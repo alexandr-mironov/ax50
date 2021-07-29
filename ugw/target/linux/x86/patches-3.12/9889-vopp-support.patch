@@ -1,0 +1,412 @@
+diff --git a/arch/x86/NetIP_SubSystem/netip_mem_util.c b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+--- a/arch/x86/NetIP_SubSystem/netip_mem_util.c
++++ b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+@@ -108,6 +108,7 @@ static struct netip_mem_rgion_device mem
+     {NETSS_DEV_TIMER2, NULL, false, 0xF0130000, NULL, "NETSS_DEV_TIMER2"},
+     {NETSS_DEV_TDM2, NULL, false, 0xF0180000, NULL, "NETSS_DEV_TDM2"},
+     {NETSS_DEV_VCODEC, NULL, false, 0xF00F6000, NULL, "NETSS_DEV_VCODEC"},
++    {NETSS_DEV_VDSP_PP, NULL, false, 0x00C00000, NULL, "NETSS_DEV_VDSP_PP"},	
+     {NETSS_DEV_BOOT_RAM, NULL, false, 0xFFFF0000, NULL, "NETSS_DEV_BOOT_RAM"},
+ };
+ 
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -331,6 +331,11 @@ int netss_device_get_info(netss_dev_t su
+          mmio->size = NETSS_DEV_VCODEC_MMIO_SIZE;
+          ret = 0;
+       break;
++      case NETSS_DEV_VDSP_PP:
++         mmio->base = NETSS_DEV_VDSP_PP_MMIO_OFFSET;
++         mmio->size = NETSS_DEV_VDSP_PP_MMIO_SIZE;
++         ret = 0;
++      break;      
+       case NETSS_DEV_BOOT_RAM:
+          mmio->base = net_ip_mmios.region1_base + NETSS_DEV_BOOT_RAM_MMIO_OFFSET;
+          mmio->size = NETSS_DEV_BOOT_RAM_MMIO_SIZE;
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -330,6 +330,10 @@ int PAL_cppi4Exit(PAL_Handle hnd, void *
+ }
+ EXPORT_SYMBOL(PAL_cppi4Exit);
+ 
++/*
++ * PAL_cppi4BufDecRefCnt
++ *  - Decrement the reference count of the valid buffer
++*/
+ int PAL_cppi4BufDecRefCnt (PAL_Handle hnd, Cppi4BufPool pool, Ptr bufPtr)
+ {
+     CSL_BufMgr_Regs *bPoolRegs = (CSL_BufMgr_Regs *)bmgr_base;
+@@ -1241,6 +1245,65 @@ static int __init pal_cppi41_procs_init(
+     return 0;
+ }
+ 
++int PAL_cppi4EmbDescRecycle(PAL_Handle hnd, Ptr vDesc, Ptr physDesc)
++{
++    Uint32 descType;
++
++    PAL_CPPI4_CACHE_INVALIDATE(vDesc, sizeof(Cppi4EmbdDesc));
++
++    descType = (be32_to_cpu(*(Uint32 *)vDesc) & CPPI41_EM_DESCINFO_DTYPE_MASK) >> CPPI41_EM_DESCINFO_DTYPE_SHIFT; 
++
++    if (CPPI41_EM_DESCINFO_DTYPE_EMB == descType)
++    {
++        Cppi4EmbdDesc*      eDesc = (Cppi4EmbdDesc *)vDesc;
++        Cppi4Queue          retQueue;
++        PAL_Cppi4QueueHnd   retQueueHnd;
++
++        if (be32_to_cpu(eDesc->pktInfo) & CPPI41_EM_PKTINFO_RETPOLICY_MASK)
++        {
++            Uint32 curSlot = 0;
++            Uint32 eopSlot = (CPPI41_EM_PKTINFO_EOPIDX_MASK & be32_to_cpu(eDesc->pktInfo)) >> CPPI41_EM_PKTINFO_EOPIDX_SHIFT;
++
++            while (curSlot <= eopSlot)
++            {
++                if (be32_to_cpu(eDesc->Buf[curSlot].BufInfo) & CPPI41_EM_BUF_VALID_MASK)
++                {
++                    Cppi4BufPool bPool;
++                    bPool.bPool = (be32_to_cpu(eDesc->Buf[curSlot].BufInfo) & CPPI41_EM_BUF_POOL_MASK) >> CPPI41_EM_BUF_POOL_SHIFT;
++                    bPool.bMgr  = (be32_to_cpu(eDesc->Buf[curSlot].BufInfo) & CPPI41_EM_BUF_MGR_MASK)  >> CPPI41_EM_BUF_MGR_SHIFT;
++                    DPRINTK("%s:%d  bPool = %d , bMgr = %d \n",__FUNCTION__,__LINE__, bPool.bPool, bPool.bMgr);
++
++                    PAL_cppi4BufDecRefCnt( hnd, bPool, (Ptr)be32_to_cpu(eDesc->Buf[curSlot].BufPtr));
++
++                    eDesc->Buf[curSlot].BufInfo = cpu_to_be32(be32_to_cpu(eDesc->Buf[curSlot].BufInfo) & ~CPPI41_EM_BUF_VALID_MASK);
++                }
++                curSlot++;
++            }
++        }
++
++        retQueue.qMgr =     (be32_to_cpu(eDesc->pktInfo) & CPPI41_EM_PKTINFO_RETQMGR_MASK)   >> CPPI41_EM_PKTINFO_RETQMGR_SHIFT;
++        retQueue.qNum =     (be32_to_cpu(eDesc->pktInfo) & CPPI41_EM_PKTINFO_RETQ_MASK)      >> CPPI41_EM_PKTINFO_RETQ_SHIFT;
++        DPRINTK("%s:%d  qMgr = %d , qNum = %d \n",__FUNCTION__,__LINE__, retQueue.qMgr, retQueue.qNum);
++        retQueueHnd = PAL_cppi4QueueOpen(hnd, retQueue);
++
++        PAL_CPPI4_CACHE_WRITEBACK( vDesc, sizeof(Cppi4EmbdDesc) );
++
++        PAL_cppi4QueuePush( retQueueHnd, physDesc, PAL_CPPI4_DESCSIZE_2_QMGRSIZE(sizeof(Cppi4EmbdDesc)), 0 );
++
++        PAL_cppi4QueueClose( hnd, retQueueHnd );
++
++        return (0);
++    }
++	else
++	{
++		pr_err("%s:%d:: Descriptor isn't an embedded type and cannot be recycled",__func__, __LINE__);
++	}
++
++    return (-1);
++}
++EXPORT_SYMBOL(PAL_cppi4EmbDescRecycle);
++
++
+ static int __init pal_cppi41_init(void)
+ {
+     spin_lock_init(&init_lock);
+diff --git a/include/linux/avalanche/generic/cslr_cppi41.h b/include/linux/avalanche/generic/cslr_cppi41.h
+--- a/include/linux/avalanche/generic/cslr_cppi41.h
++++ b/include/linux/avalanche/generic/cslr_cppi41.h
+@@ -284,10 +284,10 @@ typedef volatile struct
+ 	#define QMGR_MEMREG_CTRL_INDEX_MASK                 (0x3FFF << QMGR_MEMREG_CTRL_INDEX_SHIFT)
+ #endif
+ 
+-#define QMGR_MEMREG_CTRL_DESCSZ_SHIFT               (8)
+-#define QMGR_MEMREG_CTRL_DESCSZ_MASK                (0xF << QMGR_MEMREG_CTRL_DESCSZ_SHIFT)
+-#define QMGR_MEMREG_CTRL_REGSZ_SHIFT                (0)
+-#define QMGR_MEMREG_CTRL_REGSZ_MASK                 (0x7 << QMGR_MEMREG_CTRL_REGSZ_SHIFT)
++#define QMGR_MEMREG_CTRL_DESCSZ_SHIFT                   (8)
++#define QMGR_MEMREG_CTRL_DESCSZ_MASK                    (0xF << QMGR_MEMREG_CTRL_DESCSZ_SHIFT)
++#define QMGR_MEMREG_CTRL_REGSZ_SHIFT                    (0)
++#define QMGR_MEMREG_CTRL_REGSZ_MASK                     (0x7 << QMGR_MEMREG_CTRL_REGSZ_SHIFT)
+ 
+ /**
+  * \brief Queue Manager descriptor memory setup region
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -143,6 +143,11 @@ typedef void* PAL_Cppi4AccChHnd;
+ typedef void* PAL_Cppi4QueueHnd;
+ /* The PAL CPPI4 Buffer descriptor type */
+ typedef unsigned int PAL_Cppi4BD;
++/** \brief The Open Tx channel handle */
++typedef void* PAL_Cppi4TxChHnd;
++/** \brief The Open Rx channel handle */
++typedef void* PAL_Cppi4RxChHnd;
++
+ #define CPPI41_EM_DESCINFO_DTYPE_SHIFT     30
+ #define CPPI41_EM_DESCINFO_DTYPE_MASK      (0x3u<<CPPI41_EM_DESCINFO_DTYPE_SHIFT)
+ #define CPPI41_EM_DESCINFO_DTYPE_EMB       0
+@@ -229,6 +234,19 @@ typedef struct {
+ 
+ } Cppi4HostDesc;
+ 
++/**
++ * \brief CPPI4.1 Embedded descriptor structure.
++ *
++ * The CPPI4.1 Embedded descriptor structure is defined here to enable its
++ * reuse across various driver modules. The PAL CPPI (much like the
++ * underlying hardware) does not use the descriptor structre internally
++ * for any of its operations.
++ */
++#define EMSLOTCNT      4
++#define EMSLOTCNT_PP   1
++#define EMSLOTCNT_EXT  8
++#define EMSLOTOFFSET   1
++
+ typedef struct
+ {
+ 	Cppi4HostDesc       hw;         /* The Hardware Descriptor */
+@@ -454,10 +472,20 @@ typedef struct {
+     Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
+     Uint32 tagInfo;      /**< Source tag (31:16), Dest Tag (15:0) (valid only in Host PD)*/
+     Uint32 pktInfo;      /**< pkt err state, type, proto flags, return info, desc location */
++    Cppi4EmbdBuf Buf[EMSLOTCNT];
++    Uint32 EPI[2];       /**< Extended Packet Information (from SR) */
++} Cppi4EmbdDesc;
++
++typedef struct {
++    Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
++    Uint32 tagInfo;      /**< Source tag (31:16), Dest Tag (15:0) (valid only in Host PD)*/
++    Uint32 pktInfo;      /**< pkt err state, type, proto flags, return info, desc location */
+     Cppi4EmbdBuf Buf;
+     Uint32 EPI[2];       /**< Extended Packet Information (from SR) */
+ } Cppi4EmbdDescPp;
+ 
++typedef Cppi4EmbdDescPp Cppi4Desc;
++
+ typedef struct
+ {
+     Cppi4Queue          fdQueue;
+@@ -797,6 +825,19 @@ PAL_Cppi4AccChHnd PAL_cppi4AccChOpenShar
+  */
+ int PAL_cppi4Control (PAL_Handle hnd, Uint32 cmd, Ptr cmdArg, Ptr param);
+ 
++/**
++ *  \brief CPPI4.1 Embedded Descriptor Recycle
++ *
++ *  This function is called to recycle embedded descriptor.
++ *
++ *  @param  hnd           [IN]      Handle to the PAL Layer.
++ *  @param  vDesc         [IN]      descriptor virtual address.
++ *  @param  physDesc      [IN]      descriptor physical address.
++ *
++ *  @return PAL_SOK on success or failure code otherwise <BR>
++ */
++int PAL_cppi4EmbDescRecycle(PAL_Cppi4QueueHnd hnd, Ptr vDesc, Ptr physDesc);
++
+ #endif /* __KERNEL__ */
+ 
+ #endif /* __PAL_CPPI4_H__ */
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -2453,6 +2453,14 @@ extern void dev_kfree_skb_irq(struct sk_
+  */
+ extern void dev_kfree_skb_any(struct sk_buff *skb);
+ 
++extern unsigned short int set_voice_udp_port(unsigned short int portNum );
++extern unsigned short int get_voice_udp_port(unsigned short int *portNum );
++extern unsigned short int set_voice_udp_port_range(unsigned short int portMinNum, unsigned short int portMaxNum);
++extern unsigned short int get_voice_udp_port_range(unsigned short int *portMinNum, unsigned short int *portMaxNum);
++extern unsigned short int dev_skb_get_udp_port(struct sk_buff *skb, unsigned short int *source_port, unsigned short int *dest_port );
++extern unsigned short int check_voice_udp_port(struct sk_buff *skb, unsigned short int checkForSrcPort );
++extern unsigned short int is_voice_udp_port_in_range(struct sk_buff *skb, unsigned short int checkForSrcPort );
++
+ extern int		netif_rx(struct sk_buff *skb);
+ extern int		netif_rx_ni(struct sk_buff *skb);
+ extern int		netif_receive_skb(struct sk_buff *skb);
+diff --git a/include/linux/netip_subsystem.h b/include/linux/netip_subsystem.h
+--- a/include/linux/netip_subsystem.h
++++ b/include/linux/netip_subsystem.h
+@@ -96,6 +96,9 @@
+ #define NETSS_DEV_VCODEC_MMIO_OFFSET  (0xF6000)
+ #define NETSS_DEV_VCODEC_MMIO_SIZE    (0x150)
+ 
++#define NETSS_DEV_VDSP_PP_MMIO_OFFSET  (0x00C00000)
++#define NETSS_DEV_VDSP_PP_MMIO_SIZE    (0x400000)
++
+ #define NETSS_DEV_BOOT_RAM_MMIO_OFFSET  (0xFFF0000)
+ #define NETSS_DEV_BOOT_RAM_MMIO_SIZE    (0x4000)
+ 
+@@ -136,6 +139,7 @@ typedef enum {
+    NETSS_DEV_TIMER2,
+    NETSS_DEV_TDM2,
+    NETSS_DEV_VCODEC,
++   NETSS_DEV_VDSP_PP,   
+    NETSS_DEV_BOOT_RAM,
+    NETSS_DEV_MAX
+ }netss_dev_t;
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -220,6 +220,123 @@ static inline void rps_unlock(struct sof
+ #endif
+ }
+ 
++static unsigned short int voicePortNum    = htons(5002);
++static unsigned short int voicePortMinNum = htons(5000);
++static unsigned short int voicePortMaxNum = htons(5020);
++
++unsigned short int set_voice_udp_port(unsigned short int portNum )
++{
++    if (portNum == 0)
++        return 1; //return error as port not set.
++        
++    voicePortNum = portNum;
++    
++    return 0;
++}
++EXPORT_SYMBOL(set_voice_udp_port);
++
++unsigned short int get_voice_udp_port(unsigned short int *portNum )
++{
++    *portNum = voicePortNum;
++    
++    return 0;
++}
++EXPORT_SYMBOL(get_voice_udp_port);
++
++unsigned short int set_voice_udp_port_range(unsigned short int portMinNum, unsigned short int portMaxNum)
++{
++    if ((portMinNum == 0) && (portMaxNum == 0))
++        return 1; //return error as port not set.
++        
++    voicePortMinNum = portMinNum;
++    voicePortMaxNum = portMaxNum;
++    
++    return 0;
++}
++EXPORT_SYMBOL(set_voice_udp_port_range);
++
++unsigned short int get_voice_udp_port_range(unsigned short int *portMinNum, unsigned short int *portMaxNum)
++{
++    *portMinNum = voicePortMinNum;
++    *portMaxNum = voicePortMaxNum;
++    
++    return 0;
++}
++EXPORT_SYMBOL(get_voice_udp_port_range);
++
++unsigned short int dev_skb_get_udp_port(struct sk_buff *skb, unsigned short int *source_port, unsigned short int *dest_port )
++{
++    struct iphdr  *ipHeader  = NULL;
++    struct udphdr *udpHeader = NULL;    
++
++    ipHeader = ip_hdr(skb);
++
++	  /* consider only UDP packets. */
++	  if (ipHeader->protocol != IPPROTO_UDP)
++	  	return 0;
++    
++    udpHeader = (struct udphdr *) ((unsigned int *) ipHeader + ipHeader->ihl);
++    
++    *source_port = udpHeader->source;
++    *dest_port   = udpHeader->dest;
++
++    return 1;
++}
++EXPORT_SYMBOL(dev_skb_get_udp_port);
++
++unsigned short int check_voice_udp_port(struct sk_buff *skb, unsigned short int checkForSrcPort)
++{
++    unsigned short int SourcePort, DestPort, portNum;    
++    unsigned short int *SourcePortPtr, *DestPortPtr;
++    
++    SourcePort         = 0;
++    DestPort           = 0;
++    portNum            = 0;
++    SourcePortPtr      = &SourcePort;
++    DestPortPtr        = &DestPort;
++    
++    dev_skb_get_udp_port(skb, SourcePortPtr, DestPortPtr);
++    
++    if(checkForSrcPort)
++      portNum = SourcePort;
++    else
++      portNum = DestPort;
++
++    /* Look for Voice UDP port number match */
++    if( portNum == voicePortNum )
++      return 1;
++    else
++      return 0;
++}
++EXPORT_SYMBOL(check_voice_udp_port);
++
++unsigned short int is_voice_udp_port_in_range(struct sk_buff *skb, unsigned short int checkForSrcPort )
++{
++    unsigned short int SourcePort, DestPort, portNum;    
++    unsigned short int *SourcePortPtr, *DestPortPtr;
++    
++    SourcePort         = 0;
++    DestPort           = 0;
++    portNum            = 0;
++    SourcePortPtr      = &SourcePort;
++    DestPortPtr        = &DestPort;
++    
++    dev_skb_get_udp_port(skb, SourcePortPtr, DestPortPtr);
++    
++    if(checkForSrcPort)
++      portNum = SourcePort;
++    else
++      portNum = DestPort;
++
++    /* Check that Voice UDP port number is in range */
++    if( ( portNum >= voicePortMinNum) && (portNum <=  voicePortMaxNum) )
++      return 1;
++    else
++      return 0;
++}
++EXPORT_SYMBOL(is_voice_udp_port_in_range);
++
++
+ /* Device list insertion */
+ static void list_netdevice(struct net_device *dev)
+ {
+diff --git a/net/ipv4/ip_input.c b/net/ipv4/ip_input.c
+--- a/net/ipv4/ip_input.c
++++ b/net/ipv4/ip_input.c
+@@ -380,6 +380,8 @@ drop:
+ 	return NET_RX_DROP;
+ }
+ 
++#define VOICENI_DEV_NAME "vni0"
++
+ /*
+  * 	Main IP Receive routine.
+  */
+@@ -387,7 +389,10 @@ int ip_rcv(struct sk_buff *skb, struct n
+ {
+ 	const struct iphdr *iph;
+ 	u32 len;
+-
++#ifdef CONFIG_INTEL_KERNEL_VOICE_SUPPORT	
++    struct net_device*  netdev = NULL;
++#endif
++    
+ 	/* When the interface is in promisc. mode, drop all the crap
+ 	 * that it receives, do not try to analyse it.
+ 	 */
+@@ -460,6 +465,21 @@ int ip_rcv(struct sk_buff *skb, struct n
+ 	/* Must drop socket now because of tproxy. */
+ 	skb_orphan(skb);
+ 
++#ifdef CONFIG_INTEL_KERNEL_VOICE_SUPPORT
++  /* Below code is added for VoPP. Checking that packet received is matching with Voice UDP port
++     range. If it is Voice Packets range then, call hook function of HIL/VoPP. */
++    netdev = dev_get_by_name(&init_net, VOICENI_DEV_NAME);
++    if((netdev != NULL) && (is_voice_udp_port_in_range(skb, 0) == 1))
++    {
++        skb->dev = netdev;
++        
++        /* Calling HIL egress Hook function. */
++        dev_queue_xmit(skb);
++        
++        return NET_RX_SUCCESS;
++    }
++#endif
++
+ 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, dev, NULL,
+ 		       ip_rcv_finish);
+ 

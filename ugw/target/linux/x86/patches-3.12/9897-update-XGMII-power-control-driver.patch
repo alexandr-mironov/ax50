@@ -1,0 +1,206 @@
+From 6f7da8b1509c1c4e34e18592b8759bafdf9e9f33 Mon Sep 17 00:00:00 2001
+From: Robert Li <robertx.li@intel.com>
+Date: Wed, 21 Feb 2018 11:00:04 -0700
+Subject: [PATCH] update XGMII power control driver
+
+Adds the reset attribute to the XGMII power control driver
+
+Signed-off-by: Robert Li <robertx.li@intel.com>
+---
+ drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c | 130 ++++++++++++++++-----
+ 1 file changed, 103 insertions(+), 27 deletions(-)
+
+diff --git a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+index 44ca7ea..0cfad09 100644
+--- a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
++++ b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+@@ -3,7 +3,7 @@
+  *
+  *  GPL LICENSE SUMMARY
+  *
+- *  Copyright(c) 2016 Intel Corporation. All rights reserved.
++ *  Copyright(c) 2016-2018 Intel Corporation. All rights reserved.
+  *
+  *  This program is free software; you can redistribute it and/or modify
+  *  it under the terms of version 2 of the GNU General Public License as
+@@ -35,6 +35,8 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/hw_mailbox.h>
+ #include <linux/wait.h>
++#include <linux/gpio.h>
++#include <linux/acpi_gpio.h>
+ 
+ #define DWC_ETH_QOS_MAX_NUM_NETDEV (5)
+ #define HW_MBOX_LAN_MSG_TAG (5)
+@@ -89,6 +91,8 @@ struct xgmii_interface_data {
+ 	struct device *dev;
+ 	int uid;
+ 	int power_state;
++	int reset_gpio;
++	char *gpio_label;
+ };
+ 
+ /** Global Variables */
+@@ -170,47 +174,111 @@ static DEVICE_ATTR(rgmii2_pwr_ctrl, S_IRUGO|S_IWUSR,
+ static DEVICE_ATTR(rgmii3_pwr_ctrl, S_IRUGO|S_IWUSR,
+ 				xgmii_pwr_show, xgmii_pwr_store);
+ 
++static ssize_t xgmii_reset_store(struct device *dev,
++			struct device_attribute *attr,
++			const char *buf, size_t count)
++{
++	unsigned long attribute_value;
++	int gpio_val = -1;
++	ssize_t ret;
++
++	struct platform_device *pdev = to_platform_device(dev);
++	struct xgmii_interface_data *priv = platform_get_drvdata(pdev);
++
++	ret = kstrtoul(buf, 0, &attribute_value);
++	if (ret != 0)
++		return ret;
++
++	if (attribute_value)
++		gpio_val = 1;
++	else
++		gpio_val = 0;
++	if (priv->reset_gpio > 0) {
++		ret = gpio_request_one(priv->reset_gpio,
++					GPIOF_DIR_OUT|GPIOF_INIT_LOW,
++					priv->gpio_label);
++		if (!ret) {
++			__gpio_set_value(priv->reset_gpio, gpio_val);
++			gpio_free(priv->reset_gpio);
++			ret = count;
++		} else
++			ret = -EFAULT;
++	} else
++		ret = -EFAULT;
++
++	return ret;
++}
++static DEVICE_ATTR(sgmii0_reset, S_IWUSR,
++				NULL, xgmii_reset_store);
++static DEVICE_ATTR(sgmii1_reset, S_IWUSR,
++				NULL, xgmii_reset_store);
++static DEVICE_ATTR(rgmii2_reset, S_IWUSR,
++				NULL, xgmii_reset_store);
++static DEVICE_ATTR(rgmii3_reset, S_IWUSR,
++				NULL, xgmii_reset_store);
++
++
+ static int create_sysfs_attrs(struct xgmii_interface_data *priv)
+ {
+ 	int ret = 0;
++	struct device_attribute *pwr_ctrl_attr = NULL;
++	struct device_attribute *reset_attr = NULL;
++	priv->gpio_label =  NULL;
++
+ 	if (priv->uid == 0) {
+-		ret = device_create_file(priv->dev,
+-				&dev_attr_sgmii0_pwr_ctrl);
+-		if (ret < 0)
+-			return ret;
++		pwr_ctrl_attr = &dev_attr_sgmii0_pwr_ctrl;
++		reset_attr = &dev_attr_sgmii0_reset;
++		priv->gpio_label = "sgmii0_reset";
+ 	} else if (priv->uid == 1) {
+-		ret = device_create_file(priv->dev,
+-				&dev_attr_sgmii1_pwr_ctrl);
+-		if (ret < 0)
+-			return ret;
++		pwr_ctrl_attr = &dev_attr_sgmii1_pwr_ctrl;
++		reset_attr = &dev_attr_sgmii1_reset;
++		priv->gpio_label = "sgmii1_reset";
+ 	} else if (priv->uid == 2) {
+-		ret = device_create_file(priv->dev,
+-				&dev_attr_rgmii2_pwr_ctrl);
+-		if (ret < 0)
+-			return ret;
++		pwr_ctrl_attr = &dev_attr_rgmii2_pwr_ctrl;
++		reset_attr = &dev_attr_rgmii2_reset;
++		priv->gpio_label = "rgmii2_reset";
+ 	} else if (priv->uid == 3) {
+-		ret = device_create_file(priv->dev,
+-				&dev_attr_rgmii3_pwr_ctrl);
++		pwr_ctrl_attr = &dev_attr_rgmii3_pwr_ctrl;
++		reset_attr = &dev_attr_rgmii3_reset;
++		priv->gpio_label = "rgmii3_reset";
++	}
++
++	if (pwr_ctrl_attr) {
++		ret = device_create_file(priv->dev, pwr_ctrl_attr);
+ 		if (ret < 0)
+ 			return ret;
+ 	}
++
++	if ((priv->reset_gpio > 0) && reset_attr)
++		ret = device_create_file(priv->dev, reset_attr);
++
+ 	return ret;
+ }
+ 
+ static void remove_sysfs_attrs(struct xgmii_interface_data *priv)
+ {
+-	if (priv->uid == 0)
+-		device_remove_file(priv->dev,
+-				&dev_attr_sgmii0_pwr_ctrl);
+-	else if (priv->uid == 1)
+-		device_remove_file(priv->dev,
+-				&dev_attr_sgmii1_pwr_ctrl);
+-	else if (priv->uid == 2)
+-		device_remove_file(priv->dev,
+-				&dev_attr_rgmii2_pwr_ctrl);
+-	else if (priv->uid == 3)
+-		device_remove_file(priv->dev,
+-				&dev_attr_rgmii3_pwr_ctrl);
++	struct device_attribute *pwr_ctrl_attr = NULL;
++	struct device_attribute *reset_attr = NULL;
++
++	if (priv->uid == 0) {
++		pwr_ctrl_attr = &dev_attr_sgmii0_pwr_ctrl;
++		reset_attr = &dev_attr_sgmii0_reset;
++	} else if (priv->uid == 1) {
++		pwr_ctrl_attr = &dev_attr_sgmii1_pwr_ctrl;
++		reset_attr = &dev_attr_sgmii1_reset;
++	} else if (priv->uid == 2) {
++		pwr_ctrl_attr = &dev_attr_rgmii2_pwr_ctrl;
++		reset_attr = &dev_attr_rgmii2_reset;
++	} else if (priv->uid == 3) {
++		pwr_ctrl_attr = &dev_attr_rgmii3_pwr_ctrl;
++		reset_attr = &dev_attr_rgmii3_reset;
++	}
++
++	if (pwr_ctrl_attr)
++		device_remove_file(priv->dev, pwr_ctrl_attr);
++
++	if ((priv->reset_gpio > 0) && reset_attr)
++		device_remove_file(priv->dev, reset_attr);
+ 	return;
+ }
+ 
+@@ -327,6 +395,7 @@ static int xgmii_pwr_ctrl_probe(struct platform_device *pdev)
+ {
+ 	int ret = 0;
+ 	int uid = -1;
++	int gpio = -1;
+ 	struct device *dev = &pdev->dev;
+ 	struct xgmii_interface_data *priv;
+ 	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
+@@ -363,6 +432,13 @@ static int xgmii_pwr_ctrl_probe(struct platform_device *pdev)
+ 	priv->dev = &pdev->dev;
+ 	priv->uid = uid;
+ 
++	gpio = acpi_get_gpio_by_index(dev, 1, &info);
++	if (gpio < 0) {
++		priv->reset_gpio = -1;
++	} else {
++		priv->reset_gpio = gpio;
++		dev_info(dev, "Reset gpio: %d\n", priv->reset_gpio);
++	}
+ 	ret = create_sysfs_attrs(priv);
+ 	if (ret) {
+ 		dev_err(dev, "Failed to create sysfs attr uid %d\n", uid);
+-- 
+2.16.1
+

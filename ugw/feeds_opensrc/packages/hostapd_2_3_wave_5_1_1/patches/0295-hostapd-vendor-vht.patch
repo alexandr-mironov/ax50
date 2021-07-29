@@ -1,0 +1,133 @@
+diff -Npur hostapd.orig/src/ap/beacon.c hostapd.patched/src/ap/beacon.c
+--- hostapd.orig/src/ap/beacon.c	2017-10-20 16:01:57.508635000 +0800
++++ hostapd.patched/src/ap/beacon.c	2017-10-23 18:53:40.942139700 +0800
+@@ -479,8 +479,13 @@ static u8 * hostapd_gen_probe_resp(struc
+ 		pos = hostapd_eid_txpower_envelope(hapd, pos);
+ 		pos = hostapd_eid_wb_chsw_wrapper(hapd, pos);
+ 	}
+-	if (hapd->conf->vendor_vht)
++	if (hapd->conf->vendor_vht) {
++		/* IOP with STAs transmitting VHT inside VSIE */
+ 		pos = hostapd_eid_vendor_vht(hapd, pos);
++		/* IOP with STA transmitting directly VHT IE */
++		pos = hostapd_eid_vht_capabilities(hapd, pos, 0);
++		pos = hostapd_eid_vht_operation(hapd, pos);
++	}
+ #endif /* CONFIG_IEEE80211AC */
+ 
+ 	/* Wi-Fi Alliance WMM */
+@@ -1145,8 +1150,14 @@ int ieee802_11_build_ap_params(struct ho
+ 		tailpos = hostapd_eid_txpower_envelope(hapd, tailpos);
+ 		tailpos = hostapd_eid_wb_chsw_wrapper(hapd, tailpos);
+ 	}
+-	if (hapd->conf->vendor_vht)
++
++	if (hapd->conf->vendor_vht) {
++		/* IOP with STAs transmitting VHT-IEs inside VSIE */
+ 		tailpos = hostapd_eid_vendor_vht(hapd, tailpos);
++		/* IOP with STAs transmitting direct VHT-IEs */
++		tailpos = hostapd_eid_vht_capabilities(hapd, tailpos, 0);
++		tailpos = hostapd_eid_vht_operation(hapd, tailpos);
++	}
+ #endif /* CONFIG_IEEE80211AC */
+ 
+ 	/* Wi-Fi Alliance WMM */
+diff -Npur hostapd.orig/src/ap/ieee802_11.c hostapd.patched/src/ap/ieee802_11.c
+--- hostapd.orig/src/ap/ieee802_11.c	2017-10-20 16:01:57.814639000 +0800
++++ hostapd.patched/src/ap/ieee802_11.c	2017-10-23 18:54:35.498264800 +0800
+@@ -1627,6 +1627,11 @@ static u16 check_assoc_ies(struct hostap
+ 		if (resp != WLAN_STATUS_SUCCESS)
+ 			return resp;
+ 	}
++	if (hapd->conf->vendor_vht && elems.vht_capabilities && !hapd->iconf->ieee80211ac) {
++		resp = copy_sta_vendor2_vht(hapd, sta, elems.vht_capabilities);
++		if (resp != WLAN_STATUS_SUCCESS)
++			return resp;
++	}
+ #endif /* CONFIG_IEEE80211AC */
+ 
+ #ifdef CONFIG_P2P
+@@ -2000,6 +2005,12 @@ static u16 send_assoc_resp(struct hostap
+ #ifdef CONFIG_IEEE80211AC
+ 	if (hapd->conf->vendor_vht && (sta->flags & WLAN_STA_VENDOR_VHT))
+ 		p = hostapd_eid_vendor_vht(hapd, p);
++
++	/* IOP with STAs transmitting direct VHT-IEs */
++	if (hapd->conf->vendor_vht && (sta->flags & WLAN_STA_VENDOR2_VHT)) {
++		p = hostapd_eid_vht_capabilities(hapd, p, 0);
++		p = hostapd_eid_vht_operation(hapd, p);
++	}
+ #endif /* CONFIG_IEEE80211AC */
+ 
+ 	if (sta->flags & WLAN_STA_WMM)
+diff -Npur hostapd.orig/src/ap/ieee802_11.h hostapd.patched/src/ap/ieee802_11.h
+--- hostapd.orig/src/ap/ieee802_11.h	2017-10-20 16:01:57.462644000 +0800
++++ hostapd.patched/src/ap/ieee802_11.h	2017-10-23 18:21:17.555013300 +0800
+@@ -77,6 +77,8 @@ u16 copy_sta_ht_capab(struct hostapd_dat
+ 		      const u8 *ht_capab);
+ u16 copy_sta_vendor_vht(struct hostapd_data *hapd, struct sta_info *sta,
+ 			const u8 *ie, size_t len);
++u16 copy_sta_vendor2_vht(struct hostapd_data *hapd, struct sta_info *sta,
++			const u8 *vht_capab);
+ u16 copy_supp_rates(struct hostapd_data *hapd, struct sta_info *sta,
+ 			   struct ieee802_11_elems *elems);
+ 
+diff -Npur hostapd.orig/src/ap/ieee802_11_vht.c hostapd.patched/src/ap/ieee802_11_vht.c
+--- hostapd.orig/src/ap/ieee802_11_vht.c	2017-10-20 16:01:57.685638000 +0800
++++ hostapd.patched/src/ap/ieee802_11_vht.c	2017-10-25 16:31:54.935674100 +0800
+@@ -395,6 +395,32 @@ no_capab:
+ }
+ 
+ 
++u16 copy_sta_vendor2_vht(struct hostapd_data *hapd, struct sta_info *sta,
++			const u8 *vht_capab)
++{
++	/* Disable VHT caps for STAs associated to no-VHT BSSes. */
++	if (!vht_capab) {
++		sta->flags &= ~WLAN_STA_VHT;
++		os_free(sta->vht_capabilities);
++		sta->vht_capabilities = NULL;
++		return WLAN_STATUS_SUCCESS;
++	}
++
++	if (sta->vht_capabilities == NULL) {
++		sta->vht_capabilities =
++			os_zalloc(sizeof(struct ieee80211_vht_capabilities));
++		if (sta->vht_capabilities == NULL)
++			return WLAN_STATUS_UNSPECIFIED_FAILURE;
++	}
++
++	sta->flags |= WLAN_STA_VHT | WLAN_STA_VENDOR2_VHT;
++	os_memcpy(sta->vht_capabilities, vht_capab,
++		sizeof(struct ieee80211_vht_capabilities));
++
++	return WLAN_STATUS_SUCCESS;
++}
++
++
+ u8 * hostapd_eid_vendor_vht(struct hostapd_data *hapd, u8 *eid)
+ {
+ 	u8 *pos = eid;
+diff -Npur hostapd.orig/src/ap/sta_info.c hostapd.patched/src/ap/sta_info.c
+--- hostapd.orig/src/ap/sta_info.c	2017-10-20 16:01:57.538636000 +0800
++++ hostapd.patched/src/ap/sta_info.c	2017-10-25 16:14:35.379818500 +0800
+@@ -1495,7 +1495,7 @@ int ap_sta_flags_txt(u32 flags, char *bu
+ 			  (flags & WLAN_STA_WPS2 ? "[WPS2]" : ""),
+ 			  (flags & WLAN_STA_GAS ? "[GAS]" : ""),
+ 			  (flags & WLAN_STA_VHT ? "[VHT]" : ""),
+-			  (flags & WLAN_STA_VENDOR_VHT ? "[VENDOR_VHT]" : ""),
++			  (((flags & WLAN_STA_VENDOR_VHT) || (flags & WLAN_STA_VENDOR2_VHT)) ? "[VENDOR_VHT]" : ""),
+ 			  (flags & WLAN_STA_WNM_SLEEP_MODE ?
+ 			   "[WNM_SLEEP_MODE]" : ""));
+ 	if (os_snprintf_error(buflen, res))
+diff -Npur hostapd.orig/src/ap/sta_info.h hostapd.patched/src/ap/sta_info.h
+--- hostapd.orig/src/ap/sta_info.h	2017-10-20 16:01:57.283630000 +0800
++++ hostapd.patched/src/ap/sta_info.h	2017-10-23 17:17:07.755460100 +0800
+@@ -38,6 +38,7 @@
+ #define WLAN_STA_WNM_SLEEP_MODE BIT(19)
+ #define WLAN_STA_VHT_OPMODE_ENABLED BIT(20)
+ #define WLAN_STA_VENDOR_VHT BIT(21)
++#define WLAN_STA_VENDOR2_VHT BIT(22)
+ #define WLAN_STA_BSS_TRANS_MGMT_REQ_TIMEOUT BIT(25)
+ #define WLAN_STA_PENDING_DISASSOC_CB BIT(29)
+ #define WLAN_STA_PENDING_DEAUTH_CB BIT(30)

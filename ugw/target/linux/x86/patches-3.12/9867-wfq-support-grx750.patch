@@ -1,0 +1,372 @@
+# HG changeset patch
+# Parent c1c771471645982e391e8c6b03e956f1adb8b2c4
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -337,15 +337,28 @@
+     Uint8               flags;                  /* Control how packets in the queue should be handled */
+     Uint16              egr_q;                  /* Queue manager and queue index of forwarding queue */
+ 
++    /*Strict Schedluing parameters */
+     Uint32              it_credit_bytes;        /* The amount of forwarding byte ?credit? that the queue receives every 25us. */
+     Uint16              it_credit_packets;      /* The amount of forwarding packets ?credit? that the queue receives every 25us. */
+     Uint32              max_credit_bytes;       /* The maximum amount of forwarding byte ?credit? that the queue is allowed to hold at the end of the 25us iteration. */
+     Uint16              max_credit_packets;     /* The maximum amount of forwarding byte ?credit? that the queue is allowed to hold at the end of the 25us iteration. */
+     Uint32              congst_thrsh_bytes;     /* The size in bytes at which point the QOS queue is considered to be congested. */
+     Uint16              congst_thrsh_packets;   /* The maximum number of packets to be kept in QOS queue */
++    /* WFQ Schedluing parameters */
++    Uint16              q_weight;               /* The Weight given to queue i */
++    Uint16              cpqpi;                  /* Credit byte per queue per iteration (CPQP(i))  This is the relative number of bytes per iteration for queue based on its w(i) */
++
+ }
+ AVALANCHE_PP_QOS_QUEUE_t;
+ 
++/* QoS manager scheduling mode */
++typedef enum
++{
++    PP_QOS_SCH_STRICT,
++    PP_QOS_SCH_WFQ
++}
++PP_QOS_SCH_MODE_e;
++
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_QOS_CLST_CFG
+  **************************************************************************
+@@ -358,6 +371,9 @@
+     AVALANCHE_PP_QOS_QUEUE_t    qos_q_cfg[ AVALANCHE_PP_QOS_CLST_MAX_QCNT ]; /* Configuration for all the queues associated with the cluster, arranged in order of priority (qos_q_cfg[0] being lower in priority than qos_q_cfg[1]) */
+     Uint8                       qos_q_cnt;                /* Number of QOS queues in the cluster (1 to 8) */
+ 
++    PP_QOS_SCH_MODE_e           sch_mode;                  /* Scheduling mode */
++ 
++    /*Strict Schedluing parameters */
+     Uint32                      global_credit_bytes;      /* The amount of global bytes credit available to the next QOS queue in the cluster */
+     Uint32                      max_global_credit_bytes;  /* The maximum amount of global credit allowed to carry over to the next  queue. */
+ 
+@@ -376,6 +392,11 @@
+ 
+     Uint8                       shaperClusters[4];
+ 
++    /* WFQ Scheduling parameters */
++    Uint32                       line_rate_bps;              /* Line Rate  In bits per second. (i.e 1Gbps for RGMII)  */
++    Uint32                       credit_per_iteration;       /* The Max bytes that can be transmitted per iteration. (this field is automatically configured from the line rate and iteration */
++    Uint32                       sum_of_weights;               /* The total Weights that is configured to the cluster */
++
+ }
+ AVALANCHE_PP_QOS_CLST_CFG_t;
+ 
+@@ -1056,7 +1077,8 @@
+ #define PP_MCAST_FLAG_PSI          (0x04)
+     Uint8   Vpid;
+     Uint16  EgressQ;
+-    Uint32  PsiVlan;
++    Uint32  Vlan;
++    Uint32  Psi;
+ }
+ PP_Multiast_Member_Info_t;
+ 
+@@ -1933,6 +1955,8 @@
+ extern Bool                  avalanche_pp_state_is_active( void );
+ extern Bool                  avalanche_pp_state_is_psm( void );
+ 
++extern AVALANCHE_PP_RET_e    avalanche_set_debug_g_queue_num(Uint16 queue_num, Uint16 debugSet);
++
+ /*---------------------*/
+ /*    WIFI Proxy       */
+ /*---------------------*/
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -9,7 +9,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2016 Intel Corporation.
++  Copyright(c) 2016-2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -88,6 +88,7 @@
+ #define PP_QOS_Q_QDA_DISABLE_FLAG    (1<<2)
+ #define PP_QOS_Q_LIMITED_FLAG        (1<<3)
+ #define PP_QOS_Q_NO_QOS_FLAG         (1<<4)
++#define PP_QOS_Q_WFQ_ENABELD_FLAG    (1<<5)
+ 
+ 
+ #define PP_QOS_ITERATION_TICK_USEC   (25)
+@@ -101,6 +102,10 @@
+ #define PP_QOS_FW_QCFG_BLK_BASE_PHY  (0xF3E10200)
+ #define PP_QOS_FW_CLST_BLK_BASE_PHY  (0xF3E12200)
+ 
++#define PP_QOS_FW_DIV_SUM_BASE_PHY   (0xF3E13600)                /* 2 Bytes * 255 entries*/
++#define PP_QOS_FW_MAX_SUM_ENTRIES    (255)                       /* The MAX value for sum of weights of the active queues in WFQ */
++#define PP_QOS_MAX_WFQ_CLUSTERS      (5)                         /* Currently only 1 cluster can be from WFQ type */
++
+ /* Rate(in Mbps) * 1M) / iteration per second / 8(bits in byte) */
+ #define PP_QOS_MEGA_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)    ((Uint32)(((Uint64)(x * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
+ #define PP_QOS_PPS_TO_IT_CREDIT_PACKETS(x)               ((Uint16)(x / PP_QOS_ITERATION_PER_SECOND))
+@@ -119,19 +124,12 @@ typedef enum
+ }
+ PP_QOS_MGR_RET_e;
+ 
+-/* QoS manager scheduling mode */
+-typedef enum
+-{
+-    PP_QOS_SCH_STRICT,
+-    PP_QOS_SCH_WFQ
+-}
+-PP_QOS_SCH_MODE_e;
+ 
+ /* QoS manager Qos-profile */
+ typedef struct
+ {
+     PP_QOS_SCH_MODE_e sch_mode;                   /* Strict/WFQ */
+-    Uint8             num_of_priorities;          /* Number of priorities */
++    Uint8             num_of_priorities;          /* Number of priorities for strict scheduling or Number of queues in WFQ scheduling */
+     Uint8             vpid_id;                    /* VPID ID */
+     Uint16            profile_private_identifier;
+     Uint32            egress_port_queue;          /* Egress queue number */
+@@ -141,6 +139,7 @@ typedef struct
+     Uint32            ingress_queue_depth_bytes;  /* Ingress queue depth (bytes) */
+     Uint32            port_rate_limit_Mbps;       /* Rate limit (in Mbps)*/
+     Uint32            port_pps_limit;             /* PPS limit */
++    Uint16            queues_weights[AVALANCHE_PP_QOS_CLST_MAX_QCNT]; /* If scheduling mode is WFQ each queue has weight */
+ }
+ PP_QOS_PROFILE_t;
+ 
+@@ -169,6 +168,7 @@ typedef struct
+     Uint32   queues_starvation_shared;
+     Uint32   shapers_starvation;
+     Uint32   active_shapers;
++    Uint32   wfq_clusters;
+ }
+ PP_QOS_DB_Counters_t;
+ 
+@@ -179,6 +179,9 @@ typedef struct
+ }
+ PP_QOS_MIB_STATS_t;
+ 
++/* Cluster Flags, relevent for PP_QOS_FW_CLST_CFG_t and for PP_QOS_FW_WFQ_CLST_CFG_t */
++#define PP_QOS_CLST_WFQ_FLAG    (1<<0)
++
+ typedef struct
+ {
+ 
+@@ -190,8 +193,16 @@ typedef struct
+     Uint32                      max_global_credit_bytes;    /* The max amount of global credit bytes allowed carring over to the next queue. */
+ 
+     Uint16                      qda_queue;                  /* The queue which we activated QDA on. INVALID_QDA_QUEUE indicates that QDA wasn't activated on any on the cluster queues */
+-    Uint8                       egr_q_cnt;                  /* The total number of egress queues sampled to obtain the egress queue congestion estimation */
+-    Uint8                       qos_q_cnt;                  /* The number of QOS queues in the cluster (1 to 9) */
++
++#if defined(__BIG_ENDIAN_BITFIELD)
++    Uint8       egr_q_cnt:4,              /* The total number of egress queues sampled to obtain the egress queue congestion estimation*/
++                qos_q_cnt:4;              /* The number of QOS queues in the cluster (1 to 9)      */
++#elif defined (__LITTLE_ENDIAN_BITFIELD)
++    Uint8       qos_q_cnt:4,              /* The total number of egress queues sampled to obtain the egress queue congestion estimation */
++	            egr_q_cnt:4;              /* The total number of egress queues in WFQ its always 1 */
++#endif
++
++    Uint8                       flags;                      /* Bit 0 : Set if the cluster is working in WFQ scheduling mode. cleared when its strict scheduling mode */
+ 
+     Uint8                       qos_q3;                     /* The queue index (0 to 127) of each QOS queue in the cluster listed in priority order */
+     Uint8                       qos_q2;
+@@ -252,6 +263,82 @@ typedef struct
+ }
+ PP_QOS_FW_QUEUE_t;
+ 
++/*********************************************************************************************************************************/ 
++/*                                                                                                                               */         
++/*                                           WFQ Structures                                                                      */
++/*                                                                                                                               */  
++/*********************************************************************************************************************************/
++typedef struct
++{
++
++    Uint32                      wfq_info;                   /* Used in the FW for internal processing */
++
++    Uint32                      credit_per_iteration;       /* The Max bytes that can be transmitted per iteration. Automatically configured from the line rate and iteration rate */
++
++    Uint16                      leftover_credit;            /* Temporary variable, holding the total credit of all queues that are not utilizing their whole credit */
++    Uint16                      act_Qs_weight_sum;          /* Temporary variable, holding sum of all queues that are active within some calculation scope. */
++
++    Uint16                      qda_queue;                  /* The queue which we activated QDA on. INVALID_QDA_QUEUE indicates that QDA wasn't activated on any on the cluster queues */
++    
++#if defined(__BIG_ENDIAN_BITFIELD)
++    Uint8       egr_q_cnt:4,              /* The total number of egress queues in WFQ its always 1 */
++                qos_q_cnt:4;              /* The number of QOS queues in the cluster (1 to 9)      */
++#elif defined (__LITTLE_ENDIAN_BITFIELD)
++    Uint8       qos_q_cnt:4,              /* The number of QOS queues in the cluster (1 to 9) */
++	            egr_q_cnt:4;              /* The total number of egress queues in WFQ its always 1 */
++#endif
++
++    Uint8                       flags;                      /* Bit 0 : Set if the cluster is working in WFQ scheduling mode. cleared when its strict scheduling mode */
++
++    Uint8                       qos_q3;                     /* The queue index (0 to 127) of each QOS queue in the cluster listed in priority order */
++    Uint8                       qos_q2;
++    Uint8                       qos_q1;
++    Uint8                       qos_q0;
++
++    Uint8                       qos_q7;
++    Uint8                       qos_q6;
++    Uint8                       qos_q5;
++    Uint8                       qos_q4;
++
++    Uint16                      egr_q1;                     /* The Queue index of every egress queue enumerated in Egress Queue Count only 1 Egress queue is valid in WFQ */
++    Uint16                      egr_q0;
++
++    Uint16                      egr_q3;
++    Uint16                      egr_q2;
++
++    Uint32                      egress_Q_pending_bytes;	  /* Number of pending bytes in the output queue  */
++    Uint32                      reserve[7];               /* Not used for WFQ cluster TBD can indicate that this is wfq cluster  */
++    
++}
++PP_QOS_FW_WFQ_CLST_CFG_t;
++	
++
++typedef struct
++{
++    Uint16 egr_q;                             /* The Queue index of the forwarding queue */
++    Uint8  flags;                             /* Specifies how the frames in the QOS queue should be handled */                                     
++    Uint8  QDAThreadId;                       /* Indicates which QDA thread id is working on that queue. INVALID_QDA_THREAD_ID means that no thread is bound to that queue */
++
++    Uint16 queueWeight;                       /* The Weight given to queue i W(i)*/
++    Uint16 creditBytePerQueue;                /* Credit byte per queue per iteration (CPQP(i))   This is the relative number of bytes per iteration for queue based on its w(i) */
++
++    Uint32 queuePendingPkts;                  /* The number of pending pkts in the qos queue */
++    Uint32 queuePendingBytes;                 /* The number of pending bytes in the qos queue */
++
++    Int16 startCurrentCredit;                 /* The current credit for queue I in bytes at the start of the iteration */
++    Int16 endCurrentCredit;                   /* The current credit for queue I in bytes at the end of the iteration */
++
++    Uint16 queueExtraCredit;                  /* The temporary variable that holds extra credit per queue taken from the leftover Credit */
++    Uint16 congstThrshPkts;                   /* The size in packets at which point the Qos queue is considered to be congested */
++
++    Uint32 congstThrshBytes;                  /* The size in bytes at which point the Qos queue is considered to be congested */
++    Uint32 w7;                                /* Reserved */
++
++}
++PP_QOS_FW_WFQ_QUEUE_t;
++
++
++
+ #ifdef __KERNEL__
+ /* **************************************************************************************** */
+ /*                                                                                          */
+@@ -286,6 +373,17 @@ PP_QOS_MGR_RET_e pp_qos_mngr_init(void);
+  */
+ PP_QOS_MGR_RET_e pp_qos_set_basic_profile(PP_QOS_PROFILE_t *qos_profile);
+ /**
++ *  pp_qos_set_wfq_profile - This API should be called while QoS
++ *  profile is created for NI.
++ *  wfq profile is 1 cluster with 1 egress queue.
++ *  WFQ is the scheduling type of the QoS configuration.
++ *  @qos_profile: Pointer to qos profile to set
++ *
++ *  Returns PP_QOS_RC_SUCCESS if pass.
++ */
++PP_QOS_MGR_RET_e pp_qos_set_wfq_profile(PP_QOS_PROFILE_t *qos_profile);
++
++/**
+  *  pp_qos_is_profile_registered - This API return if the QoS
+  *  profile is alreadu exist int the QoS manager
+  *  @vpid_id: Pointer to qos profile to set
+@@ -382,6 +480,14 @@ PP_QOS_MGR_RET_e pp_qos_set_port_shaper_
+  */
+ PP_QOS_MGR_RET_e pp_qos_cluster_is_active(Uint8 phy_cluster_id, Bool *is_active);
+ /**
++ *  pp_qos_set_cluster_line rate - Configure cluster line rate
++ *  @phy_cluster_id: Cluster ID
++ *  @line_rate_bps: line rate in Mbps
++ *
++ *  Returns PP_QOS_RC_SUCCESS if pass.
++ */
++PP_QOS_MGR_RET_e pp_qos_set_cluster_line_rate (Uint8 phy_cluster_id, Uint32 line_rate_Mbps);
++/**
+  *  pp_qos_set_cluster_config - Config QoS cluster
+  *  @phy_cluster_id: Cluster ID
+  *  @vpid_id: VPID ID
+@@ -398,7 +504,7 @@ PP_QOS_MGR_RET_e pp_qos_set_cluster_conf
+  *
+  *  Returns PP_QOS_RC_SUCCESS if pass.
+  */
+-PP_QOS_MGR_RET_e pp_qos_alloc_cluster(Uint8 vpid_id, Uint16 profile_private_identifier, Uint8 *phy_cluster_id);
++PP_QOS_MGR_RET_e pp_qos_alloc_cluster(Uint8 vpid_id, Uint16 profile_private_identifier, Uint8 *phy_cluster_id, PP_QOS_SCH_MODE_e sch_mode);
+ /**
+  *  pp_qos_free_cluster - Free/Delete QoS cluster
+  *  @phy_cluster_id: Cluster ID
+@@ -473,6 +579,17 @@ PP_QOS_MGR_RET_e pp_qos_get_cluster_stat
+  *  Returns PP_QOS_RC_SUCCESS if pass.
+  */
+ PP_QOS_MGR_RET_e pp_qos_get_cluster_by_queue_id(Uint8 phy_queue_id, Uint8 *phy_cluster_id, AVALANCHE_PP_QOS_CLST_CFG_t *clst_cfg);
++/**
++ *  pp_qos_get_cluster_by_vpid_and_schedule_type - Get the
++ *  cluster configuration by given VPID and scheduling type.
++ *  @vpid_id: VPID ID
++ *  @sch_mode: QOS Scheduling Mode
++ *  @phy_cluster_id: Pointer to return the cluster ID
++ *  @clst_cfg: Pointer to return the cluster configuration
++ *  
++ *  Returns PP_QOS_RC_SUCCESS if found a cluster.
++ */
++PP_QOS_MGR_RET_e pp_qos_get_cluster_by_vpid_and_schedule_type(Uint8 vpid_id, PP_QOS_SCH_MODE_e sch_mode, Uint8 *phy_cluster_id, AVALANCHE_PP_QOS_CLST_CFG_t *clst_cfg);
+ /**************/
+ /* Queue      */
+ /**************/
+@@ -499,6 +616,18 @@ PP_QOS_MGR_RET_e pp_qos_get_queue_and_cl
+ 																	      Uint8 *phy_cluster_id, Uint8 *phy_queue_id, Uint8 *pp_priority);
+ 
+ /**
++ *  pp_qos_get_highest_or_lowest_queue_by_cluster - Get the
++ *  Highest or lowest queue in the cluster 
++ *  @phy_cluster_id: Cluster Id
++ *  @highest: if set the Highest queue will be returned if not
++ *          set the lowest queue will be returned
++ *  @phy_queue_id: will be set with the queue num that was found
++ *  @queue_cfg: The highest or lowest queue configuration 
++ *  Returns PP_QOS_RC_SUCCESS if pass.
++ */
++PP_QOS_MGR_RET_e pp_qos_get_highest_or_lowest_queue_by_cluster( Uint8 phy_cluster_id, Bool highest, Uint8 *phy_queue_id, AVALANCHE_PP_QOS_QUEUE_t *queue_cfg, Uint8 *user_priority);
++
++/**
+  *  pp_qos_queue_is_active - Check if queue is active
+  *  @phy_queue_id: Queue ID
+  *  @is_active: Pointer to return if active or not
+@@ -522,13 +651,22 @@ PP_QOS_MGR_RET_e pp_qos_alloc_queue(Uint
+  */
+ PP_QOS_MGR_RET_e pp_qos_free_queue(Uint8 phy_queue_id);
+ /**
+- *  pp_qos_get_queue_config - Get the queue configuration
++ *  pp_qos_get_strict_queue_config - Get the queue configuration
+  *  @phy_queue_id: Queue ID
+  *  @queue_cfg: Pointer to return the queue configuration
+  *
+  *  Returns PP_QOS_RC_SUCCESS if pass.
+  */
+ PP_QOS_MGR_RET_e pp_qos_get_queue_config(Uint8 phy_queue_id, AVALANCHE_PP_QOS_QUEUE_t *queue_cfg);
++/**
++ *  pp_qos_modify_queue_weight - Change the queue weight
++ *  @phy_queue_id: Queue ID
++ *  @q_weight: the new weight for the queue
++ *
++ *  Returns PP_QOS_RC_SUCCESS if pass.
++ */
++PP_QOS_MGR_RET_e pp_qos_modify_queue_weight(Uint8 phy_queue_id, Uint32 q_weight);
++
+ PP_QOS_MGR_RET_e pp_qos_update_queue_it_credits(Uint8 phy_queue_id, Uint32 pkt_credit, Uint32 bytes_credit);
+ /**
+  *  pp_qos_modify_active_queue - Modify properties for an active
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -272,6 +272,9 @@
+ /* Event generated when created session by sanity test module */
+ #define TI_PP_TEST_SESSION       (TI_PP_GENERAL_EVENT + 0x3)
+ 
++/* Event generated when it is needed to disable moca pdsp */
++#define TI_PP_CONTROL_MOCA      (TI_PP_GENERAL_EVENT + 0x4)
++
+ /**************************************************************************
+  ********************* PP L2TPv3 Event Identifiers ************************
+  **************************************************************************/

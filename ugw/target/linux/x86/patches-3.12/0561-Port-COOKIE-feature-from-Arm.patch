@@ -1,0 +1,290 @@
+From 5d45314dd91d5e87644ae45f50057ee09bcce695 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Wed, 28 Dec 2016 11:19:10 +0200
+Subject: [PATCH 561/639] Port COOKIE feature from Arm
+
+---
+ arch/x86/Kconfig        |  7 +++++++
+ include/linux/skbuff.h  | 42 ++++++++++++++++++++++++++++++++----------
+ net/core/dev.c          |  2 +-
+ net/core/skbuff.c       | 46 +++++++++++++++++++++++-----------------------
+ net/ti/pp/ti_hil_core.c | 12 ++++++------
+ 5 files changed, 69 insertions(+), 40 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 669dbf2..ee5a224 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -561,6 +561,13 @@ config ARM_AVALANCHE_PDSP
+ 	  TIPP_STATS implements a feature that allows the reading of
+ 	  TIPP filters.
+ 	  Package is part of the P7 platform netfiltering capabilities.
++    config INTEL_KERNEL_SKB_COOKIE
++        bool "Support Aggregated SKB Cookie"
++	depends on TI_PACKET_PROCESSOR
++        default n
++        ---help---
++	  Allow support of the aggregated cookie inside SKB
++
+     config X86_AVALANCHE_SOC
+         bool "Packet processor data pipe support"
+         depends on TI_PACKET_PROCESSOR
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+index edd35fd..dc296dc 100755
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -290,12 +290,20 @@ enum {
+ 
+     }PP_PACKET_INFO_t;
+ 
+-/*
+-    return pointer to pp_packet_info struct within the skb
+-*/
+-#ifdef CONFIG_TI_PACKET_PROCESSOR  
+-#define SKB_GET_PP_INFO_P(skb)          (skb->pp_packet_info)
+-#endif 
++#ifdef CONFIG_INTEL_KERNEL_SKB_COOKIE
++    typedef union
++    {
++        unsigned int  raw[ 0 ];
++        struct
++        {
++            PP_PACKET_INFO_t    pp_packet_info;  
++            /* Add the additinal info below ... */  
++        }s;
++    }
++    SKB_INTEL_COOKIE;
++#else
++    #define SKB_INTEL_COOKIE    PP_PACKET_INFO_t
++#endif
+ 
+ #endif /* CONFIG_TI_PACKET_PROCESSOR */
+ 
+@@ -605,9 +613,23 @@ struct sk_buff {
+ #endif /* CONFIG_TI_L2_SELECTIVE_FORWARDER */
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+     #if PUMA7_OR_NEWER_SOC_TYPE
+-    PP_PACKET_INFO_t    *pp_packet_info;
++        #ifdef CONFIG_INTEL_KERNEL_SKB_COOKIE
++
++            SKB_INTEL_COOKIE *              	intel_cookie;
++            #define SKB_GET_PP_INFO_P(skb)      (&(skb)->intel_cookie->s.pp_packet_info)
++            #define SKB_GET_COOKIE_P(skb)       ((skb)->intel_cookie)
++
++        #else
++
++            PP_PACKET_INFO_t *              	pp_packet_info;
++            #define SKB_GET_PP_INFO_P(skb)      ((skb)->pp_packet_info)
++            #define SKB_GET_COOKIE_P(skb)       ((skb)->pp_packet_info)
++
++        #endif
++
+     #else
+-    PP_PACKET_INFO_t    pp_packet_info;
++            PP_PACKET_INFO_t                	pp_packet_info;
++            #define SKB_GET_PP_INFO_P(skb)      (&(skb)->pp_packet_info)
+     #endif
+     __u16               vpid_vlan_tci;
+ #endif  /* CONFIG_TI_PACKET_PROCESSOR */
+@@ -735,8 +757,8 @@ extern bool skb_try_coalesce(struct sk_buff *to, struct sk_buff *from,
+ 			     bool *fragstolen, int *delta_truesize);
+ 
+ #ifdef CONFIG_TI_PACKET_PROCESSOR  
+-extern void* __alloc_skb_pp_packet_info(void);
+-extern void kfree_pp_packet_info(void *pp_info);
++extern void* __alloc_skb_intel_cookie(void);
++extern void kfree_skb_intel_cookie(void *cookie_ptr);
+ #endif
+ 
+ extern struct sk_buff *__alloc_skb(unsigned int size,
+diff --git a/net/core/dev.c b/net/core/dev.c
+index f9268f1..64a5274 100755
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -3982,7 +3982,7 @@ static gro_result_t napi_skb_finish(gro_result_t ret, struct sk_buff *skb)
+             if (NAPI_GRO_CB(skb)->free == NAPI_GRO_FREE_STOLEN_HEAD)
+             {
+ #if PUMA7_OR_NEWER_SOC_TYPE && CONFIG_TI_PACKET_PROCESSOR
+-                kfree_pp_packet_info( (skb)->pp_packet_info );
++                kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb) );
+ #endif
+                 kmem_cache_free(skbuff_head_cache, skb);
+             }
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+index 22980d8..1cbd397 100755
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -94,7 +94,7 @@
+ EXPORT_SYMBOL(sysctl_max_skb_frags);
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-struct kmem_cache *skbuff_pp_info_cache __read_mostly;
++struct kmem_cache *skbuff_intel_cookie_cache __read_mostly;
+ #endif
+ #endif
+ 
+@@ -212,8 +212,8 @@
+ void __init intel_cache_init(void)
+ {
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-    skbuff_pp_info_cache = kmem_cache_create("skbuff_pp_info_cache",
+-                                             sizeof(PP_PACKET_INFO_t),
++    skbuff_intel_cookie_cache = kmem_cache_create("skbuff_intel_cookie_cache",
++                                             sizeof(SKB_INTEL_COOKIE),
+                                              0,
+                                              SLAB_HWCACHE_ALIGN | SLAB_PANIC,
+                                              NULL);
+@@ -221,25 +221,24 @@
+ }
+ 
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-void* __alloc_skb_pp_packet_info(void)
++void* __alloc_skb_intel_cookie(void)
+ {
+-    PP_PACKET_INFO_t *pp_info;
++    SKB_INTEL_COOKIE *  cookie_ptr;
+ 
+     /* Get the HEAD */
+-    pp_info = kmem_cache_alloc_node(skbuff_pp_info_cache, GFP_ATOMIC, NUMA_NO_NODE);
+-    if (!pp_info)
+-        return pp_info;
+-
+-    prefetchw(pp_info);
+-    return (void *) pp_info;
++    cookie_ptr = kmem_cache_alloc_node(skbuff_intel_cookie_cache, GFP_ATOMIC, NUMA_NO_NODE);
++    if (!cookie_ptr)
++        return cookie_ptr;
++    prefetchw(cookie_ptr);
++    return (void *) cookie_ptr;
+ }
+-EXPORT_SYMBOL(__alloc_skb_pp_packet_info);
++EXPORT_SYMBOL(__alloc_skb_intel_cookie);
+ 
+-void kfree_pp_packet_info(void *pp_info)
++void kfree_skb_intel_cookie(void *cookie_ptr)
+ {
+-    kmem_cache_free(skbuff_pp_info_cache, pp_info);
++    kmem_cache_free(skbuff_intel_cookie_cache, cookie_ptr);
+ }
+-EXPORT_SYMBOL(kfree_pp_packet_info);
++EXPORT_SYMBOL(kfree_skb_intel_cookie);
+ #endif /* CONFIG_TI_PACKET_PROCESSOR */
+ #endif
+ /**
+@@ -253,8 +252,8 @@
+ {
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-    skb->pp_packet_info = __alloc_skb_pp_packet_info();
+-    if (!skb->pp_packet_info)
++    SKB_GET_COOKIE_P(skb) = __alloc_skb_intel_cookie();
++    if (!SKB_GET_COOKIE_P(skb))
+     {
+         return -1;
+     }
+@@ -276,7 +275,7 @@
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+ #ifdef CONFIG_INTEL_L2VPN_MAC_AGING
+ 	/* Indicating N.I.U cpe number */
+-	skb->pp_packet_info->pp_session.cpe_number =
++	SKB_GET_PP_INFO_P(skb)->pp_session.cpe_number =
+ 		AVALANCHE_PP_L2VPN_INVALID_CPE_NUMBER;
+ #endif
+ #endif
+@@ -686,7 +685,7 @@
+         {
+ 	#ifdef CONFIG_TI_PACKET_PROCESSOR
+ 	#if PUMA7_OR_NEWER_SOC_TYPE
+-            kfree_pp_packet_info( skb->pp_packet_info );
++            kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb) );
+         #endif
+ 	#endif
+ 		kmem_cache_free(skbuff_head_cache, skb);
+@@ -699,8 +698,8 @@
+         {
+ 	#ifdef CONFIG_TI_PACKET_PROCESSOR
+ 	#if PUMA7_OR_NEWER_SOC_TYPE
+-            kfree_pp_packet_info( (skb  )->pp_packet_info );
+-            kfree_pp_packet_info( (skb+1)->pp_packet_info );
++            kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb  ) );
++            kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb+1) );
+         #endif
+ 	#endif
+ 			kmem_cache_free(skbuff_fclone_cache, skb);
+@@ -720,8 +719,8 @@
+         {
+ 	#ifdef CONFIG_TI_PACKET_PROCESSOR
+ 	#if PUMA7_OR_NEWER_SOC_TYPE
+-            kfree_pp_packet_info( (skb  )->pp_packet_info );
+-            kfree_pp_packet_info( (skb-1)->pp_packet_info );
++            kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb  ) );
++            kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb-1) );
+         #endif
+ 	#endif
+ 			kmem_cache_free(skbuff_fclone_cache, other);
+@@ -3641,7 +3640,7 @@
+ 		skb_release_head_state(skb);
+ 	#ifdef CONFIG_TI_PACKET_PROCESSOR
+ 	#if PUMA7_OR_NEWER_SOC_TYPE
+-	kfree_pp_packet_info( (skb)->pp_packet_info );
++    kfree_skb_intel_cookie( SKB_GET_COOKIE_P(skb) );
+ 	#endif
+         #endif
+ 		kmem_cache_free(skbuff_head_cache, skb);
+diff --git a/net/ti/pp/ti_hil_core.c b/net/ti/pp/ti_hil_core.c
+index a880a19..3576a52 100755
+--- a/net/ti/pp/ti_hil_core.c
++++ b/net/ti/pp/ti_hil_core.c
+@@ -108,13 +108,13 @@ int create_drop_session(struct sk_buff* skb, unsigned long event)
+     unsigned int flags;
+ 
+     /* Read current flags */
+-    flags = ntohl(skb->pp_packet_info->flags);
++    flags = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
+ 
+     /* Store event in flags */
+     flags |= (event << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET );
+ 
+     /* Convert new flags back to network byte order */
+-    skb->pp_packet_info->flags = htonl(flags);
++    SKB_GET_PP_INFO_P(skb)->flags = htonl(flags);
+ 
+     param.skb = skb;
+     atomic_notifier_call_chain(&notifier_list, 0, &param);
+@@ -402,13 +402,13 @@ int ti_hil_pp_event(unsigned long event, void *v)
+             skb = (struct sk_buff*) v;
+ 
+             /* Convert existing flags to host byte order */
+-            flags = ntohl(skb->pp_packet_info->flags);
++            flags = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
+ 
+             /* In the intrusive mode profile these packets are not considered as candidates for acceleration so mark the packet BYPASS mode so that the egress hook is bypassed */
+             flags |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
+ 
+             /* Convert new flags back to network byte order */
+-            skb->pp_packet_info->flags = htonl(flags);
++            SKB_GET_PP_INFO_P(skb)->flags = htonl(flags);
+ 
+             break;
+         }
+@@ -437,7 +437,7 @@ int ti_hil_pp_event(unsigned long event, void *v)
+                 break;
+             }
+ 
+-	    if (skb->pp_packet_info->input_device_index == 0)
++        if (SKB_GET_PP_INFO_P(skb)->input_device_index == 0)
+             {
+ 		break;
+             }
+@@ -454,7 +454,7 @@ int ti_hil_pp_event(unsigned long event, void *v)
+ 		break;
+ 	    }
+ 
+-            memcpy(new_skb->pp_packet_info, skb->pp_packet_info, sizeof(PP_PACKET_INFO_t));
++            memcpy(SKB_GET_COOKIE_P(new_skb), SKB_GET_COOKIE_P(skb), sizeof(SKB_INTEL_COOKIE));
+             memcpy(new_skb->data, skb->data, skb->len);
+             skb_put(new_skb, skb->len);
+ 
+-- 
+2.10.1
+

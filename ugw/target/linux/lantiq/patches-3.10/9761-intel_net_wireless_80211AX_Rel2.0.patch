@@ -1,0 +1,276 @@
+From 9fd01705af25c43d11e4413e64900939c8a7811e Mon Sep 17 00:00:00 2001
+From: vulsmike <mikelis.vuls@intel.com>
+Date: Fri, 23 Feb 2018 13:00:02 +0200
+Subject: [PATCH 33/36] 80211AX_Rel2.0
+
+---
+ include/linux/ieee80211.h | 15 ++++++++++++
+ include/net/cfg80211.h    | 22 ++++++++++++++++++
+ include/net/mac80211.h    |  2 ++
+ net/wireless/nl80211.c    | 59 ++++++++++++++++++++++++++++++++++++++++++++++-
+ 4 files changed, 97 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/ieee80211.h b/include/linux/ieee80211.h
+index 35a56c7..e71dfce 100644
+--- a/include/linux/ieee80211.h
++++ b/include/linux/ieee80211.h
+@@ -1403,6 +1403,14 @@ struct ieee80211_vht_operation {
+ #define IEEE80211_VHT_CAP_RX_ANTENNA_PATTERN			0x10000000
+ #define IEEE80211_VHT_CAP_TX_ANTENNA_PATTERN			0x20000000
+ 
++/* 802.11ax HE  */
++#define IEEE80211_HE_CAPABILITIES_SIZE 64
++
++struct ieee80211_he_cap {
++	u8 he_capabilities[IEEE80211_HE_CAPABILITIES_SIZE];
++} __packed;
++/* End of 802.11ax HE  */
++
+ /* Authentication algorithms */
+ #define WLAN_AUTH_OPEN 0
+ #define WLAN_AUTH_SHARED_KEY 1
+@@ -1742,6 +1750,7 @@ enum ieee80211_eid {
+ 	WLAN_EID_EPAC_POLICY = 182,
+ 	WLAN_EID_CLISTER_TIME_OFF = 183,
+ 	WLAN_EID_ANTENNA_SECTOR_ID_PATTERN = 190,
++	WLAN_EID_HE_CAP_ID = 255,
+ };
+ 
+ /* Action category code */
+@@ -1795,6 +1804,12 @@ enum ieee80211_vht_actioncode {
+ 	WLAN_VHT_ACTION_OPMODE_NOTIF = 2,
+ };
+ 
++/* HE action codes */
++enum ieee80211_he_actioncode {
++	WLAN_HE_ACTION_COMPRESSED_BF = 0,
++	WLAN_HE_ACTION_GROUPID_MGMT = 1,
++	WLAN_HE_ACTION_OPMODE_NOTIF = 2,
++};
+ /* Self Protected Action codes */
+ enum ieee80211_self_protected_actioncode {
+ 	WLAN_SP_RESERVED = 0,
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index f80a17c..55a6fdf 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -254,6 +254,20 @@ struct ieee80211_sta_vht_cap {
+ };
+ 
+ /**
++ * struct ieee80211_sta_he_cap - STA's HE capabilities
++ *
++ * This structure describes most essential parameters needed
++ * to describe 802.11ax HE capabilities for the STA.
++ *
++ * @he_supported: is HE supported by the STA
++ * @he_capabilities: HE capabilities map as described in 802.11ax spec
++  */
++struct ieee80211_sta_he_cap {
++	 bool he_supported;
++	u8 he_capabilities[IEEE80211_HE_CAPABILITIES_SIZE];
++};
++
++/**
+  * struct ieee80211_supported_band - frequency band definition
+  *
+  * This structure describes a frequency band a wiphy
+@@ -278,6 +292,7 @@ struct ieee80211_supported_band {
+ 	int n_bitrates;
+ 	struct ieee80211_sta_ht_cap ht_cap;
+ 	struct ieee80211_sta_vht_cap vht_cap;
++	struct ieee80211_sta_he_cap he_cap;
+ };
+ 
+ /*
+@@ -697,6 +712,7 @@ struct station_parameters {
+ 	u8 plink_state;
+ 	const struct ieee80211_ht_cap *ht_capa;
+ 	const struct ieee80211_vht_cap *vht_capa;
++	const struct ieee80211_he_cap *he_capa;
+ 	u8 uapsd_queues;
+ 	u8 max_sp;
+ 	enum nl80211_mesh_power_mode local_pm;
+@@ -706,6 +722,7 @@ struct station_parameters {
+ 	u8 *resp;
+ 	size_t resp_len;
+ 	u32 rssi;
++	u8 he_capa_len;
+ };
+ 
+ /**
+@@ -1495,6 +1512,7 @@ enum cfg80211_assoc_req_flags {
+  * @ht_capa_mask:  The bits of ht_capa which are to be used.
+  * @vht_capa: VHT capability override
+  * @vht_capa_mask: VHT capability mask indicating which fields to use
++ * @he_capa_mask: HE capability mask indicating which fields to use
+  * @vendor_wds: use wds vendor specific capabilities
+  */
+ struct cfg80211_assoc_request {
+@@ -1507,6 +1525,7 @@ struct cfg80211_assoc_request {
+ 	struct ieee80211_ht_cap ht_capa;
+ 	struct ieee80211_ht_cap ht_capa_mask;
+ 	struct ieee80211_vht_cap vht_capa, vht_capa_mask;
++	struct ieee80211_he_cap he_capa, he_capa_mask;
+ 	int vendor_wds;
+ };
+ 
+@@ -1640,6 +1659,8 @@ struct cfg80211_connect_params {
+ 	struct ieee80211_ht_cap ht_capa_mask;
+ 	struct ieee80211_vht_cap vht_capa;
+ 	struct ieee80211_vht_cap vht_capa_mask;
++	struct ieee80211_he_cap he_capa;
++	struct ieee80211_he_cap he_capa_mask;
+ };
+ 
+ /**
+@@ -2847,6 +2868,7 @@ struct wiphy {
+ 
+ 	const struct ieee80211_ht_cap *ht_capa_mod_mask;
+ 	const struct ieee80211_vht_cap *vht_capa_mod_mask;
++	const struct ieee80211_he_cap *he_capa_mod_mask;
+ 
+ #ifdef CONFIG_NET_NS
+ 	/* the network namespace this phy lives in currently */
+diff --git a/include/net/mac80211.h b/include/net/mac80211.h
+index db993ad..265d7e1 100644
+--- a/include/net/mac80211.h
++++ b/include/net/mac80211.h
+@@ -1334,6 +1334,7 @@ struct ieee80211_sta_rates {
+  * @supp_rates: Bitmap of supported rates (per band)
+  * @ht_cap: HT capabilities of this STA; restricted to our own capabilities
+  * @vht_cap: VHT capabilities of this STA; restricted to our own capabilities
++ * @he_cap: HE capabilities of this STA; restricted to our own capabilities
+  * @wme: indicates whether the STA supports QoS/WME (if local devices does,
+  *	otherwise always false)
+  * @drv_priv: data area for driver use, will always be aligned to
+@@ -1358,6 +1359,7 @@ struct ieee80211_sta {
+ 	u16 aid;
+ 	struct ieee80211_sta_ht_cap ht_cap;
+ 	struct ieee80211_sta_vht_cap vht_cap;
++	struct ieee80211_sta_he_cap he_cap;
+ 	bool wme;
+ 	u8 uapsd_queues;
+ 	u8 max_sp;
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 5cc9668..a5b8cf2 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -364,6 +364,8 @@ static const struct nla_policy nl80211_policy[NL80211_ATTR_MAX+1] = {
+ 	[NL80211_ATTR_USER_REG_HINT_TYPE] = { .type = NLA_U32 },
+ 	[NL80211_ATTR_SAE_DATA] = { .type = NLA_BINARY, },
+ 	[NL80211_ATTR_VHT_CAPABILITY] = { .len = NL80211_VHT_CAPABILITY_LEN },
++	[NL80211_ATTR_HE_CAPABILITY] = { .type = NLA_BINARY,
++						.len = NL80211_HE_CAPABILITY_MAX_LEN },
+ 	[NL80211_ATTR_SCAN_FLAGS] = { .type = NLA_U32 },
+ 	[NL80211_ATTR_P2P_CTWINDOW] = { .type = NLA_U8 },
+ 	[NL80211_ATTR_P2P_OPPPS] = { .type = NLA_U8 },
+@@ -376,6 +378,8 @@ static const struct nla_policy nl80211_policy[NL80211_ATTR_MAX+1] = {
+ 	[NL80211_ATTR_VHT_CAPABILITY_MASK] = {
+ 		.len = NL80211_VHT_CAPABILITY_LEN,
+ 	},
++	[NL80211_ATTR_HE_CAPABILITY_MASK] = { .type = NLA_BINARY,
++						.len = NL80211_HE_CAPABILITY_MAX_LEN },
+ 	[NL80211_ATTR_MDID] = { .type = NLA_U16 },
+ 	[NL80211_ATTR_IE_RIC] = { .type = NLA_BINARY,
+ 				  .len = IEEE80211_MAX_DATA_LEN },
+@@ -1072,7 +1076,14 @@ static int nl80211_send_band_rateinfo(struct sk_buff *msg,
+ 	     nla_put_u32(msg, NL80211_BAND_ATTR_VHT_CAPA,
+ 			 sband->vht_cap.cap)))
+ 		return -ENOBUFS;
+-
++	/* add HE info */
++	if (sband->he_cap.he_supported &&
++	(nla_put(msg, NL80211_BAND_ATTR_HE_MCS_SET,
++		sizeof(sband->vht_cap.vht_mcs),
++		&sband->vht_cap.vht_mcs) ||
++		nla_put_u32(msg, NL80211_BAND_ATTR_HE_CAPA,
++		sband->vht_cap.cap))) /* TODO: Temporary, using VHT rates for HE */
++	return -ENOBUFS;
+ 	/* add bitrates */
+ 	nl_rates = nla_nest_start(msg, NL80211_BAND_ATTR_RATES);
+ 	if (!nl_rates)
+@@ -1560,6 +1571,13 @@ static int nl80211_send_wiphy(struct cfg80211_registered_device *dev,
+ 			goto nla_put_failure;
+ 		(*split_start)++;
+ 		break;
++        if (dev->wiphy.he_capa_mod_mask &&
++            nla_put(msg, NL80211_ATTR_HE_CAPABILITY_MASK,
++                sizeof(*dev->wiphy.he_capa_mod_mask),
++                dev->wiphy.he_capa_mod_mask))
++            goto nla_put_failure;
++        (*split_start)++;
++        break;
+ 	case 10:
+ 		(*split_start)++;
+ 		break;
+@@ -3921,6 +3939,10 @@ static int nl80211_set_station_tdls(struct genl_info *info,
+ 	if (info->attrs[NL80211_ATTR_VHT_CAPABILITY])
+ 		params->vht_capa =
+ 			nla_data(info->attrs[NL80211_ATTR_VHT_CAPABILITY]);
++	if (info->attrs[NL80211_ATTR_HE_CAPABILITY]) {
++		params->he_capa = nla_data(info->attrs[NL80211_ATTR_HE_CAPABILITY]);
++		params->he_capa_len = nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY]);
++	}
+ 
+ 	return nl80211_parse_sta_wme(info, params);
+ }
+@@ -4101,6 +4123,11 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+ 		params.vht_capa =
+ 			nla_data(info->attrs[NL80211_ATTR_VHT_CAPABILITY]);
+ 
++	if (info->attrs[NL80211_ATTR_HE_CAPABILITY]) {
++		params.he_capa = nla_data(info->attrs[NL80211_ATTR_HE_CAPABILITY]);
++		params.he_capa_len = nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY]);
++	}
++
+ 	if (info->attrs[NL80211_ATTR_STA_PLINK_ACTION]) {
+ 		params.plink_action =
+ 			nla_get_u8(info->attrs[NL80211_ATTR_STA_PLINK_ACTION]);
+@@ -6374,6 +6401,20 @@ static int nl80211_associate(struct sk_buff *skb, struct genl_info *info)
+ 		       sizeof(req.vht_capa));
+ 	}
+ 
++	if (info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]) {
++		memcpy(&req.he_capa_mask,
++		nla_data(info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]),
++		nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]));
++	}
++
++	if (info->attrs[NL80211_ATTR_HE_CAPABILITY]) {
++		if (!info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK])
++			return -EINVAL;
++			memcpy(&req.he_capa,
++			nla_data(info->attrs[NL80211_ATTR_HE_CAPABILITY]),
++			nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY]));
++	}
++
+ 	err = nl80211_crypto_settings(rdev, info, &req.crypto, 1);
+ 	if (!err)
+ 		err = cfg80211_mlme_assoc(rdev, dev, chan, bssid,
+@@ -6989,6 +7030,22 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+ 		       sizeof(connect.vht_capa));
+ 	}
+ 
++	if (info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]) {
++		memcpy(&connect.he_capa_mask,
++		nla_data(info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]),
++		nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]));
++	}
++
++	if (info->attrs[NL80211_ATTR_HE_CAPABILITY]) {
++		if (!info->attrs[NL80211_ATTR_HE_CAPABILITY_MASK]) {
++			kfree(connkeys);
++			return -EINVAL;
++		}
++	memcpy(&connect.he_capa,
++		nla_data(info->attrs[NL80211_ATTR_HE_CAPABILITY]),
++		nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY]));
++	}
++
+ 	err = cfg80211_connect(rdev, dev, &connect, connkeys);
+ 	if (err)
+ 		kfree(connkeys);
+-- 
+2.10.1
+

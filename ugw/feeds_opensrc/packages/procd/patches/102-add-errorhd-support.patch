@@ -1,0 +1,161 @@
+From 4c08d757c386743fcbef24529a8e4abd9a96d5f5 Mon Sep 17 00:00:00 2001
+From: Yaniv Yithzak <yaniv.yitzhak@intel.com>
+Date: Tue, 13 Feb 2018 14:36:15 +0200
+Subject: [PATCH] 102-add-errorhd-support
+
+---
+ service/instance.c      |  14 +++++++
+ service/procd_errorhd.h | 109 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 123 insertions(+)
+ create mode 100644 service/procd_errorhd.h
+
+diff --git a/service/instance.c b/service/instance.c
+index 1fc51e8..7c9dedf 100644
+--- a/service/instance.c
++++ b/service/instance.c
+@@ -28,6 +28,7 @@
+ #include <unistd.h>
+ #include <sched.h>
+ #include <libubox/md5.h>
++#include "procd_errorhd.h"
+ 
+ #include "../procd.h"
+ 
+@@ -480,6 +481,19 @@ instance_exit(struct uloop_process *p, int ret)
+ 	} else if (in->restart) {
+ 		instance_start(in);
+ 	} else if (in->respawn) {
++		if ((ret != 0) && (ret != 256)) {
++			struct eh_info info = { 0 };
++			printf("procd: respawn Instance %s::%s crashed with error code %d after %ld seconds!!\n", in->srv->name, in->name, ret, runtime);
++			ERROR("Instance %s::%s crashed with error code %d after %ld seconds!!\n", in->srv->name, in->name, ret, runtime);
++			//trigger errorhd daemon!
++			snprintf(info.subsys, sizeof(info.subsys), "procd");
++			snprintf(info.data[0], sizeof(info.data[0]), "%s", in->srv->name);
++			snprintf(info.data[1], sizeof(info.data[1]), "%d", ret);
++			snprintf(info.headline, sizeof(info.headline), "procd: respawn Instance %s::%s crashed with error code %d after %ld seconds!\n",
++										in->srv->name, in->name, ret, runtime);
++			errorhd_trigger(&info);
++		}
++
+ 		if (runtime < in->respawn_threshold)
+ 			in->respawn_count++;
+ 		else
+diff --git a/service/procd_errorhd.h b/service/procd_errorhd.h
+new file mode 100644
+index 0000000..a685148
+--- /dev/null
++++ b/service/procd_errorhd.h
+@@ -0,0 +1,109 @@
++/******************************************************************************
++ *     File Name  : procd_errorhd.h                                                  *
++ *     Project    : UGW                                                        *
++ *     Description: Error Handler Daemon main program and core.                *
++ *                                                                             *
++ ******************************************************************************/
++#pragma once
++#define _GNU_SOURCE
++#include <stdio.h>
++#include <unistd.h>
++#include <sys/file.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <stdbool.h>
++
++#define MAX_DATA_SIZE         64U
++#define MAX_SUBSYS_SIZE     32U
++#define MAX_HEADLINE_SIZE  256U
++
++#define ERRORHD_NAMED_PIPE            "/opt/errorhd_pipe"
++#define ERRORHD_NAMED_PIPE_LOCK "/opt/errorhd_pipe_lock"
++
++#define max(a,b) \
++   ({ __typeof__ (a) _a = (a); \
++       __typeof__ (b) _b = (b); \
++     _a > _b ? _a : _b; })
++
++#define min(a,b) max(b,a)
++
++struct eh_info {
++	char subsys[MAX_SUBSYS_SIZE];
++	char headline[MAX_HEADLINE_SIZE];
++	char data[3][MAX_DATA_SIZE];
++	bool nopadlog;
++};
++
++static inline int errorhd_lock(void)
++{
++	int fd, ret = 0;
++
++	errno = 0;
++	fd = open(ERRORHD_NAMED_PIPE_LOCK, O_CREAT | O_WRONLY);
++	if (fd < 0) {
++		fprintf(stderr, "errorhd_lock: PID %ld open %s failed with error [%s]\n", (long)getpid(), ERRORHD_NAMED_PIPE_LOCK, strerror(errno));
++		return -1;
++	}
++
++	if ((ret = flock(fd, LOCK_EX)) == -1) {
++		fprintf(stderr, "errorhd_lock: PID %ld flock %d failed with error [%s]\n", (long)getpid(), fd, strerror(errno));
++		close(fd);
++		return -1;
++	}
++
++	return fd;
++}
++
++static inline int errorhd_unlock(int fd)
++{
++	int ret = 0;
++
++	errno = 0;
++	if ((ret = flock(fd, LOCK_UN)) == -1)
++		fprintf(stderr, "errorhd_unlock: PID %ld flock %d failed with error [%s]\n", (long)getpid(), fd, strerror(errno));
++
++	close(fd);
++	return ret;
++}
++
++
++/**
++ * errorhd_trigger - trigger error handler
++ * Not thread safe! If called from threads, protect call with appropriate locking.
++ *
++ * @param struct eh_info *info
++ * @return
++ */
++static inline int
++errorhd_trigger(struct eh_info *info)
++{
++	FILE *f;
++	int lock_fd;
++	size_t len = 0;
++
++	if (access(ERRORHD_NAMED_PIPE, F_OK)) {
++		perror("errorhd_trigger: access failed\n");
++		return -1;
++	}
++
++	if ((lock_fd = errorhd_lock()) == -1)
++		return -1;
++
++	f = fopen(ERRORHD_NAMED_PIPE, "wb");
++	if (f == NULL) {
++		perror("errorhd_trigger: fopen failed\n");
++		errorhd_unlock(lock_fd);
++		return -1;
++	}
++
++	len = fwrite(info, sizeof(struct eh_info), 1, f);
++	fclose(f);
++	errorhd_unlock(lock_fd);
++
++	if (len != 1) {
++		perror("errorhd_trigger: fwrite failed\n");
++	}
++
++	return 0;
++}
+-- 
+2.11.0
+

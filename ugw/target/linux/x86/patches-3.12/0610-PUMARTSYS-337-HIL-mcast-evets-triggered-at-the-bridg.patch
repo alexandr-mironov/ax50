@@ -1,0 +1,236 @@
+From 43c9fff6a9fc5b62b3c33fb8117179feb645e474 Mon Sep 17 00:00:00 2001
+From: "Martinez, Ricardo" <ricardo.martinez@intel.com>
+Date: Mon, 6 Mar 2017 09:29:32 -0700
+Subject: [PATCH 610/639] PUMARTSYS-337 - HIL mcast evets triggered at the
+ bridge snooping code
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 11 ++---
+ include/linux/ti_hil.h                             |  4 +-
+ net/bridge/br_multicast.c                          | 48 ++++++++++++++++++++++
+ net/ipv4/igmp.c                                    | 15 -------
+ net/ipv6/mcast.c                                   | 15 -------
+ 5 files changed, 56 insertions(+), 37 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index c7e3a37..a6ba3fb 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -4,7 +4,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014-2016 Intel Corporation.
++  Copyright(c) 2014-2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -1769,11 +1769,12 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_session_create        ( AVALANCHE_PP_S
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ /* Multicast support */
+ extern AVALANCHE_PP_RET_e    avalanche_pp_check_multiple_egress ( AVALANCHE_PP_SESSION_INFO_t *ptr_session );
+-extern AVALANCHE_PP_RET_e    avalanche_pp_del_mcast_member      ( void *ptr, Uint8 vpid_handle );
+-extern AVALANCHE_PP_RET_e    avalanche_pp_mcast_dbg_add_member  ( Uint8 group_index, Uint8 vpid, Uint16 cluster, Uint32 psi);
+-extern AVALANCHE_PP_RET_e    avalanche_pp_delete_mc_session     ( void *ptr);
++extern AVALANCHE_PP_RET_e    avalanche_pp_del_mcast_member      ( void *ptr );
++extern AVALANCHE_PP_RET_e    avalanche_pp_add_mcast_member      ( void *ptr );
++extern AVALANCHE_PP_RET_e    avalanche_pp_mcast_dbg_add_member  ( Uint8 group_index, Uint8 vpid, Uint16 cluster, Uint32 psi );
++extern AVALANCHE_PP_RET_e    avalanche_pp_delete_mc_session     ( void *ptr, Bool deleteMCVpidInfo );
+ 
+-extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats, Bool deleteFromFW );
++extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats, Bool deleteFromFW, Bool deleteMCVpidInfo );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_override_egress_queue  ( Uint32 session_handle,     Uint8 override_qMgr,                               Uint16 override_qNum);
+ #else
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats );
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 4378c38..6863987 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -1,7 +1,7 @@
+ /*
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2016 Intel Corporation.
++  Copyright(c) 2016 -2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -344,7 +344,7 @@ struct hil_mr_ipaddr {
+                 struct in_addr  ip4;
+                 struct in6_addr ip6;
+         } addr;
+-        int ifindex;
++        int vpid;
+ };
+ 
+ /**************************************************************************
+diff --git a/net/bridge/br_multicast.c b/net/bridge/br_multicast.c
+index f2c1049..99c6a5a 100644
+--- a/net/bridge/br_multicast.c
++++ b/net/bridge/br_multicast.c
+@@ -34,6 +34,10 @@
+ 
+ #include "br_private.h"
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++#include <linux/ti_hil.h>
++#endif
++
+ static void br_multicast_start_querier(struct net_bridge *br,
+ 				       struct bridge_mcast_query *query);
+ unsigned int br_mdb_rehash_seq;
+@@ -717,6 +721,17 @@ static int br_ip4_multicast_add_group(struct net_bridge *br,
+ 	br_group.proto = htons(ETH_P_IP);
+ 	br_group.vid = vid;
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	if (group && port && port->dev)
++	{
++		struct hil_mr_ipaddr hil_ip;
++		hil_ip.type = HIL_MR_IPV4;
++		hil_ip.addr.ip4.s_addr = group;
++		hil_ip.vpid = port->dev->vpid_handle;
++		ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
++	}
++#endif// CONFIG_TI_PACKET_PROCESSOR
++
+ 	return br_multicast_add_group(br, port, &br_group);
+ }
+ 
+@@ -735,6 +750,17 @@ static int br_ip6_multicast_add_group(struct net_bridge *br,
+ 	br_group.proto = htons(ETH_P_IPV6);
+ 	br_group.vid = vid;
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	if (group && port && port->dev)
++	{
++		struct hil_mr_ipaddr hil_ip;
++		hil_ip.type = HIL_MR_IPV6;
++		memcpy(&(hil_ip.addr.ip6), group, sizeof(struct in6_addr));
++		hil_ip.vpid = port->dev->vpid_handle;
++		ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
++	}
++#endif// CONFIG_TI_PACKET_PROCESSOR
++
+ 	return br_multicast_add_group(br, port, &br_group);
+ }
+ #endif
+@@ -1438,6 +1464,17 @@ static void br_ip4_multicast_leave_group(struct net_bridge *br,
+ 	br_group.proto = htons(ETH_P_IP);
+ 	br_group.vid = vid;
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	if (group && port && port->dev)
++	{
++		struct hil_mr_ipaddr hil_ip;
++		hil_ip.type = HIL_MR_IPV4;
++		hil_ip.addr.ip4.s_addr = group;
++		hil_ip.vpid = port->dev->vpid_handle;
++		ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
++	}
++#endif// CONFIG_TI_PACKET_PROCESSOR
++
+ 	br_multicast_leave_group(br, port, &br_group, &br->ip4_querier, query);
+ }
+ 
+@@ -1459,6 +1496,17 @@ static void br_ip6_multicast_leave_group(struct net_bridge *br,
+ 	br_group.proto = htons(ETH_P_IPV6);
+ 	br_group.vid = vid;
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	if (group && port && port->dev)
++	{
++		struct hil_mr_ipaddr hil_ip;
++		hil_ip.type = HIL_MR_IPV6;
++		memcpy(&(hil_ip.addr.ip6), group, sizeof(struct in6_addr));
++		hil_ip.vpid = port->dev->vpid_handle;
++		ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
++	}
++#endif// CONFIG_TI_PACKET_PROCESSOR
++
+ 	br_multicast_leave_group(br, port, &br_group, &br->ip6_querier, query);
+ }
+ #endif
+diff --git a/net/ipv4/igmp.c b/net/ipv4/igmp.c
+index 16fd75a..0e45e47 100644
+--- a/net/ipv4/igmp.c
++++ b/net/ipv4/igmp.c
+@@ -105,7 +105,6 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ #endif
+-#include <linux/ti_hil.h>
+ #define IP_MAX_MEMBERSHIPS	20
+ #define IP_MAX_MSF		10
+ 
+@@ -1909,13 +1908,6 @@ int ip_mc_join_group(struct sock *sk , struct ip_mreqn *imr)
+ 	err = 0;
+ done:
+ 	rtnl_unlock();
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-	struct hil_mr_ipaddr hil_ip;
+-	hil_ip.type = HIL_MR_IPV4;
+-	hil_ip.addr.ip4.s_addr = addr;
+-	hil_ip.ifindex = ifindex;
+-	ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+ 	return err;
+ }
+ EXPORT_SYMBOL(ip_mc_join_group);
+@@ -1983,13 +1975,6 @@ int ip_mc_leave_group(struct sock *sk, struct ip_mreqn *imr)
+ 		/* decrease mem now to avoid the memleak warning */
+ 		atomic_sub(sizeof(*iml), &sk->sk_omem_alloc);
+ 		kfree_rcu(iml, rcu);
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-		struct hil_mr_ipaddr hil_ip;
+-		hil_ip.type = HIL_MR_IPV4;
+-		hil_ip.addr.ip4.s_addr = group;
+-		hil_ip.ifindex = ifindex;
+-		ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+ 		return 0;
+ 	}
+ out:
+diff --git a/net/ipv6/mcast.c b/net/ipv6/mcast.c
+index 3b93005..58e0a8f 100644
+--- a/net/ipv6/mcast.c
++++ b/net/ipv6/mcast.c
+@@ -46,7 +46,6 @@
+ #include <linux/slab.h>
+ #include <linux/pkt_sched.h>
+ #include <net/mld.h>
+-#include <linux/ti_hil.h>
+ #include <linux/netfilter.h>
+ #include <linux/netfilter_ipv6.h>
+ 
+@@ -212,13 +211,6 @@ int ipv6_sock_mc_join(struct sock *sk, int ifindex, const struct in6_addr *addr)
+ 	spin_unlock(&ipv6_sk_mc_lock);
+ 
+ 	rcu_read_unlock();
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-	struct hil_mr_ipaddr hil_ip;
+-	hil_ip.type = HIL_MR_IPV6;
+-	memcpy(&(hil_ip.addr.ip6), addr, sizeof(struct in6_addr));
+-	hil_ip.ifindex = ifindex;
+-	ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+ 	return 0;
+ }
+ 
+@@ -259,13 +251,6 @@ int ipv6_sock_mc_drop(struct sock *sk, int ifindex, const struct in6_addr *addr)
+ 			rcu_read_unlock();
+ 			atomic_sub(sizeof(*mc_lst), &sk->sk_omem_alloc);
+ 			kfree_rcu(mc_lst, rcu);
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-			struct hil_mr_ipaddr hil_ip;
+-			hil_ip.type = HIL_MR_IPV6;
+-			memcpy(&(hil_ip.addr.ip6), addr, sizeof(struct in6_addr));
+-			hil_ip.ifindex = ifindex;
+-			ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+ 			return 0;
+ 		}
+ 	}
+-- 
+2.10.1
+

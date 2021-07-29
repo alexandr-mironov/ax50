@@ -1,0 +1,319 @@
+From 2a127fbed0c9c4d1eee11e0270409edf25130692 Mon Sep 17 00:00:00 2001
+From: "Michael L. Walker" <michael.l.walker@intel.com>
+Date: Thu, 8 Dec 2016 14:03:05 -0700
+Subject: [PATCH 538/639] Add Netfilter GWMETA extension to kernel
+
+Symptom: Need to allow iptables rules to bypass PP acceleration
+RootCause: This patch was previously in rdkb-compat layer
+Resolution: Add GWMETA extension to kernel
+---
+ include/uapi/linux/netfilter/Kbuild      |   1 +
+ include/uapi/linux/netfilter/xt_GWMETA.h |  68 +++++++++++++
+ net/Kconfig                              |   6 ++
+ net/netfilter/Kconfig                    |   8 ++
+ net/netfilter/Makefile                   |   1 +
+ net/netfilter/xt_GWMETA.c                | 157 +++++++++++++++++++++++++++++++
+ 6 files changed, 241 insertions(+)
+ create mode 100644 include/uapi/linux/netfilter/xt_GWMETA.h
+ create mode 100644 net/netfilter/xt_GWMETA.c
+
+diff --git a/include/uapi/linux/netfilter/Kbuild b/include/uapi/linux/netfilter/Kbuild
+index 1749154..8df4d72 100644
+--- a/include/uapi/linux/netfilter/Kbuild
++++ b/include/uapi/linux/netfilter/Kbuild
+@@ -22,6 +22,7 @@ header-y += xt_CONNMARK.h
+ header-y += xt_CONNSECMARK.h
+ header-y += xt_CT.h
+ header-y += xt_DSCP.h
++header-y += xt_GWMETA.h
+ header-y += xt_HMARK.h
+ header-y += xt_IDLETIMER.h
+ header-y += xt_LED.h
+diff --git a/include/uapi/linux/netfilter/xt_GWMETA.h b/include/uapi/linux/netfilter/xt_GWMETA.h
+new file mode 100644
+index 0000000..625f851
+--- /dev/null
++++ b/include/uapi/linux/netfilter/xt_GWMETA.h
+@@ -0,0 +1,68 @@
++/* 
++ * 
++ *
++ * Copyright (C) 2011, Intel Ltd.
++ * All Rights Reserved.
++ ** Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions, and the following disclaimer,
++ *    without modification.
++ * 2. The name of the author may not be used to endorse or promote products
++ *    derived from this software without specific prior written permission.
++ *
++ * Alternatively, this software may be distributed under the terms of the
++ * GNU General Public License ("GPL").
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
++ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ *
++   You should have received a copy of the GNU General Public License 
++   along with this program; if not, write to the Free Software 
++   Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++   The full GNU General Public License is included in this distribution 
++   in the file called LICENSE.GPL.
++
++   Contact Information:
++    Intel Corporation
++    2200 Mission College Blvd.
++    Santa Clara, CA  97052
++ 
++ 
++ * Description:
++ *   This module provide extends netfilter feature to set a bitmask on a packets.
++ *   In a difference from netfilter this masks lasts till packet leaves gateway TCP stack 
++ *
++ *   The module follows the Netfilter framework, called extended packet
++ *   matching modules.
++ * Usage :
++ *  iptables -t mangle -I POSTROUTING 1 -o rndbr1 -p tcp --dport 6800:6866 -j GWMETA --gwmeta-gwmask 0x00000020
++ *  iptables -t mangle -I OUTPUT 1 -o rndbr1 -p tcp --dport 6800:6866 -j GWMETA --gwmeta-gwmask 0x00000002
++ *   Packet will have resulted ti_gw_meta ORed mask 0x22 
++ */
++
++#ifndef __XT_GWMETA_H_
++#define __XT_GWMETA_H_
++               
++enum xt_gw_skb
++{
++	XT_GW_META = 1,
++	XT_GW_DIS_PP = 2,
++	XT_GW_EN_PP = 3
++};
++               
++struct xt_gw_skb_rule_info 
++{
++	u_int32_t  gwmask;
++	enum xt_gw_skb type;
++};
++
++#endif /*_XT_GWMETA_H*/
+diff --git a/net/Kconfig b/net/Kconfig
+index 5657158..6373870 100644
+--- a/net/Kconfig
++++ b/net/Kconfig
+@@ -331,6 +331,12 @@ config APPCPU_GW_PP_HANDLE
+ 	depends on TI_PACKET_PROCESSOR
+ 	default n
+ 
++config INTEL_NF_GWMETA_SUPPORT
++        bool "Intel Gateway Packet Meta Data"
++        default y
++        help
++        This feature allows to label skb data of ip packets (GWMETA module of iptables/Netfilter )
++
+ source "net/ax25/Kconfig"
+ source "net/can/Kconfig"
+ source "net/irda/Kconfig"
+diff --git a/net/netfilter/Kconfig b/net/netfilter/Kconfig
+index 6e839b6..07b5d1b 100644
+--- a/net/netfilter/Kconfig
++++ b/net/netfilter/Kconfig
+@@ -783,6 +783,14 @@ config NETFILTER_XT_TARGET_TCPOPTSTRIP
+ 	  This option adds a "TCPOPTSTRIP" target, which allows you to strip
+ 	  TCP options from TCP packets.
+ 
++config NETFILTER_XT_TARGET_GWMETA
++	tristate "GWMETA target support"
++	depends on INTEL_NF_GWMETA_SUPPORT
++	help
++          This option allows to label skb data of ip packets or disable packet processor
++	  To compile it as a module, choose M here.  If unsure, say N.
++
++
+ # alphabetically ordered list of matches
+ 
+ comment "Xtables matches"
+diff --git a/net/netfilter/Makefile b/net/netfilter/Makefile
+index c3a0a12..225e145 100644
+--- a/net/netfilter/Makefile
++++ b/net/netfilter/Makefile
+@@ -96,6 +96,7 @@ obj-$(CONFIG_NETFILTER_XT_TARGET_TCPOPTSTRIP) += xt_TCPOPTSTRIP.o
+ obj-$(CONFIG_NETFILTER_XT_TARGET_TEE) += xt_TEE.o
+ obj-$(CONFIG_NETFILTER_XT_TARGET_TRACE) += xt_TRACE.o
+ obj-$(CONFIG_NETFILTER_XT_TARGET_IDLETIMER) += xt_IDLETIMER.o
++obj-$(CONFIG_NETFILTER_XT_TARGET_GWMETA) += xt_GWMETA.o
+ 
+ # matches
+ obj-$(CONFIG_NETFILTER_XT_MATCH_ADDRTYPE) += xt_addrtype.o
+diff --git a/net/netfilter/xt_GWMETA.c b/net/netfilter/xt_GWMETA.c
+new file mode 100644
+index 0000000..816e6fb
+--- /dev/null
++++ b/net/netfilter/xt_GWMETA.c
+@@ -0,0 +1,157 @@
++/* Kernel module to set flags in ti_gw_meta field of skb.
++ * 
++ *
++ * 
++ *
++ * Copyright (C) 2011-2014, Intel Ltd.
++ * All Rights Reserved.
++ ** Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *  notice, this list of conditions, and the following disclaimer,
++ *  without modification.
++ * 2. The name of the author may not be used to endorse or promote products
++ *  derived from this software without specific prior written permission.
++ *
++ * Alternatively, this software may be distributed under the terms of the
++ * GNU General Public License ("GPL").
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
++ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ *
++ * 
++ *
++   You should have received a copy of the GNU General Public License 
++   along with this program; if not, write to the Free Software 
++   Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++   The full GNU General Public License is included in this distribution 
++   in the file called LICENSE.GPL.
++  
++    Contact Information:
++    Intel Corporation
++    2200 Mission College Blvd.
++    Santa Clara, CA  97052
++ * Description:
++ *   This module provide extends netfilter feature to set a bitmask on a packets.
++ *   In difference from netfiltyer this masks lasts till packet leaves GateWay TCP stack 
++ *
++ *   The module follows the Netfilter framework, called extended packet
++ *   matching modules.
++ * Usage :
++ *  iptables -t mangle -I POSTROUTING 1 -o rndbr1 -p tcp --dport 6800:6866 -j GWMETA --gwmeta-gwmask 0x00000020
++ *  iptables -t mangle -I OUTPUT 1 -o rndbr1 -p tcp --dport 6800:6866 -j GWMETA --gwmeta-gwmask 0x00000002
++ *  Packet will have resulted ti_gw_meta ORed mask 0x22 
++ */
++
++#include <linux/types.h>
++#include <linux/module.h>
++#include <linux/skbuff.h>
++
++#include <linux/netfilter/x_tables.h>
++#include <linux/netfilter_ipv4/ip_tables.h>
++#include <linux/netfilter_ipv6/ip6_tables.h>
++#include <linux/netfilter/xt_GWMETA.h>
++
++//#define GWMETA_DEBUG
++#ifdef GWMETA_DEBUG
++    #define DEBUGP printk
++    #define DEBUG_LEVEL KERN_CRIT
++#else
++    #define DEBUGP(DEBUG_LEVEL, format, args...)
++#endif
++
++
++static unsigned int
++do_target_job(struct sk_buff *skb, const struct xt_action_param *par)
++{
++
++    const struct xt_gw_skb_rule_info *info = par->targinfo;
++    unsigned int host_val;
++
++    if (info->type == XT_GW_META)
++    {
++        DEBUGP( DEBUG_LEVEL " %s: mark with i %x \n", __FUNCTION__, info->gwmask);
++        host_val = ntohl(skb->ti_gw_meta);
++        host_val |= info->gwmask;
++        skb->ti_gw_meta = htonl(host_val);
++    }
++    else if (info->type == XT_GW_DIS_PP)
++    {
++        /*DISABLE PP */
++        host_val = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
++        host_val |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
++        SKB_GET_PP_INFO_P(skb)->flags = htonl(host_val);
++    }
++    else if (info->type == XT_GW_EN_PP)
++    {
++        /*ENABLE PP */
++        host_val = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
++        host_val &= ~(TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
++        SKB_GET_PP_INFO_P(skb)->flags = htonl(host_val);
++    }
++
++    return XT_CONTINUE;
++}
++
++static int
++check_usage(const struct xt_tgchk_param *par )
++{
++    //const struct ipt_entry *e = (struct ipt_entry*)e_void;
++    //const struct ipt_gw_skb_rule_info *info = targinfo;
++
++    /* this module might be used at any table and chain
++       no check is needed */
++
++    DEBUGP( DEBUG_LEVEL "%s: \n", __FUNCTION__);
++
++
++    return 0;
++}
++
++static struct xt_target redirect_tg_reg[] __read_mostly = {
++    {
++        .name          = "GWMETA",
++        .family      = NFPROTO_IPV4,
++        .target      = do_target_job,
++        .targetsize  = sizeof(struct xt_gw_skb_rule_info),
++        .checkentry  = check_usage,
++        .me          = THIS_MODULE,
++    },
++#if IS_ENABLED(CONFIG_IPV6)
++    {
++        .name          = "GWMETA",
++        .family      = NFPROTO_IPV6,
++        .target      = do_target_job,
++        .targetsize  = sizeof(struct xt_gw_skb_rule_info),
++        .checkentry  = check_usage,
++        .me          = THIS_MODULE,
++    }
++#endif
++};
++
++static int __init ipt_gwmeta_init(void)
++{
++    return xt_register_targets(redirect_tg_reg,
++                   ARRAY_SIZE(redirect_tg_reg));
++}
++
++static void __exit ipt_gwmeta_fini(void)
++{
++    xt_unregister_targets(redirect_tg_reg, ARRAY_SIZE(redirect_tg_reg));
++}
++
++module_init(ipt_gwmeta_init);
++module_exit(ipt_gwmeta_fini);
++
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("ip6t_GWMETA");
++MODULE_ALIAS("ipt_GWMETA");
++
+-- 
+2.10.1
+

@@ -1,0 +1,522 @@
+From 5c9d710e37e498bdcc8f50d7ae746f568a1200a8 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 27 Oct 2016 12:27:52 -0700
+Subject: [PATCH 508/639] pwm-intelce2700: Add driver Intel CE 2700 PWM
+
+Adding pwm driver for IntelCE 2700 pwm controller using Linux pwm FW.
+Now bios enumerates NetIP's BBUC-PWM as an acpi device.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c |   5 +
+ drivers/acpi/acpi_platform.c                   |   1 +
+ drivers/pwm/Kconfig                            |   9 +
+ drivers/pwm/Makefile                           |   1 +
+ drivers/pwm/pwm-intelce2700/Makefile           |   1 +
+ drivers/pwm/pwm-intelce2700/pwm-intelce2700.c  | 409 +++++++++++++++++++++++++
+ include/linux/netip_subsystem.h                |   3 +
+ 7 files changed, 429 insertions(+)
+ create mode 100644 drivers/pwm/pwm-intelce2700/Makefile
+ create mode 100644 drivers/pwm/pwm-intelce2700/pwm-intelce2700.c
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index 2ec2769..37fb16f 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -343,6 +343,11 @@ int netss_device_get_info(netss_dev_t subdevice, netss_dev_info_t *mmio)
+          mmio->size = NETSS_DEV_BOOT_RAM_MMIO_SIZE;
+          ret = 0;
+       break;
++      case NETSS_DEV_PWM:
++         mmio->base = net_ip_mmios.region1_base + NETSS_DEV_PWM_MMIO_OFFSET;
++         mmio->size = NETSS_DEV_PWM_MMIO_SIZE;
++         ret = 0;
++      break;
+       default:
+          ret = -1;
+    }
+diff --git a/drivers/acpi/acpi_platform.c b/drivers/acpi/acpi_platform.c
+index d607ef5..3f0adf2 100644
+--- a/drivers/acpi/acpi_platform.c
++++ b/drivers/acpi/acpi_platform.c
+@@ -30,6 +30,7 @@ static const struct acpi_device_id acpi_platform_device_ids[] = {
+ 
+ 	{ "PNP0D40" },
+ 	{ "INT33FF" },
++	{ "INT351A" },
+ 
+ 	{ }
+ };
+diff --git a/drivers/pwm/Kconfig b/drivers/pwm/Kconfig
+index 75840b5..0d868c7 100644
+--- a/drivers/pwm/Kconfig
++++ b/drivers/pwm/Kconfig
+@@ -224,4 +224,13 @@ config PWM_VT8500
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called pwm-vt8500.
+ 
++config PWM_INTELCE2700
++        tristate "IntelCE 2700 PWM support"
++        depends on PWM
++        depends on NET_SUBSYSTEM
++        help
++          PWM driver for IntelCE 2700.
++
++          To compile this driver as a module, choose M here: the module
++          will be called pwm-intelce2700.
+ endif
+diff --git a/drivers/pwm/Makefile b/drivers/pwm/Makefile
+index 77a8c18..a82540f 100644
+--- a/drivers/pwm/Makefile
++++ b/drivers/pwm/Makefile
+@@ -20,3 +20,4 @@ obj-$(CONFIG_PWM_TIPWMSS)	+= pwm-tipwmss.o
+ obj-$(CONFIG_PWM_TWL)		+= pwm-twl.o
+ obj-$(CONFIG_PWM_TWL_LED)	+= pwm-twl-led.o
+ obj-$(CONFIG_PWM_VT8500)	+= pwm-vt8500.o
++obj-$(CONFIG_PWM_INTELCE2700)  += pwm-intelce2700/
+diff --git a/drivers/pwm/pwm-intelce2700/Makefile b/drivers/pwm/pwm-intelce2700/Makefile
+new file mode 100644
+index 0000000..011adfb
+--- /dev/null
++++ b/drivers/pwm/pwm-intelce2700/Makefile
+@@ -0,0 +1 @@
++obj-$(CONFIG_PWM_INTELCE2700) += pwm-intelce2700.o
+diff --git a/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c b/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c
+new file mode 100644
+index 0000000..9449d30
+--- /dev/null
++++ b/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c
+@@ -0,0 +1,409 @@
++/*
++ * pwm-intelce2700.c
++ *
++ *  GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation. All rights reserved.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *    Intel Corporation
++ *    2200 Mission College Blvd.
++ *    Santa Clara, CA  97052
++ *
++ */
++#include <linux/module.h>
++#include <linux/pwm.h>
++#include <linux/slab.h>
++#include <linux/acpi.h>
++#include <linux/spinlock.h>
++#include <linux/platform_device.h>
++#include <linux/netip_subsystem.h>
++
++/**Default PWM clock frequency is 25M HZ, period in nano secs */
++#define PWM_CLK_PERIOD_NS 40
++#define PWM_CHAN1_IDX  1
++#define PWM_CHAN2_IDX  2
++#define PWM_CHAN_MAX  2
++#define PWM_CHAN1_REG_OFFSET  0x4
++#define PWM_CHAN2_REG_OFFSET  0x8
++#define PWMEN_REG_OFFSET      0xC
++#define PWM_CHAN1_EN  (1 << 1)
++#define PWM_CHAN2_EN  (1 << 2)
++#define PWM_CHAN1_OUT_EN  (1 << 9)
++#define PWM_CHAN2_OUT_EN  (1 << 10)
++#define PWM_CHAN1_EN_WD (PWM_CHAN1_EN | PWM_CHAN1_OUT_EN)
++#define PWM_CHAN2_EN_WD (PWM_CHAN2_EN | PWM_CHAN2_OUT_EN)
++
++#define BOOT_CFG_UNLOCK0_OFFSET 0x007C
++#define BOOT_CFG_UNLOCK1_OFFSET 0x0080
++#define BBU_CRU_OFFSET 0x00A0
++#define BOOT_CFG_BBU_ACCESS_CTRL_OFFSET  0x0158
++
++#define BOOT_CFG_UNLOCK0_DATA 0x20406080
++#define BOOT_CFG_UNLOCK1_DATA 0x10305070
++#define BBU_CRU_ENABLE  0x3
++#define BBU_ACCESS_CTRL 0x7
++
++
++struct intelce2700_pwm_chip {
++	struct pwm_chip chip;
++	void __iomem *reg_base;
++	uint16_t range[PWM_CHAN_MAX];
++	uint16_t duty_cycle[PWM_CHAN_MAX];
++	struct device *dev;
++	spinlock_t lock;
++	atomic_t access_ok;
++};
++
++static inline struct intelce2700_pwm_chip *to_intelce2700_pwm_chip
++						(struct pwm_chip *chip)
++{
++	return container_of(chip, struct intelce2700_pwm_chip, chip);
++}
++
++static int intelce2700_pwm_config(struct pwm_chip *chip,
++				struct pwm_device *pwmdev,
++				int duty_ns, int period_ns)
++{
++	int idx;
++	int offset;
++	struct intelce2700_pwm_chip *pwm = to_intelce2700_pwm_chip(chip);
++	void __iomem *ptr = pwm->reg_base;
++	uint16_t range_plus_one;
++	uint16_t duty_cycle_val;
++	uint32_t val;
++
++	if (pwmdev->hwpwm >= PWM_CHAN_MAX)
++		return -EINVAL;
++	if (pwmdev->pwm != PWM_CHAN1_IDX &&
++		pwmdev->pwm != PWM_CHAN2_IDX)
++		return -EINVAL;
++	if (period_ns < PWM_CLK_PERIOD_NS)
++		return -EINVAL;
++
++	/** Called to set period, return and calculate when duty_ns is set*/
++	if (duty_ns == 0)
++		return 0;
++
++	spin_lock(&pwm->lock);
++	if (!atomic_read(&pwm->access_ok)) {
++		spin_unlock(&pwm->lock);
++		return -ENODEV;
++	}
++	idx = pwmdev->hwpwm;
++	if (idx == 0)
++		ptr += PWM_CHAN1_REG_OFFSET;
++	else if (idx == 1)
++		ptr += PWM_CHAN2_REG_OFFSET;
++
++	dev_dbg(pwm->dev, "Intelce2700 pwm config pwm %d hwpwm %d\n",
++			pwmdev->pwm, pwmdev->hwpwm);
++	/** range_plus_one = period_ns/pwm_clock_period */
++	if (period_ns > 0) {
++		range_plus_one = period_ns/PWM_CLK_PERIOD_NS;
++		pwm->range[idx] = range_plus_one - 1;
++	}
++
++	/** duty_cycle_val = (duty_ns * range_plus_one)/period_ns */
++	if (duty_ns > 0) {
++		duty_cycle_val =  (duty_ns * range_plus_one)/(period_ns);
++		pwm->duty_cycle[idx] = duty_cycle_val;
++	}
++
++	val = ((pwm->duty_cycle[idx] << 16) |  pwm->range[idx]);
++	iowrite32be(val, ptr);
++
++	spin_unlock(&pwm->lock);
++	dev_dbg(pwm->dev, "Range %08X  duty %08X\n", pwm->range[idx],
++			pwm->duty_cycle[idx]);
++	return 0;
++}
++
++static uint32_t calculate_pwm_ctrl_word(int idx, uint32_t val, bool en)
++{
++	if (en) {
++		if (idx == PWM_CHAN1_IDX)
++			val |= PWM_CHAN1_EN_WD;
++		else if (idx == PWM_CHAN2_IDX)
++			val |= PWM_CHAN2_EN_WD;
++	} else {
++		if (idx == PWM_CHAN1_IDX)
++			val &= ~PWM_CHAN1_EN_WD;
++		else if (idx == PWM_CHAN2_IDX)
++			val &= ~PWM_CHAN2_EN_WD;
++	}
++
++	return val;
++}
++
++static int pwm_control(int idx, void __iomem *ptr, bool en)
++{
++	int ret = 0;
++	uint32_t val;
++	uint32_t rdbk_val;
++
++	val = ioread32be(ptr);
++
++	val = calculate_pwm_ctrl_word(idx, val, en);
++	iowrite32be(val, ptr);
++
++	/**Check PWM channel0 control bits are modified */
++	rdbk_val = ioread32be(ptr);
++	if (val != rdbk_val) {
++		val = calculate_pwm_ctrl_word(idx, rdbk_val, en);
++		iowrite32be(val, ptr);
++	}
++
++	pr_debug("Intelce2700 pwm %s pwm %d regval= %08X\n",
++				(en ? "enable" : "disable"), idx, val);
++	return 0;
++}
++static int intelce2700_pwm_enable(struct pwm_chip *chip,
++				struct pwm_device *pwmdev)
++{
++	int ret = 0;
++	struct intelce2700_pwm_chip *pwm = to_intelce2700_pwm_chip(chip);
++
++	if (pwmdev->hwpwm >= PWM_CHAN_MAX)
++		return -EINVAL;
++	if (pwmdev->pwm != PWM_CHAN1_IDX &&
++		pwmdev->pwm != PWM_CHAN2_IDX)
++		return -EINVAL;
++	spin_lock(&pwm->lock);
++	if (!atomic_read(&pwm->access_ok)) {
++		spin_unlock(&pwm->lock);
++		return -ENODEV;
++	}
++
++	ret = pwm_control(pwmdev->pwm, pwm->reg_base+PWMEN_REG_OFFSET, true);
++	spin_unlock(&pwm->lock);
++
++	return ret;
++}
++
++static int intelce2700_pwm_disable(struct pwm_chip *chip,
++				struct pwm_device *pwmdev)
++{
++	int ret = 0;
++	struct intelce2700_pwm_chip *pwm = to_intelce2700_pwm_chip(chip);
++
++	if (pwmdev->hwpwm >= PWM_CHAN_MAX)
++		return -EINVAL;
++	if (pwmdev->pwm != PWM_CHAN1_IDX &&
++		pwmdev->pwm != PWM_CHAN2_IDX)
++		return -EINVAL;
++	spin_lock(&pwm->lock);
++	if (!atomic_read(&pwm->access_ok)) {
++		spin_unlock(&pwm->lock);
++		return -ENODEV;
++	}
++
++	ret = pwm_control(pwmdev->pwm, pwm->reg_base+PWMEN_REG_OFFSET, false);
++	spin_unlock(&pwm->lock);
++
++	return ret;
++}
++
++static const struct pwm_ops intelce2700_pwm_ops = {
++	.config = intelce2700_pwm_config,
++	.enable = intelce2700_pwm_enable,
++	.disable = intelce2700_pwm_disable,
++	.owner = THIS_MODULE,
++};
++
++int intelce2700_pwm_handle_pwr_state(void *data,
++				netss_power_state_t state)
++{
++	struct intelce2700_pwm_chip *pwm = data;
++
++	spin_lock(&pwm->lock);
++	if (state == NETSS_NETIP_POWER_STATE_ACTIVE)
++		atomic_set(&pwm->access_ok, 1);
++	else
++		atomic_set(&pwm->access_ok, 0);
++
++	spin_unlock(&pwm->lock);
++	return 0;
++}
++
++int intelce2700_pwm_probe(struct platform_device *pdev)
++{
++	int ret = 0;
++	netss_dev_info_t boot_cfg_mmio;
++	netss_dev_info_t clk_ctrl_mmio;
++	netss_dev_info_t pwm_mmio;
++	struct intelce2700_pwm_chip *pwm;
++	void __iomem *boot_cfg = NULL;
++	netss_power_state_callback_info_t pwr_cb_info;
++
++	pwm = kzalloc(sizeof(struct intelce2700_pwm_chip), GFP_KERNEL);
++
++	if (!pwm)
++		ret = -ENOMEM;
++
++	pwm->chip.ops = &intelce2700_pwm_ops;
++	pwm->chip.base = PWM_CHAN1_IDX;
++	pwm->chip.npwm = PWM_CHAN_MAX;
++	pwm->chip.dev = &pdev->dev;
++
++	ret = pwmchip_add(&pwm->chip);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "pwmchip_add() failed: %d\n", ret);
++		return ret;
++	}
++	/**Enable host access to PWM registers */
++	/*1. set boot and cfg  */
++	ret = netss_device_get_info(NETSS_DEV_BOOTCFG, &boot_cfg_mmio);
++	if (ret < 0) {
++		dev_err(&pdev->dev,
++				"Failed to get netss subdev %d info, ret %d\n",
++				NETSS_DEV_BOOTCFG, ret);
++		goto free_mem;
++	} else {
++		boot_cfg = ioremap_nocache(boot_cfg_mmio.base,
++						boot_cfg_mmio.size);
++
++		if (NULL == boot_cfg) {
++			ret = -EFAULT;
++			goto free_mem;
++		}
++		iowrite32be(BOOT_CFG_UNLOCK0_DATA,
++				boot_cfg + BOOT_CFG_UNLOCK0_OFFSET);
++		iowrite32be(BOOT_CFG_UNLOCK1_DATA,
++				boot_cfg + BOOT_CFG_UNLOCK1_OFFSET);
++	}
++
++	/*2.Enable BBU CRU */
++	ret = netss_device_get_info(NETSS_DEV_CLK_CTRL, &clk_ctrl_mmio);
++	if (ret < 0) {
++		dev_err(&pdev->dev,
++				"Failed to get netss subdev %d info, ret %d\n",
++				NETSS_DEV_CLK_CTRL, ret);
++		goto unmap_mem;
++	} else {
++		void __iomem *bbu_cru;
++		uint32_t val;
++
++		bbu_cru = ioremap_nocache(clk_ctrl_mmio.base+BBU_CRU_OFFSET, 4);
++		if (NULL == bbu_cru) {
++			ret = -EFAULT;
++			goto unmap_mem;
++		}
++		val = ioread32be(bbu_cru);
++		val |= BBU_CRU_ENABLE;
++		iowrite32be(val, bbu_cru);
++		iounmap(bbu_cru);
++	}
++	/*3. Enable BBU access */
++	if (boot_cfg) {
++		uint32_t val;
++		void __iomem *ptr = boot_cfg + BOOT_CFG_BBU_ACCESS_CTRL_OFFSET;
++		val  = ioread32be(ptr);
++		val |= BBU_ACCESS_CTRL;
++		iowrite32be(val, ptr);
++		iounmap(boot_cfg);
++	}
++
++	ret = netss_device_get_info(NETSS_DEV_PWM, &pwm_mmio);
++	if (ret) {
++		dev_err(&pdev->dev, "Failed to get pwm mmio\n");
++		goto free_mem;
++	}
++
++	pwm->reg_base = ioremap_nocache(pwm_mmio.base,
++					pwm_mmio.size);
++	if (!pwm->reg_base) {
++		dev_err(&pdev->dev, "Failed to ioremap pwm mmio\n");
++		ret = -EFAULT;
++		goto free_mem;
++	}
++	atomic_set(&pwm->access_ok, 1);
++	pwm->dev = &pdev->dev;
++	platform_set_drvdata(pdev, pwm);
++
++	pwr_cb_info.func = intelce2700_pwm_handle_pwr_state;
++	pwr_cb_info.args = pwm;
++	ret = netss_power_state_change_callback_register(NETSS_DEV_PWM,
++								&pwr_cb_info);
++	if (ret) {
++		dev_err(&pdev->dev,
++			"Failed to register netss pwr state callback\n");
++		iounmap(pwm->reg_base);
++		goto free_mem;
++	}
++	spin_lock_init(&pwm->lock);
++	return ret;
++unmap_mem:
++	if (boot_cfg)
++		iounmap(boot_cfg);
++free_mem:
++	kfree(pwm);
++	return ret;
++}
++
++int intelce2700_pwm_remove(struct platform_device *pdev)
++{
++	int ret = 0;
++	struct intelce2700_pwm_chip *pwm = platform_get_drvdata(pdev);
++
++	if (!pwm)
++		return -EINVAL;
++
++	ret = pwmchip_remove(&pwm->chip);
++
++	if (!ret)
++		dev_err(&pdev->dev, "pwmchip_remove() failed: %d\n", ret);
++
++	iounmap(pwm->reg_base);
++	kfree(pwm);
++	return ret;
++}
++
++static const struct acpi_device_id intelce2700_pwm_acpi_match[] = {
++	{ "INT351A", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(acpi, intelce2700_pwm_acpi_match);
++
++static struct platform_driver intelce2700_pwm_driver = {
++	.probe          = intelce2700_pwm_probe,
++	.remove         = intelce2700_pwm_remove,
++	.driver = {
++		.name   = "intelce2700_pwm_driver",
++		.owner  = THIS_MODULE,
++		.acpi_match_table = ACPI_PTR(intelce2700_pwm_acpi_match),
++	}
++};
++
++static int intelce2700_pwm_drv_init(void)
++{
++	return platform_driver_register(&intelce2700_pwm_driver);
++}
++
++static int intelce2700_pwm_drv_exit(void)
++{
++	platform_driver_unregister(&intelce2700_pwm_driver);
++	return 0;
++}
++
++device_initcall(intelce2700_pwm_drv_init);
++module_exit(intelce2700_pwm_drv_exit);
++
++MODULE_DESCRIPTION("Intel(R) CE 2700 PWM Driver");
++MODULE_AUTHOR("Intel Corporation");
++MODULE_LICENSE("GPL");
+diff --git a/include/linux/netip_subsystem.h b/include/linux/netip_subsystem.h
+index dd5da5e..c535bc76 100644
+--- a/include/linux/netip_subsystem.h
++++ b/include/linux/netip_subsystem.h
+@@ -105,6 +105,8 @@
+ #define NETSS_DEV_BBU_CTRLR_MMIO_SIZE   (0x20000)  /*128 KB */
+ #define NETSS_DEV_PERIPHERAL_SRAM_MMIO_OFFSET (0xFFF0000)
+ #define NETSS_DEV_PERIPHERAL_SRAM_MMIO_SIZE   (0x4000)
++#define NETSS_DEV_PWM_MMIO_OFFSET (0x165000)
++#define NETSS_DEV_PWM_MMIO_SIZE   (0x10)
+ 
+ #define NETSS_INTERUPT_ARM11_MAX (96)  /*ARM11 is a bundle of 96 interrupts */
+ 
+@@ -137,6 +139,7 @@ typedef enum {
+    NETSS_DEV_TDM2,
+    NETSS_DEV_VCODEC,
+    NETSS_DEV_BOOT_RAM,
++   NETSS_DEV_PWM,
+    NETSS_DEV_MAX
+ }netss_dev_t;
+ 
+-- 
+2.10.1
+

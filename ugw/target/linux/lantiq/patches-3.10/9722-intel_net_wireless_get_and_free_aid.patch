@@ -1,0 +1,743 @@
+From 647a2cc8caa81f8a7b3b46f339fcd6d2e97dcf8d Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 14:53:55 +0300
+Subject: [PATCH 9722/9740] get_and_free_aid
+
+---
+ include/net/cfg80211.h       | 179 +++++++++++++++++++-
+ net/wireless/core.h          |   4 +-
+ net/wireless/nl80211.c       | 381 +++++++++++++++++++++++++++++------------
+ 4 files changed, 800 insertions(+), 156 deletions(-)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 48e7dbd..494e4a8 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -2472,6 +2472,34 @@ struct wiphy_wowlan_support {
+ };
+ 
+ /**
++ * enum wiphy_vendor_command_flags - validation flags for vendor commands
++ * @WIPHY_VENDOR_CMD_NEED_WDEV: vendor command requires wdev
++ * @WIPHY_VENDOR_CMD_NEED_NETDEV: vendor command requires netdev
++ * @WIPHY_VENDOR_CMD_NEED_RUNNING: interface/wdev must be up & running
++ *	(must be combined with %_WDEV or %_NETDEV)
++ */
++enum wiphy_vendor_command_flags {
++	WIPHY_VENDOR_CMD_NEED_WDEV = BIT(0),
++	WIPHY_VENDOR_CMD_NEED_NETDEV = BIT(1),
++	WIPHY_VENDOR_CMD_NEED_RUNNING = BIT(2),
++};
++
++/**
++ * struct wiphy_vendor_command - vendor command definition
++ * @info: vendor command identifying information, as used in nl80211
++ * @flags: flags, see &enum wiphy_vendor_command_flags
++ * @doit: callback for the operation, note that wdev is %NULL if the
++ *	flags didn't ask for a wdev and non-%NULL otherwise; the data
++ *	pointer may be %NULL if userspace provided no data at all
++ */
++struct wiphy_vendor_command {
++	struct nl80211_vendor_cmd_info info;
++	u32 flags;
++	int (*doit)(struct wiphy *wiphy, struct wireless_dev *wdev,
++		    const void *data, int data_len);
++};
++
++/**
+  * struct wiphy - wireless hardware description
+  * @reg_notifier: the driver's regulatory notification callback,
+  *	note that if your driver uses wiphy_apply_custom_regulatory()
+@@ -2578,6 +2606,11 @@ struct wiphy_wowlan_support {
+  *	802.11-2012 8.4.2.29 for the defined fields.
+  * @extended_capabilities_mask: mask of the valid values
+  * @extended_capabilities_len: length of the extended capabilities
++ *
++ * @vendor_commands: array of vendor commands supported by the hardware
++ * @n_vendor_commands: number of vendor commands
++ * @vendor_events: array of vendor events supported by the hardware
++ * @n_vendor_events: number of vendor events
+  */
+ struct wiphy {
+ 	/* assign these fields before you register the wiphy */
+@@ -2686,6 +2719,10 @@ struct wiphy {
+ 	const struct iw_handler_def *wext;
+ #endif
+ 
++	const struct wiphy_vendor_command *vendor_commands;
++	const struct nl80211_vendor_cmd_info *vendor_events;
++	int n_vendor_commands, n_vendor_events;
++
+ 	char priv[0] __aligned(NETDEV_ALIGN);
+ };
+ 
+@@ -3596,6 +3633,121 @@ void wiphy_rfkill_start_polling(struct wiphy *wiphy);
+  */
+ void wiphy_rfkill_stop_polling(struct wiphy *wiphy);
+ 
++/**
++ * DOC: Vendor commands
++ *
++ * Occasionally, there are special protocol or firmware features that
++ * can't be implemented very openly. For this and similar cases, the
++ * vendor command functionality allows implementing the features with
++ * (typically closed-source) userspace and firmware, using nl80211 as
++ * the configuration mechanism.
++ *
++ * A driver supporting vendor commands must register them as an array
++ * in struct wiphy, with handlers for each one, each command has an
++ * OUI and sub command ID to identify it.
++ *
++ * Note that this feature should not be (ab)used to implement protocol
++ * features that could openly be shared across drivers. In particular,
++ * it must never be required to use vendor commands to implement any
++ * "normal" functionality that higher-level userspace like connection
++ * managers etc. need.
++ */
++
++struct sk_buff *__cfg80211_alloc_reply_skb(struct wiphy *wiphy,
++					   enum nl80211_commands cmd,
++					   enum nl80211_attrs attr,
++					   int approxlen);
++
++struct sk_buff *__cfg80211_alloc_event_skb(struct wiphy *wiphy,
++					   enum nl80211_commands cmd,
++					   enum nl80211_attrs attr,
++					   int vendor_event_idx,
++					   int approxlen, gfp_t gfp);
++
++void __cfg80211_send_event_skb(struct sk_buff *skb, gfp_t gfp);
++
++/**
++ * cfg80211_vendor_cmd_alloc_reply_skb - allocate vendor command reply
++ * @wiphy: the wiphy
++ * @approxlen: an upper bound of the length of the data that will
++ *	be put into the skb
++ *
++ * This function allocates and pre-fills an skb for a reply to
++ * a vendor command. Since it is intended for a reply, calling
++ * it outside of a vendor command's doit() operation is invalid.
++ *
++ * The returned skb is pre-filled with some identifying data in
++ * a way that any data that is put into the skb (with skb_put(),
++ * nla_put() or similar) will end up being within the
++ * %NL80211_ATTR_VENDOR_DATA attribute, so all that needs to be done
++ * with the skb is adding data for the corresponding userspace tool
++ * which can then read that data out of the vendor data attribute.
++ * You must not modify the skb in any other way.
++ *
++ * When done, call cfg80211_vendor_cmd_reply() with the skb and return
++ * its error code as the result of the doit() operation.
++ *
++ * Return: An allocated and pre-filled skb. %NULL if any errors happen.
++ */
++static inline struct sk_buff *
++cfg80211_vendor_cmd_alloc_reply_skb(struct wiphy *wiphy, int approxlen)
++{
++	return __cfg80211_alloc_reply_skb(wiphy, NL80211_CMD_VENDOR,
++					  NL80211_ATTR_VENDOR_DATA, approxlen);
++}
++
++/**
++ * cfg80211_vendor_cmd_reply - send the reply skb
++ * @skb: The skb, must have been allocated with
++ *	cfg80211_vendor_cmd_alloc_reply_skb()
++ *
++ * Since calling this function will usually be the last thing
++ * before returning from the vendor command doit() you should
++ * return the error code.  Note that this function consumes the
++ * skb regardless of the return value.
++ *
++ * Return: An error code or 0 on success.
++ */
++int cfg80211_vendor_cmd_reply(struct sk_buff *skb);
++
++/**
++ * cfg80211_vendor_event_alloc - allocate vendor-specific event skb
++ * @wiphy: the wiphy
++ * @event_idx: index of the vendor event in the wiphy's vendor_events
++ * @approxlen: an upper bound of the length of the data that will
++ *	be put into the skb
++ * @gfp: allocation flags
++ *
++ * This function allocates and pre-fills an skb for an event on the
++ * vendor-specific multicast group.
++ *
++ * When done filling the skb, call cfg80211_vendor_event() with the
++ * skb to send the event.
++ *
++ * Return: An allocated and pre-filled skb. %NULL if any errors happen.
++ */
++static inline struct sk_buff *
++cfg80211_vendor_event_alloc(struct wiphy *wiphy, int approxlen,
++			    int event_idx, gfp_t gfp)
++{
++	return __cfg80211_alloc_event_skb(wiphy, NL80211_CMD_VENDOR,
++					  NL80211_ATTR_VENDOR_DATA,
++					  event_idx, approxlen, gfp);
++}
++
++/**
++ * cfg80211_vendor_event - send the event
++ * @skb: The skb, must have been allocated with cfg80211_vendor_event_alloc()
++ * @gfp: allocation flags
++ *
++ * This function sends the given @skb, which must have been allocated
++ * by cfg80211_vendor_event_alloc(), as an event. It always consumes it.
++ */
++static inline void cfg80211_vendor_event(struct sk_buff *skb, gfp_t gfp)
++{
++	__cfg80211_send_event_skb(skb, gfp);
++}
++
+ #ifdef CONFIG_NL80211_TESTMODE
+ /**
+  * DOC: Test mode
+@@ -3631,8 +3783,12 @@ void wiphy_rfkill_stop_polling(struct wiphy *wiphy);
+  *
+  * Return: An allocated and pre-filled skb. %NULL if any errors happen.
+  */
+-struct sk_buff *cfg80211_testmode_alloc_reply_skb(struct wiphy *wiphy,
+-						  int approxlen);
++static inline struct sk_buff *
++cfg80211_testmode_alloc_reply_skb(struct wiphy *wiphy, int approxlen)
++{
++	return __cfg80211_alloc_reply_skb(wiphy, NL80211_CMD_TESTMODE,
++					  NL80211_ATTR_TESTDATA, approxlen);
++}
+ 
+ /**
+  * cfg80211_testmode_reply - send the reply skb
+@@ -3646,7 +3802,10 @@ struct sk_buff *cfg80211_testmode_alloc_reply_skb(struct wiphy *wiphy,
+  *
+  * Return: An error code or 0 on success.
+  */
+-int cfg80211_testmode_reply(struct sk_buff *skb);
++static inline int cfg80211_testmode_reply(struct sk_buff *skb)
++{
++	return cfg80211_vendor_cmd_reply(skb);
++}
+ 
+ /**
+  * cfg80211_testmode_alloc_event_skb - allocate testmode event
+@@ -3669,8 +3828,13 @@ int cfg80211_testmode_reply(struct sk_buff *skb);
+  *
+  * Return: An allocated and pre-filled skb. %NULL if any errors happen.
+  */
+-struct sk_buff *cfg80211_testmode_alloc_event_skb(struct wiphy *wiphy,
+-						  int approxlen, gfp_t gfp);
++static inline struct sk_buff *
++cfg80211_testmode_alloc_event_skb(struct wiphy *wiphy, int approxlen, gfp_t gfp)
++{
++	return __cfg80211_alloc_event_skb(wiphy, NL80211_CMD_TESTMODE,
++					  NL80211_ATTR_TESTDATA, -1,
++					  approxlen, gfp);
++}
+ 
+ /**
+  * cfg80211_testmode_event - send the event
+@@ -3682,7 +3846,10 @@ struct sk_buff *cfg80211_testmode_alloc_event_skb(struct wiphy *wiphy,
+  * by cfg80211_testmode_alloc_event_skb(), as an event. It always
+  * consumes it.
+  */
+-void cfg80211_testmode_event(struct sk_buff *skb, gfp_t gfp);
++static inline void cfg80211_testmode_event(struct sk_buff *skb, gfp_t gfp)
++{
++	__cfg80211_send_event_skb(skb, gfp);
++}
+ 
+ #define CFG80211_TESTMODE_CMD(cmd)	.testmode_cmd = (cmd),
+ #define CFG80211_TESTMODE_DUMP(cmd)	.testmode_dump = (cmd),
+diff --git a/net/wireless/core.h b/net/wireless/core.h
+index fd35dae..15b4bb7 100644
+--- a/net/wireless/core.h
++++ b/net/wireless/core.h
+@@ -77,9 +77,7 @@ struct cfg80211_registered_device {
+ 
+ 	struct mutex sched_scan_mtx;
+ 
+-#ifdef CONFIG_NL80211_TESTMODE
+-	struct genl_info *testmode_info;
+-#endif
++	struct genl_info *cur_cmd_info;
+ 
+ 	struct work_struct conn_work;
+ 	struct work_struct event_work;
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 8f5e8bc..33c4bb7 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -30,17 +30,17 @@ static int nl80211_crypto_settings(struct cfg80211_registered_device *rdev,
+ 				   struct cfg80211_crypto_settings *settings,
+ 				   int cipher_limit);
+ 
+-static int nl80211_pre_doit(struct genl_ops *ops, struct sk_buff *skb,
++static int nl80211_pre_doit(const struct genl_ops *ops, struct sk_buff *skb,
+ 			    struct genl_info *info);
+-static void nl80211_post_doit(struct genl_ops *ops, struct sk_buff *skb,
++static void nl80211_post_doit(const struct genl_ops *ops, struct sk_buff *skb,
+ 			      struct genl_info *info);
+ 
+ /* the netlink family */
+ static struct genl_family nl80211_fam = {
+-	.id = GENL_ID_GENERATE,	/* don't bother with a hardcoded ID */
+-	.name = "nl80211",	/* have users key off the name instead */
+-	.hdrsize = 0,		/* no private header */
+-	.version = 1,		/* no particular meaning now */
++	.id = GENL_ID_GENERATE,		/* don't bother with a hardcoded ID */
++	.name = NL80211_GENL_NAME,	/* have users key off the name instead */
++	.hdrsize = 0,			/* no private header */
++	.version = 1,			/* no particular meaning now */
+ 	.maxattr = NL80211_ATTR_MAX,
+ 	.netnsok = true,
+ 	.pre_doit = nl80211_pre_doit,
+@@ -378,6 +378,9 @@ static const struct nla_policy nl80211_policy[NL80211_ATTR_MAX+1] = {
+ 	[NL80211_ATTR_MDID] = { .type = NLA_U16 },
+ 	[NL80211_ATTR_IE_RIC] = { .type = NLA_BINARY,
+ 				  .len = IEEE80211_MAX_DATA_LEN },
++	[NL80211_ATTR_VENDOR_ID] = { .type = NLA_U32 },
++	[NL80211_ATTR_VENDOR_SUBCMD] = { .type = NLA_U32 },
++	[NL80211_ATTR_VENDOR_DATA] = { .type = NLA_BINARY },
+ };
+ 
+ /* policy for the key attributes */
+@@ -1547,6 +1550,44 @@ static int nl80211_send_wiphy(struct cfg80211_registered_device *dev,
+ 			    sizeof(*dev->wiphy.vht_capa_mod_mask),
+ 			    dev->wiphy.vht_capa_mod_mask))
+ 			goto nla_put_failure;
++		(*split_start)++;
++		break;
++	case 10:
++		(*split_start)++;
++		break;
++	case 11:
++		if (dev->wiphy.n_vendor_commands) {
++			const struct nl80211_vendor_cmd_info *info;
++			struct nlattr *nested;
++
++			nested = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
++			if (!nested)
++				goto nla_put_failure;
++
++			for (i = 0; i < dev->wiphy.n_vendor_commands; i++) {
++				info = &dev->wiphy.vendor_commands[i].info;
++				if (nla_put(msg, i + 1, sizeof(*info), info))
++					goto nla_put_failure;
++			}
++			nla_nest_end(msg, nested);
++		}
++
++		if (dev->wiphy.n_vendor_events) {
++			const struct nl80211_vendor_cmd_info *info;
++			struct nlattr *nested;
++
++			nested = nla_nest_start(msg,
++						NL80211_ATTR_VENDOR_EVENTS);
++			if (!nested)
++				goto nla_put_failure;
++
++			for (i = 0; i < dev->wiphy.n_vendor_events; i++) {
++				info = &dev->wiphy.vendor_events[i];
++				if (nla_put(msg, i + 1, sizeof(*info), info))
++					goto nla_put_failure;
++			}
++			nla_nest_end(msg, nested);
++		}
+ 
+ 		/* done */
+ 		*split_start = 0;
+@@ -6407,28 +6448,127 @@ static int nl80211_set_mcast_rate(struct sk_buff *skb, struct genl_info *info)
+ 	return err;
+ }
+ 
++static struct sk_buff *
++__cfg80211_alloc_vendor_skb(struct cfg80211_registered_device *rdev,
++			    int approxlen, u32 portid, u32 seq,
++			    enum nl80211_commands cmd,
++			    enum nl80211_attrs attr,
++			    const struct nl80211_vendor_cmd_info *info,
++			    gfp_t gfp)
++{
++	struct sk_buff *skb;
++	void *hdr;
++	struct nlattr *data;
++
++	skb = nlmsg_new(approxlen + 100, gfp);
++	if (!skb)
++		return NULL;
++
++	hdr = nl80211hdr_put(skb, portid, seq, 0, cmd);
++	if (!hdr) {
++		kfree_skb(skb);
++		return NULL;
++	}
++
++	if (nla_put_u32(skb, NL80211_ATTR_WIPHY, rdev->wiphy_idx))
++		goto nla_put_failure;
++
++	if (info) {
++		if (nla_put_u32(skb, NL80211_ATTR_VENDOR_ID,
++				info->vendor_id))
++			goto nla_put_failure;
++		if (nla_put_u32(skb, NL80211_ATTR_VENDOR_SUBCMD,
++				info->subcmd))
++			goto nla_put_failure;
++	}
++
++	data = nla_nest_start(skb, attr);
++
++	((void **)skb->cb)[0] = rdev;
++	((void **)skb->cb)[1] = hdr;
++	((void **)skb->cb)[2] = data;
++
++	return skb;
++
++ nla_put_failure:
++	kfree_skb(skb);
++	return NULL;
++}
++
++struct sk_buff *__cfg80211_alloc_event_skb(struct wiphy *wiphy,
++					   enum nl80211_commands cmd,
++					   enum nl80211_attrs attr,
++					   int vendor_event_idx,
++					   int approxlen, gfp_t gfp)
++{
++	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
++	const struct nl80211_vendor_cmd_info *info;
++
++	switch (cmd) {
++	case NL80211_CMD_TESTMODE:
++		if (WARN_ON(vendor_event_idx != -1))
++			return NULL;
++		info = NULL;
++		break;
++	case NL80211_CMD_VENDOR:
++		if (WARN_ON(vendor_event_idx < 0 ||
++			    vendor_event_idx >= wiphy->n_vendor_events))
++			return NULL;
++		info = &wiphy->vendor_events[vendor_event_idx];
++		break;
++	default:
++		WARN_ON(1);
++		return NULL;
++	}
++
++	return __cfg80211_alloc_vendor_skb(rdev, approxlen, 0, 0,
++					   cmd, attr, info, gfp);
++}
++EXPORT_SYMBOL(__cfg80211_alloc_event_skb);
+ 
+-#ifdef CONFIG_NL80211_TESTMODE
+ static struct genl_multicast_group nl80211_testmode_mcgrp = {
+ 	.name = "testmode",
+ };
+ 
++static struct genl_multicast_group nl80211_vendor_mcgrp = {
++	.name = "vendor",
++};
++
++void __cfg80211_send_event_skb(struct sk_buff *skb, gfp_t gfp)
++{
++	struct cfg80211_registered_device *rdev = ((void **)skb->cb)[0];
++	void *hdr = ((void **)skb->cb)[1];
++	struct nlattr *data = ((void **)skb->cb)[2];
++	unsigned int mcgrp_id = nl80211_testmode_mcgrp.id;
++
++	nla_nest_end(skb, data);
++	genlmsg_end(skb, hdr);
++
++	if (data->nla_type == NL80211_ATTR_VENDOR_DATA)
++		mcgrp_id = nl80211_vendor_mcgrp.id;
++
++	genlmsg_multicast_netns(wiphy_net(&rdev->wiphy), skb, 0,
++				mcgrp_id, gfp);
++}
++EXPORT_SYMBOL(__cfg80211_send_event_skb);
++
++#ifdef CONFIG_NL80211_TESTMODE
+ static int nl80211_testmode_do(struct sk_buff *skb, struct genl_info *info)
+ {
+ 	struct cfg80211_registered_device *rdev = info->user_ptr[0];
+ 	int err;
+ 
++	if (!rdev->ops->testmode_cmd)
++		return -EOPNOTSUPP;
++
+ 	if (!info->attrs[NL80211_ATTR_TESTDATA])
+ 		return -EINVAL;
+ 
+-	err = -EOPNOTSUPP;
+-	if (rdev->ops->testmode_cmd) {
+-		rdev->testmode_info = info;
+-		err = rdev_testmode_cmd(rdev,
++	rdev->cur_cmd_info = info;
++	err = rdev_testmode_cmd(rdev,
+ 				nla_data(info->attrs[NL80211_ATTR_TESTDATA]),
+ 				nla_len(info->attrs[NL80211_ATTR_TESTDATA]));
+-		rdev->testmode_info = NULL;
+-	}
++	rdev->cur_cmd_info = NULL;
+ 
+ 	return err;
+ }
+@@ -6527,99 +6667,6 @@ static int nl80211_testmode_dump(struct sk_buff *skb,
+ 	cfg80211_unlock_rdev(rdev);
+ 	return err;
+ }
+-
+-static struct sk_buff *
+-__cfg80211_testmode_alloc_skb(struct cfg80211_registered_device *rdev,
+-			      int approxlen, u32 portid, u32 seq, gfp_t gfp)
+-{
+-	struct sk_buff *skb;
+-	void *hdr;
+-	struct nlattr *data;
+-
+-	skb = nlmsg_new(approxlen + 100, gfp);
+-	if (!skb)
+-		return NULL;
+-
+-	hdr = nl80211hdr_put(skb, portid, seq, 0, NL80211_CMD_TESTMODE);
+-	if (!hdr) {
+-		kfree_skb(skb);
+-		return NULL;
+-	}
+-
+-	if (nla_put_u32(skb, NL80211_ATTR_WIPHY, rdev->wiphy_idx))
+-		goto nla_put_failure;
+-	data = nla_nest_start(skb, NL80211_ATTR_TESTDATA);
+-
+-	((void **)skb->cb)[0] = rdev;
+-	((void **)skb->cb)[1] = hdr;
+-	((void **)skb->cb)[2] = data;
+-
+-	return skb;
+-
+- nla_put_failure:
+-	kfree_skb(skb);
+-	return NULL;
+-}
+-
+-struct sk_buff *cfg80211_testmode_alloc_reply_skb(struct wiphy *wiphy,
+-						  int approxlen)
+-{
+-	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
+-
+-	if (WARN_ON(!rdev->testmode_info))
+-		return NULL;
+-
+-	return __cfg80211_testmode_alloc_skb(rdev, approxlen,
+-				rdev->testmode_info->snd_portid,
+-				rdev->testmode_info->snd_seq,
+-				GFP_KERNEL);
+-}
+-EXPORT_SYMBOL(cfg80211_testmode_alloc_reply_skb);
+-
+-int cfg80211_testmode_reply(struct sk_buff *skb)
+-{
+-	struct cfg80211_registered_device *rdev = ((void **)skb->cb)[0];
+-	void *hdr = ((void **)skb->cb)[1];
+-	struct nlattr *data = ((void **)skb->cb)[2];
+-
+-	/* clear CB data for netlink core to own from now on */
+-	memset(skb->cb, 0, sizeof(skb->cb));
+-
+-	if (WARN_ON(!rdev->testmode_info)) {
+-		kfree_skb(skb);
+-		return -EINVAL;
+-	}
+-
+-	nla_nest_end(skb, data);
+-	genlmsg_end(skb, hdr);
+-	return genlmsg_reply(skb, rdev->testmode_info);
+-}
+-EXPORT_SYMBOL(cfg80211_testmode_reply);
+-
+-struct sk_buff *cfg80211_testmode_alloc_event_skb(struct wiphy *wiphy,
+-						  int approxlen, gfp_t gfp)
+-{
+-	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
+-
+-	return __cfg80211_testmode_alloc_skb(rdev, approxlen, 0, 0, gfp);
+-}
+-EXPORT_SYMBOL(cfg80211_testmode_alloc_event_skb);
+-
+-void cfg80211_testmode_event(struct sk_buff *skb, gfp_t gfp)
+-{
+-	struct cfg80211_registered_device *rdev = ((void **)skb->cb)[0];
+-	void *hdr = ((void **)skb->cb)[1];
+-	struct nlattr *data = ((void **)skb->cb)[2];
+-
+-	/* clear CB data for netlink core to own from now on */
+-	memset(skb->cb, 0, sizeof(skb->cb));
+-
+-	nla_nest_end(skb, data);
+-	genlmsg_end(skb, hdr);
+-	genlmsg_multicast_netns(wiphy_net(&rdev->wiphy), skb, 0,
+-				nl80211_testmode_mcgrp.id, gfp);
+-}
+-EXPORT_SYMBOL(cfg80211_testmode_event);
+ #endif
+ 
+ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
+@@ -8311,6 +8358,110 @@ static int nl80211_crit_protocol_stop(struct sk_buff *skb,
+ 	return 0;
+ }
+ 
++static int nl80211_vendor_cmd(struct sk_buff *skb, struct genl_info *info)
++{
++	struct cfg80211_registered_device *rdev = info->user_ptr[0];
++	struct wireless_dev *wdev =
++		__cfg80211_wdev_from_attrs(genl_info_net(info), info->attrs);
++	int i, err;
++	u32 vid, subcmd;
++
++	if (!rdev->wiphy.vendor_commands)
++		return -EOPNOTSUPP;
++
++	if (IS_ERR(wdev)) {
++		err = PTR_ERR(wdev);
++		if (err != -EINVAL)
++			return err;
++		wdev = NULL;
++	} else if (wdev->wiphy != &rdev->wiphy) {
++		return -EINVAL;
++	}
++
++	if (!info->attrs[NL80211_ATTR_VENDOR_ID] ||
++	    !info->attrs[NL80211_ATTR_VENDOR_SUBCMD])
++		return -EINVAL;
++
++	vid = nla_get_u32(info->attrs[NL80211_ATTR_VENDOR_ID]);
++	subcmd = nla_get_u32(info->attrs[NL80211_ATTR_VENDOR_SUBCMD]);
++	for (i = 0; i < rdev->wiphy.n_vendor_commands; i++) {
++		const struct wiphy_vendor_command *vcmd;
++		void *data = NULL;
++		int len = 0;
++
++		vcmd = &rdev->wiphy.vendor_commands[i];
++
++		if (vcmd->info.vendor_id != vid || vcmd->info.subcmd != subcmd)
++			continue;
++
++		if (vcmd->flags & (WIPHY_VENDOR_CMD_NEED_WDEV |
++				   WIPHY_VENDOR_CMD_NEED_NETDEV)) {
++			if (!wdev)
++				return -EINVAL;
++			if (vcmd->flags & WIPHY_VENDOR_CMD_NEED_NETDEV &&
++			    !wdev->netdev)
++				return -EINVAL;
++
++			if (vcmd->flags & WIPHY_VENDOR_CMD_NEED_RUNNING) {
++				if (wdev->netdev &&
++				    !netif_running(wdev->netdev))
++					return -ENETDOWN;
++				if (!wdev->netdev && !wdev->p2p_started)
++					return -ENETDOWN;
++			}
++		} else {
++			wdev = NULL;
++		}
++
++		if (info->attrs[NL80211_ATTR_VENDOR_DATA]) {
++			data = nla_data(info->attrs[NL80211_ATTR_VENDOR_DATA]);
++			len = nla_len(info->attrs[NL80211_ATTR_VENDOR_DATA]);
++		}
++
++		rdev->cur_cmd_info = info;
++		err = rdev->wiphy.vendor_commands[i].doit(&rdev->wiphy, wdev,
++							  data, len);
++		rdev->cur_cmd_info = NULL;
++		return err;
++	}
++
++	return -EOPNOTSUPP;
++}
++
++struct sk_buff *__cfg80211_alloc_reply_skb(struct wiphy *wiphy,
++					   enum nl80211_commands cmd,
++					   enum nl80211_attrs attr,
++					   int approxlen)
++{
++	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
++
++	if (WARN_ON(!rdev->cur_cmd_info))
++		return NULL;
++
++	return __cfg80211_alloc_vendor_skb(rdev, approxlen,
++					   rdev->cur_cmd_info->snd_portid,
++					   rdev->cur_cmd_info->snd_seq,
++					   cmd, attr, NULL, GFP_KERNEL);
++}
++EXPORT_SYMBOL(__cfg80211_alloc_reply_skb);
++
++int cfg80211_vendor_cmd_reply(struct sk_buff *skb)
++{
++	struct cfg80211_registered_device *rdev = ((void **)skb->cb)[0];
++	void *hdr = ((void **)skb->cb)[1];
++	struct nlattr *data = ((void **)skb->cb)[2];
++
++	if (WARN_ON(!rdev->cur_cmd_info)) {
++		kfree_skb(skb);
++		return -EINVAL;
++	}
++
++	nla_nest_end(skb, data);
++	genlmsg_end(skb, hdr);
++	return genlmsg_reply(skb, rdev->cur_cmd_info);
++}
++EXPORT_SYMBOL_GPL(cfg80211_vendor_cmd_reply);
++
+ #define NL80211_FLAG_NEED_WIPHY		0x01
+ #define NL80211_FLAG_NEED_NETDEV	0x02
+ #define NL80211_FLAG_NEED_RTNL		0x04
+@@ -8322,7 +8473,7 @@ static int nl80211_crit_protocol_stop(struct sk_buff *skb,
+ #define NL80211_FLAG_NEED_WDEV_UP	(NL80211_FLAG_NEED_WDEV |\
+ 					 NL80211_FLAG_CHECK_NETDEV_UP)
+ 
+-static int nl80211_pre_doit(struct genl_ops *ops, struct sk_buff *skb,
++static int nl80211_pre_doit(const struct genl_ops *ops, struct sk_buff *skb,
+ 			    struct genl_info *info)
+ {
+ 	struct cfg80211_registered_device *rdev;
+@@ -8398,7 +8549,7 @@ static int nl80211_pre_doit(struct genl_ops *ops, struct sk_buff *skb,
+ 	return 0;
+ }
+ 
+-static void nl80211_post_doit(struct genl_ops *ops, struct sk_buff *skb,
++static void nl80211_post_doit(const struct genl_ops *ops, struct sk_buff *skb,
+ 			      struct genl_info *info)
+ {
+ 	if (info->user_ptr[0])
+@@ -9015,7 +9166,15 @@ static struct genl_ops nl80211_ops[] = {
+ 		.flags = GENL_ADMIN_PERM,
+ 		.internal_flags = NL80211_FLAG_NEED_WDEV_UP |
+ 				  NL80211_FLAG_NEED_RTNL,
+-	}
++	},
++	{
++		.cmd = NL80211_CMD_VENDOR,
++		.doit = nl80211_vendor_cmd,
++		.policy = nl80211_policy,
++		.flags = GENL_ADMIN_PERM,
++		.internal_flags = NL80211_FLAG_NEED_WIPHY |
++				  NL80211_FLAG_NEED_RTNL,
++	},
+ };
+ 
+ static struct genl_multicast_group nl80211_mlme_mcgrp = {
+@@ -10830,6 +10989,10 @@ int nl80211_init(void)
+ 	if (err)
+ 		goto err_out;
+ 
++	err = genl_register_mc_group(&nl80211_fam, &nl80211_vendor_mcgrp);
++	if (err)
++		goto err_out;
++
+ #ifdef CONFIG_NL80211_TESTMODE
+ 	err = genl_register_mc_group(&nl80211_fam, &nl80211_testmode_mcgrp);
+ 	if (err)
+-- 
+2.10.1
+

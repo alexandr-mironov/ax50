@@ -1,0 +1,245 @@
+//---------------------------------------------
+// ETH1 QoS Firmware Data Structure Definitions 
+//---------------------------------------------
+//  id       ::= [_a-zA-Z][_a-zA-Z0-9]*
+//  newline  ::= \n
+//  dec_num  ::= [0-9]+ 
+//  hex_num  ::= 0[x|X][0-9a-fA-F]+
+//  dw_pos   ::= [dec_num|hex_num]
+//  dw_range ::= dw_pos1 \.\. dw_pos2       ==> dw_pos1 <= dw_pos2
+//  bit_pos  ::= dec_num                    ==> 0 <= dec_num <=31
+//  bit_range::= bit_pos1 : bit_pos2        ==> bit_pos1 >= bit_pos2
+//  field_def::= FIELD id \[ bit_range \] newline
+//  dw_fdef  ::= DW \[ dw_pos \] \{ newline
+//                  field_def +                
+//                \} newline
+//  dw_def   ::= DW  \[ dw_pos \] id? newline
+//  dw_rdef  ::= DW \[ dw_range \] id? newline
+//  ds_def   ::= DS id \{ \newline
+//                  [dw_fdef|dw_def|dw_rdef] + 
+//              \} newline
+//---------------------------------------------
+
+//perl ../../../Tools/DEF2INC --mode data --input_fn ../def/qos_data_structure.def --output_fn eth1_qos_data_structure.inc
+//perl ../../../Tools/DEF2INC --mode access --input_fn ../def/qos_data_structure.def --output_fn eth1_qos_data_structure_access.inc
+
+DS TX_QOS_CFG {
+    DW[0] {
+        FIELD time_tick     [31:16]
+        FIELD overhd_bytes  [15:8]
+        FIELD eth1_eg_qnum  [7:4]
+        FIELD eth1_qss      [2:2]
+        FIELD shape_en      [1:1]
+        FIELD wfq_en        [0:0]
+    }
+}
+
+
+//ETH1 QoS Queue Descriptor Configuration Table
+DS ETH1_QoS_Q_DES_CFG {
+    DW[0] {
+        FIELD threshold[31:24]
+        FIELD desc_num[23:16]
+        FIELD base_adr[15:0]
+    }
+    
+    DW[1] {
+        FIELD rd_ptr[31:16]
+        FIELD wr_ptr[15:0]
+    }
+}
+
+// TX Descriptor
+DS TX_DESCRIPTOR {
+    DW[0] {
+        FIELD own       [31:31]
+        FIELD c         [30:30]
+        FIELD sop       [29:29]
+        FIELD eop       [28:28]
+        FIELD byte_off  [27:23]
+        FIELD qos       [22:19]
+        FIELD res       [18:17]
+        FIELD small     [16:16]
+        FIELD data_len  [15:0]
+    }
+    
+    DW[1] {
+//        FIELD small     [31:31]
+        FIELD data_ptr  [28:0]
+    }
+}
+
+// Unified US TX Descriptor
+DS UNIFIED_TX_DESCRIPTOR {
+    DW[0] {
+        FIELD own       [31:31]
+        FIELD c         [30:30]
+        FIELD sop       [29:29]
+        FIELD eop       [28:28]
+        FIELD dic       [27:27]
+        FIELD pdu_type  [26:26]
+        FIELD byte_off  [25:23]
+        FIELD qos       [22:19]
+        FIELD mpoa_pt   [18:18]
+        FIELD mpoa_type [17:16]
+        FIELD data_len  [15:0]
+    }
+    
+    DW[1] {
+        FIELD data_ptr  [31:0]
+    }
+}
+
+
+DS UNIFIED_RX_DESCRIPTOR {
+    DW[0] {
+        FIELD own       [31:31]
+        FIELD c         [30:30]
+        FIELD sop       [29:29]
+        FIELD eop       [28:28]
+        FIELD dic       [27:27]
+        FIELD pdu_type  [26:26]
+        FIELD byte_off  [25:23]
+        FIELD qos       [22:19]
+        FIELD mpoa_pt   [18:18]
+        FIELD mpoa_type [17:16]
+        FIELD data_len  [15:0]
+    }
+    
+    DW[1] {
+        FIELD data_ptr  [31:0]
+    }
+}
+
+
+DS US_FPQ_SWAP_CFG_CTXT {
+    DW[0] {
+        FIELD des_in_own_val[31:31]
+        FIELD enabled[30:30]    
+        FIELD fpq_shutdown[29:29]
+        FIELD swap_en[28:28]
+        FIELD cdma_des_num[15:8]
+        FIELD vrx218_syncdes_num[7:0]
+    }
+    
+    DW[1] {
+        FIELD cdma_des_base[31:16]
+        FIELD cdma_idx[15:0]        
+    }
+    
+    DW[2] {
+        FIELD vrx218_syncdes_base[31:16]
+        FIELD vrx218_idx[15:0]
+    }
+    
+    DW[3] us_fpq_rx_cnt
+    
+    DW[4] us_fpq_swap_drop_cnt
+
+    DW[5] us_fpq_shutdown_drop_cnt
+    
+    DW[6] res1
+    
+    DW[7] res2
+
+}
+
+// ETH1 Egress Queue Shaping and Scheduling Configuration Table
+DS ETH1_shaping_scheduling_cfg {
+    DW[0] {
+        FIELD t [31:24]
+        FIELD w [23:0]
+    }
+    DW[1] {
+        FIELD s [31:16]
+        FIELD r [15:0]
+    }
+    DW[2] {
+        FIELD d [23:0]
+    }
+    
+    DW[3] {
+        FIELD tick_cnt  [23:16]
+        FIELD b [15:0]
+    }
+}
+
+// ETH1 Egress Queue Shaping and Scheduling MIB Table
+DS ETH1_shaping_scheduling_mib {
+    DW[0]   total_rx_pkt
+    DW[1]   total_rx_bytes
+    DW[2]   total_tx_pkt
+    DW[3]   total_tx_bytes
+
+            
+    DW[4]   cpu_path_small_pkt_drop_cnt                       
+    DW[5]   cpu_path_total_pkt_drop_cnt
+    DW[6]   fast_path_small_pkt_drop_cnt                       
+    DW[7]   fast_path_total_pkt_drop_cnt
+}
+
+DS TX_QOSQ_BANDWIDTH_CTRL {
+    DW[0] {
+        FIELD large_frame_size      [15:0]
+        FIELD large_frame_drop_th   [31:16]
+    }
+}
+
+DS CFG_STD_DATA_LEN {
+    DW[0] {
+        FIELD data_len  [15:0]
+        FIELD byte_off  [17:16]
+    }
+}
+
+// RX Descriptor
+DS RX_DESCRIPTOR {
+    DW[0] {
+        FIELD own       [31:31]
+        FIELD c         [30:30]
+        FIELD sop       [29:29]
+        FIELD eop       [28:28]
+        FIELD byte_off  [24:23]
+        FIELD data_len  [15:0]
+    }
+    
+    DW[1] {
+        FIELD data_ptr  [28:0]
+    }
+}
+
+DS STD_DES_CFG {
+    DW[0] {
+        FIELD data_len  [15:0]
+        FIELD byte_off  [17:16]
+    }
+}
+
+DS DESQ_CFG_CTXT {
+    DW[0] {
+        FIELD des_in_own_val[31:31]
+        FIELD fast_path[30:30]  
+        FIELD mbox_int_en[29:29]
+        FIELD des_sync_needed[28:28]      
+        FIELD gif_id[26:24]
+        FIELD des_num[23:16]
+        FIELD des_base_addr[15:0]
+    }
+
+    DW[1] {
+        FIELD mbox_int_cfg_ptr[31:16]
+        // bonding extension, for bonding part des
+        FIELD bp_des_base_addr[15:0]
+    }
+
+    DW[2] {
+        FIELD deq_idx[31:16]
+        FIELD enq_idx[15:0]
+    }
+     
+    DW[4] enq_pkt_cnt
+    DW[5] enq_byte_cnt
+    
+    DW[6] deq_pkt_cnt
+    DW[7] deq_byte_cnt
+}

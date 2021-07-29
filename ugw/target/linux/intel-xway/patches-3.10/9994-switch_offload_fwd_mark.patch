@@ -1,0 +1,345 @@
+# HG changeset patch
+# Parent 47a90860a989b3fb3cfac7307c59b964f2e4875f
+
+diff --git a/drivers/net/ethernet/lantiq/Kconfig b/drivers/net/ethernet/lantiq/Kconfig
+--- a/drivers/net/ethernet/lantiq/Kconfig
++++ b/drivers/net/ethernet/lantiq/Kconfig
+@@ -105,6 +105,12 @@ config LTQ_TOE_DRIVER
+         default n
+         ---help---
+         Lantiq TOE (TCP Offload Engine) driver for XRX500 series.
++config OFFLOAD_FWD_MARK
++	bool "Enable offload fwd mark for the packets already forwarded by switch"
++				depends on LTQ_ETH_XRX500
++				default y
++				---help---
++				Lantiq switch offload for broadcast/multicast packets
+ 
+ source "drivers/net/ethernet/lantiq/datapath/Kconfig"
+ source "drivers/net/ethernet/lantiq/switch-api/Kconfig"
+diff --git a/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c b/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c
+--- a/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c
++++ b/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c
+@@ -35,6 +35,7 @@
+ 
+ #include <lantiq.h>
+ #include <net/datapath_api.h>
++#include <net/datapath_proc_api.h>
+ #include <net/lantiq_cbm.h>
+ #include <net/lantiq_cbm_api.h>
+ #include <xway/switch-api/lantiq_gsw_api.h>
+@@ -52,9 +53,20 @@
+ static int xrx500_mdio_probe(struct net_device *dev, struct xrx500_port *port);
+ 
+ static int ltq_gsw_pmac_init(void);
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++static void eth_offload_dump(struct seq_file *s);
++ssize_t eth_offload_write(struct file *file, const char *buf,
++      size_t count, loff_t *ppos);
++static struct dp_proc_entry proc_entries[] = {
++/*name single_callback_t multi_callback_t/_start write_callback_t */
++  {"offload_enable", eth_offload_dump, NULL, NULL,eth_offload_write},
++	{NULL,NULL,NULL,NULL,NULL}
++};
++static u32 offload_enable_t = 0xFFFFFFFF;
++static u32 get_offloadmark(u32 , struct net_device *);
++#endif
+ 
+ #define LTQ_RXCSUM
+-
+ #define DRV_MODULE_NAME             "lantiq_eth_drv_xrx500"
+ #define DRV_MODULE_VERSION          "1.1"
+ 
+@@ -171,6 +183,24 @@ static inline void dump_skb(u32 len, cha
+ }
+ #endif
+ 
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++static u32 get_offloadmark(u32 bridge_dev, struct net_device *dev){
++ u32 i;
++ ltq_switch_priv_t *priv;
++ for(i=1; i < xrx500_hw.num_devs; i++){
++   if(xrx500_hw.devs[i]->ifindex == dev->ifindex ) {
++     priv = netdev_priv(dev);
++     if(priv->wan == 1){
++       return 0;
++     }
++     return bridge_dev;
++   }
++ }
++ return 0;
++}
++#endif
++
++
+ /* Get the driver information, used by ethtool_ops  */
+ static void get_drvinfo (struct net_device *dev, struct ethtool_drvinfo *info)
+ {
+@@ -283,6 +313,9 @@ static void eth_rx(struct net_device *de
+ 	if (dev->features & NETIF_F_RXCSUM) {
+ 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+ 	}
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	skb->offload_fwd_mark = dev->offload_fwd_mark & offload_enable_t;
++#endif
+     pr_debug ("passing to stack: protocol: %x\n", skb->protocol);
+     netif_rx(skb);
+     priv->stats.rx_packets++;
+@@ -1300,8 +1333,12 @@ static int xrx500_of_iface(struct xrx500
+ 	ltq_eth_drv_eth_addr_setup(hw->devs[hw->num_devs], priv->id);
+ 
+ 	/* register the actual device */
+-	if (!register_netdev(hw->devs[hw->num_devs]))
++	if (!register_netdev(hw->devs[hw->num_devs])){
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++		hw->devs[hw->num_devs]->get_offloadmark = &get_offloadmark;
++#endif
+ 		hw->num_devs++;
++	}
+ 	return 0;
+ }
+ 
+@@ -1885,6 +1922,44 @@ static void ltq_eth_pae_tasklet(unsigned
+ }
+ #endif
+ 
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++struct proc_dir_entry *driver_proc_node;
++static void eth_proc_create(void)
++{
++  driver_proc_node = proc_mkdir("eth", NULL);
++  if (driver_proc_node != NULL) {
++		dp_proc_entry_create(driver_proc_node,&proc_entries[0]);
++	}else{
++		printk(KERN_ERR "Couldn't create base dir /proc/eth\n");
++	}
++}
++static void eth_offload_dump(struct seq_file *s)
++{
++	if(offload_enable_t)
++		seq_printf(s,"1\n");
++	else
++		seq_printf(s,"0\n");
++}
++ssize_t eth_offload_write(struct file *file, const char *buf,
++      size_t count, loff_t *ppos)
++{
++	char str;
++
++	if(count > 2){
++		printk(KERN_INFO "Usage:echo 0/1 > /proc/eth/offload_enable\n");
++		return count;
++	}
++	copy_from_user(&str, buf, 1);
++	if(str == '0')
++		offload_enable_t = 0;
++	else if(str == '1')
++		offload_enable_t = 0xFFFFFFFF;
++	else
++		printk(KERN_INFO "Usage:echo 0/1 > /proc/eth/offload_enable\n");
++
++		return count;
++}
++#endif
+ /* Initilization  Ethernet module */
+ static int ltq_eth_drv_init(struct platform_device *pdev)
+ {
+@@ -2040,6 +2115,10 @@ static int ltq_eth_drv_init(struct platf
+ 	/* Register the netlink notification */
+ 	ltq_eth_genetlink_init();
+ #endif
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	/*Register the proc*/
++	eth_proc_create();
++#endif
+ 
+ #ifdef CONFIG_XRX500_ETH_DRV_COC_SUPPORT
+ 	if (of_irq_to_resource_table(node, irqres, 2) == 2) {
+@@ -2069,6 +2148,7 @@ static int ltq_eth_drv_init(struct platf
+ #endif
+ 
+ err1:
++	
+  /* Print the driver version info */
+     eth_drv_ver(ver_str);
+     printk(KERN_INFO "%s", ver_str);
+@@ -2097,6 +2177,11 @@ static void  ltq_eth_drv_exit (void)
+ #ifdef CONFIG_USERSPACE_LINK_NOTIFICATION
+ 	ltq_eth_genetlink_exit();
+ #endif
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	remove_proc_entry("offload_enable",driver_proc_node);
++	driver_proc_node = NULL;
++	remove_proc_entry("eth",NULL);
++#endif
+ }
+ 
+ static int ltq_eth_drv_probe(struct platform_device *pdev)
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -1243,6 +1243,16 @@ struct net_device {
+ 	struct cpu_rmap		*rx_cpu_rmap;
+ #endif
+ 
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++ /*
++  * If offload fwd mark is enabled the default hook for offload mark is set to null
++  *    and default value for mark is set to 0. Register the hook after net dev
++  * register function in the corresponding caller where its supported 
++  */
++ u32 offload_fwd_mark;
++ u32 (*get_offloadmark)(u32 , struct net_device *dev); 
++#endif
++
+ 	/* These may be needed for future network-power-down code. */
+ 
+ 	/*
+@@ -1343,6 +1353,7 @@ struct net_device {
+ 	int group;
+ 
+ 	struct pm_qos_request	pm_qos_req;
++
+ };
+ #define to_net_dev(d) container_of(d, struct net_device, dev)
+ 
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -541,6 +541,9 @@ struct sk_buff {
+ #ifdef CONFIG_NETWORK_EXTMARK
+ 	__u32			extmark;
+ #endif
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	__u32 offload_fwd_mark; 
++#endif
+ 	union {
+ 		__u32		mark;
+ 		__u32		dropcount;
+diff --git a/net/bridge/br_forward.c b/net/bridge/br_forward.c
+--- a/net/bridge/br_forward.c
++++ b/net/bridge/br_forward.c
+@@ -58,6 +58,9 @@ static inline int should_deliver(const s
+ {
+ 	return (((p->flags & BR_HAIRPIN_MODE) || skb->dev != p->dev) &&
+ 		br_allowed_egress(p->br, nbp_get_vlan_info(p), skb) &&
++#ifdef CONFIG_OFFLOAD_FWD_MARK 
++		(!skb->offload_fwd_mark || (BR_INPUT_SKB_CB(skb)->offload_fwd_mark != p->offload_fwd_mark)) && 
++#endif
+ 		p->state == BR_STATE_FORWARDING);
+ }
+ 
+diff --git a/net/bridge/br_if.c b/net/bridge/br_if.c
+--- a/net/bridge/br_if.c
++++ b/net/bridge/br_if.c
+@@ -394,6 +394,14 @@ int br_add_if(struct net_bridge *br, str
+ 	if (err)
+ 		goto err5;
+ 
++/*get offload mark through hook to query whether dev has 
++	stack offload capability*/
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++   if(dev->get_offloadmark != NULL)
++     dev->offload_fwd_mark = dev->get_offloadmark((u32)br->dev,dev);
++	/*copy it to the bridge port also*/
++	 p->offload_fwd_mark = dev->offload_fwd_mark;
++#endif
+ 	dev->priv_flags |= IFF_BRIDGE_PORT;
+ 
+ 	dev_disable_lro(dev);
+@@ -473,6 +481,13 @@ int br_del_if(struct net_bridge *br, str
+ 
+ 	netdev_update_features(br->dev);
+ 	
++#ifdef CONFIG_LTQ_MCAST_SNOOPING
++      br_ifinfo_notify(RTM_DELLINK, p);
++#endif
++/*reset it irrespective of the hook defined or not */
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++		dev->offload_fwd_mark = 0;
++#endif
+ 
+ 	return 0;
+ }
+diff --git a/net/bridge/br_input.c b/net/bridge/br_input.c
+--- a/net/bridge/br_input.c
++++ b/net/bridge/br_input.c
+@@ -73,6 +73,10 @@ int __ebt_optimized br_handle_frame_fini
+ 	if (!br_allowed_ingress(p->br, nbp_get_vlan_info(p), skb, &vid))
+ 		goto out;
+ 
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++		if (skb->offload_fwd_mark)
++			BR_INPUT_SKB_CB(skb)->offload_fwd_mark = p->offload_fwd_mark;
++#endif
+ 	/* insert into forwarding database after filtering to avoid spoofing */
+ 	br = p->br;
+ 	br_fdb_update(br, p, eth_hdr(skb)->h_source, vid);
+diff --git a/net/bridge/br_ioctl.c b/net/bridge/br_ioctl.c
+--- a/net/bridge/br_ioctl.c
++++ b/net/bridge/br_ioctl.c
+@@ -101,7 +101,6 @@ static int add_del_if(struct net_bridge 
+ 		ret = br_add_if(br, dev);
+ 	else
+ 		ret = br_del_if(br, dev);
+-
+ 	return ret;
+ }
+ #ifdef CONFIG_LTQ_MCAST_SNOOPING
+diff --git a/net/bridge/br_private.h b/net/bridge/br_private.h
+--- a/net/bridge/br_private.h
++++ b/net/bridge/br_private.h
+@@ -248,6 +248,9 @@ struct net_bridge_port
+ #ifdef CONFIG_BRIDGE_VLAN_FILTERING
+ 	struct net_port_vlans __rcu	*vlan_info;
+ #endif
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	u32 offload_fwd_mark;
++#endif
+ };
+ 
+ #define br_port_exists(dev) (dev->priv_flags & IFF_BRIDGE_PORT)
+@@ -358,6 +361,9 @@ struct br_input_skb_cb {
+ 	int igmp;
+ 	int mrouters_only;
+ #endif
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	u32 offload_fwd_mark;
++#endif
+ };
+ 
+ #define BR_INPUT_SKB_CB(__skb)	((struct br_input_skb_cb *)(__skb)->cb)
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -5416,6 +5416,17 @@ int register_netdevice(struct net_device
+ 		rollback_registered(dev);
+ 		dev->reg_state = NETREG_UNREGISTERED;
+ 	}
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++ /*
++  * If offload fwd mark is enabled the default hook for offload mark is set to null
++  *    and default value for mark is set to 0. Register the hook after net dev
++  * register function in the corresponding caller where its supported 
++  */
++ else {
++   dev->offload_fwd_mark = 0;
++   dev->get_offloadmark = NULL;
++ }
++#endif
+ 	/*
+ 	 *	Prevent userspace races by waiting until the network
+ 	 *	device is fully setup before sending notifications.
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -934,6 +934,9 @@ void __copy_skb_header(struct sk_buff *n
+ #ifdef CONFIG_NETWORK_EXTMARK
+ 	new->extmark		= old->extmark;
+ #endif
++#ifdef CONFIG_OFFLOAD_FWD_MARK
++	new->offload_fwd_mark = old->offload_fwd_mark; 
++#endif
+ 	new->mark		= old->mark;
+ 	new->skb_iif		= old->skb_iif;
+ 	__nf_copy(new, old);

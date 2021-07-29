@@ -1,0 +1,520 @@
+From f8e39a55146c80b59c5c72406193bdd974e8176c Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 13 Dec 2016 12:36:49 -0700
+Subject: [PATCH 546/639] xgmii-pwr-ctrl: xGMII power control driver
+
+For the PP on Atom builds the SGMII/RGMII interface power control should
+be done from the Atom side. This driver exposes sysfs attributes for the
+power manager to use to control the power to these interfaces.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/power/Kconfig                              |   2 +
+ drivers/power/Makefile                             |   1 +
+ drivers/power/xgmii-pwr-ctrl/Kconfig               |   5 +
+ drivers/power/xgmii-pwr-ctrl/Makefile              |   1 +
+ drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c | 453 +++++++++++++++++++++
+ 5 files changed, 462 insertions(+)
+ create mode 100644 drivers/power/xgmii-pwr-ctrl/Kconfig
+ create mode 100644 drivers/power/xgmii-pwr-ctrl/Makefile
+ create mode 100644 drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+
+diff --git a/drivers/power/Kconfig b/drivers/power/Kconfig
+index e6f92b4..0629df7 100644
+--- a/drivers/power/Kconfig
++++ b/drivers/power/Kconfig
+@@ -379,3 +379,5 @@ source "drivers/power/reset/Kconfig"
+ endif # POWER_SUPPLY
+ 
+ source "drivers/power/avs/Kconfig"
++
++source "drivers/power/xgmii-pwr-ctrl/Kconfig"
+diff --git a/drivers/power/Makefile b/drivers/power/Makefile
+index a4b7417..d626ed1 100644
+--- a/drivers/power/Makefile
++++ b/drivers/power/Makefile
+@@ -56,3 +56,4 @@ obj-$(CONFIG_POWER_AVS)		+= avs/
+ obj-$(CONFIG_CHARGER_SMB347)	+= smb347-charger.o
+ obj-$(CONFIG_CHARGER_TPS65090)	+= tps65090-charger.o
+ obj-$(CONFIG_POWER_RESET)	+= reset/
++obj-$(CONFIG_XGMII_PWR_CTRL)    += xgmii-pwr-ctrl/
+diff --git a/drivers/power/xgmii-pwr-ctrl/Kconfig b/drivers/power/xgmii-pwr-ctrl/Kconfig
+new file mode 100644
+index 0000000..7a457a8
+--- /dev/null
++++ b/drivers/power/xgmii-pwr-ctrl/Kconfig
+@@ -0,0 +1,5 @@
++
++config XGMII_PWR_CTRL
++        tristate "R/SGMII interface power control driver"
++        help
++          Say Y to control the xGMII interface power from Atom.
+diff --git a/drivers/power/xgmii-pwr-ctrl/Makefile b/drivers/power/xgmii-pwr-ctrl/Makefile
+new file mode 100644
+index 0000000..972b6b0
+--- /dev/null
++++ b/drivers/power/xgmii-pwr-ctrl/Makefile
+@@ -0,0 +1 @@
++obj-$(CONFIG_XGMII_PWR_CTRL) += xgmii-power-control.o
+diff --git a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+new file mode 100644
+index 0000000..af6aefc
+--- /dev/null
++++ b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+@@ -0,0 +1,453 @@
++/*
++ * xgmii-power-control.c
++ *
++ *  GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation. All rights reserved.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *    Intel Corporation
++ *    2200 Mission College Blvd.
++ *    Santa Clara, CA  97052
++ *
++ */
++#include <linux/module.h>
++#include <linux/slab.h>
++#include <linux/acpi.h>
++#include <linux/spinlock.h>
++#include <linux/platform_device.h>
++#include <linux/pm.h>
++#include <linux/pm_runtime.h>
++#include <linux/hw_mailbox.h>
++#include <linux/wait.h>
++
++#define DWC_ETH_QOS_MAX_NUM_NETDEV (5)
++#define HW_MBOX_LAN_MSG_TAG (5)
++#define PCE_MSG_OPCODE (6)
++/*PCE response timeout in milli seconds */
++#define PCE_RSP_TIMEOUT (200)
++
++enum xgmii_power_state {
++	XGMII_PWR_STATE_OFF = 0,
++	XGMII_PWR_STATE_ACTIVE = 1,
++};
++
++enum pce_response {
++	PCE_RSP_OK = 0,
++	PCE_RSP_NOK = 1,
++	PCE_RSP_UNKNOWN = 2,
++};
++
++enum pce_cmd {
++	PCE_CMD_ALLOC = 0,
++	PCE_CMD_FREE = 1,
++};
++
++enum rsc_id {
++	RSC_INVALID = 0,
++	RSC_MOCA_PRIMARY = 1,
++	RSC_MOCA_SECONDARY = 2,
++	RSC_SGMII0 = 3,
++	RSC_SGMII1 = 4,
++	RSC_RGMII2 = 5,
++	RSC_RGMII3 = 6,
++};
++
++struct xgmii_pce_cmd_msg {
++	uint32_t opcode;
++	uint32_t cmd;
++	uint32_t rsc_id;
++};
++
++struct xgmii_pce_response_msg {
++	uint32_t opcode;
++	uint32_t response;
++};
++
++/* SGMII0 connected to GMAC 0
++ * SGMII0 connected to GMAC 1
++ * SGMII0 connected to GMAC 2
++ * SGMII0 connected to GMAC 3
++ * No interface connected to GMAC 4
++ */
++struct xgmii_interface_data {
++	struct device *dev;
++	int uid;
++	int power_state;
++};
++
++/** Global Variables */
++static bool g_registered_pce_rsp_msg_cb;
++static uint32_t g_pce_rsp_status = PCE_RSP_UNKNOWN;
++static struct mutex g_pce_msg_lock;
++static DECLARE_WAIT_QUEUE_HEAD(xgmii_wq);
++/***********************************************/
++
++#ifdef CONFIG_PM_RUNTIME
++static int xgmii_runtime_suspend(struct device *dev);
++static int xgmii_runtime_resume(struct device *dev);
++static int xgmii_runtime_idle(struct device *dev);
++static const struct dev_pm_ops xgmii_pm_ops = {
++	SET_RUNTIME_PM_OPS(xgmii_runtime_suspend, xgmii_runtime_resume, NULL)
++};
++#endif
++
++static inline enum rsc_id to_rsc_id(int uid)
++{
++	enum rsc_id id = RSC_INVALID;
++	if (uid == 0)
++		id = RSC_SGMII0;
++	else if (uid == 1)
++		id = RSC_SGMII1;
++	else if (uid == 2)
++		id = RSC_RGMII2;
++	else if (uid == 3)
++		id = RSC_RGMII3;
++	return id;
++}
++
++static ssize_t xgmii_pwr_show(struct device *dev,
++			struct device_attribute *attr,
++			char *buf)
++{
++	ssize_t ret = 0;
++	char *ptr = buf;
++
++	ptr += scnprintf(buf, PAGE_SIZE, "%d\n",
++			atomic_read(&dev->power.usage_count));
++	ret = ptr - buf;
++
++	return ret;
++}
++
++static ssize_t xgmii_pwr_store(struct device *dev,
++			struct device_attribute *attr,
++			const char *buf, size_t count)
++{
++	unsigned long attribute_value;
++	ssize_t ret;
++
++	struct platform_device *pdev = to_platform_device(dev);
++	struct xgmii_interface_data *priv = platform_get_drvdata(pdev);
++
++	ret = kstrtoul(buf, 0, &attribute_value);
++	if (ret != 0)
++		return ret;
++
++	if ((attribute_value == 1) && (!atomic_read(&dev->power.usage_count)))
++		pm_runtime_get_sync(dev);
++	else if ((attribute_value == 0) &&
++			(atomic_read(&dev->power.usage_count) == 1))
++		pm_runtime_put_sync(dev);
++	else
++		ret = -EINVAL;
++	if (!ret)
++		ret = count;
++	return ret;
++}
++
++static DEVICE_ATTR(sgmii0_pwr_ctrl, S_IRUGO|S_IWUSR,
++				xgmii_pwr_show, xgmii_pwr_store);
++static DEVICE_ATTR(sgmii1_pwr_ctrl, S_IRUGO|S_IWUSR,
++				xgmii_pwr_show, xgmii_pwr_store);
++static DEVICE_ATTR(rgmii2_pwr_ctrl, S_IRUGO|S_IWUSR,
++				xgmii_pwr_show, xgmii_pwr_store);
++static DEVICE_ATTR(rgmii3_pwr_ctrl, S_IRUGO|S_IWUSR,
++				xgmii_pwr_show, xgmii_pwr_store);
++
++static int create_sysfs_attrs(struct xgmii_interface_data *priv)
++{
++	int ret = 0;
++	if (priv->uid == 0) {
++		ret = device_create_file(priv->dev,
++				&dev_attr_sgmii0_pwr_ctrl);
++		if (ret < 0)
++			return ret;
++	} else if (priv->uid == 1) {
++		ret = device_create_file(priv->dev,
++				&dev_attr_sgmii1_pwr_ctrl);
++		if (ret < 0)
++			return ret;
++	} else if (priv->uid == 2) {
++		ret = device_create_file(priv->dev,
++				&dev_attr_rgmii2_pwr_ctrl);
++		if (ret < 0)
++			return ret;
++	} else if (priv->uid == 3) {
++		ret = device_create_file(priv->dev,
++				&dev_attr_rgmii3_pwr_ctrl);
++		if (ret < 0)
++			return ret;
++	}
++	return ret;
++}
++
++static void remove_sysfs_attrs(struct xgmii_interface_data *priv)
++{
++	if (priv->uid == 0)
++		device_remove_file(priv->dev,
++				&dev_attr_sgmii0_pwr_ctrl);
++	else if (priv->uid == 1)
++		device_remove_file(priv->dev,
++				&dev_attr_sgmii1_pwr_ctrl);
++	else if (priv->uid == 2)
++		device_remove_file(priv->dev,
++				&dev_attr_rgmii2_pwr_ctrl);
++	else if (priv->uid == 3)
++		device_remove_file(priv->dev,
++				&dev_attr_rgmii3_pwr_ctrl);
++	return;
++}
++
++static int  xgmii_pce_rsp_msg_cb(hw_mbox_Masters_e commander,
++				Uint8 *dataBuf, Uint32 dataLen,
++						Uint32 *token)
++{
++	struct xgmii_pce_response_msg *msg;
++
++	msg = (struct xgmii_pce_response_msg *)dataBuf;
++
++	if (msg->opcode != PCE_MSG_OPCODE) {
++		pr_err("Invalid Opcode %d in pce response\n", msg->opcode);
++		return -1;
++	}
++	if (g_pce_rsp_status == PCE_RSP_UNKNOWN) {
++		g_pce_rsp_status = msg->response;
++		wake_up(&xgmii_wq);
++		pr_debug("pce reply msg cb rsp %d\n", g_pce_rsp_status);
++	} else {
++		pr_err("Unexpected pce response %d\n", msg->response);
++	}
++	return 0;
++}
++
++static int xgmii_send_pce_command(enum pce_cmd cmd, enum rsc_id id)
++{
++	int ret;
++	uint32_t reply_len;
++	struct xgmii_pce_cmd_msg *msg;
++
++	mutex_lock(&g_pce_msg_lock);
++
++	msg = kzalloc(sizeof(struct xgmii_pce_cmd_msg), GFP_KERNEL);
++
++	if (!msg) {
++		ret = -ENOMEM;
++		pr_err("xGMII PCE send cmd msg alloc failed ret %d\n", ret);
++		goto out;
++	}
++
++	msg->opcode = PCE_MSG_OPCODE;
++	msg->cmd = cmd;
++	msg->rsc_id = id;
++
++	pr_debug("opcode %d cmd %d id %d\n", PCE_MSG_OPCODE, cmd, id);
++
++	ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU,
++			HW_MBOX_LAN_MSG_TAG, (uint8_t *)msg,
++			sizeof(struct xgmii_pce_cmd_msg),
++			sizeof(struct xgmii_pce_cmd_msg),
++			&reply_len);
++	if (ret) {
++		pr_err("xGMII PCE send cmd failed ret %d\n", ret);
++		goto out;
++	}
++
++	g_pce_rsp_status = PCE_RSP_UNKNOWN;
++
++	ret = wait_event_timeout(xgmii_wq,
++			(g_pce_rsp_status != PCE_RSP_UNKNOWN),
++			 msecs_to_jiffies(PCE_RSP_TIMEOUT));
++	if (!ret) {
++		ret = -EBUSY;
++		pr_err("xGMII PCE response timeout ret %d\n", ret);
++	} else {
++		ret = g_pce_rsp_status;
++		if (ret)
++			pr_err("xGMII PCE response NOK ret %d\n", ret);
++	}
++out:
++	kfree(msg);
++	mutex_unlock(&g_pce_msg_lock);
++	return ret;
++}
++int xgmii_runtime_suspend(struct device *dev)
++{
++	int ret = 0;
++	struct platform_device *pdev = to_platform_device(dev);
++	struct xgmii_interface_data *priv = platform_get_drvdata(pdev);
++	uint32_t rsc_id = to_rsc_id(priv->uid);
++
++	dev_dbg(dev, "xGMII suspend uid %d\n", priv->uid);
++
++	if (priv->power_state != XGMII_PWR_STATE_OFF) {
++		xgmii_send_pce_command(PCE_CMD_FREE, rsc_id);
++		priv->power_state = XGMII_PWR_STATE_OFF;
++	} else {
++		dev_info(dev, "xGMII uid %d is already in OFF state\n",
++								priv->uid);
++	}
++
++	return ret;
++}
++
++int xgmii_runtime_resume(struct device *dev)
++{
++	int ret = 0;
++	struct platform_device *pdev = to_platform_device(dev);
++	struct xgmii_interface_data *priv = platform_get_drvdata(pdev);
++	uint32_t rsc_id = to_rsc_id(priv->uid);
++
++	dev_dbg(dev, "xGMII resume uid %d\n", priv->uid);
++	if (priv->power_state != XGMII_PWR_STATE_ACTIVE) {
++		xgmii_send_pce_command(PCE_CMD_ALLOC, rsc_id);
++		priv->power_state = XGMII_PWR_STATE_ACTIVE;
++	} else {
++		dev_info(dev, "xGMII uid %d is already in ACTIVE state\n",
++								priv->uid);
++	}
++
++	return ret;
++}
++
++static int xgmii_pwr_ctrl_probe(struct platform_device *pdev)
++{
++	int ret = 0;
++	int uid = -1;
++	struct device *dev = &pdev->dev;
++	struct xgmii_interface_data *priv;
++	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
++	struct acpi_device_info *info =  NULL;
++	acpi_status status;
++
++	status = acpi_get_object_info(handle, &info);
++	if (ACPI_FAILURE(status) || !(info->valid & ACPI_VALID_UID)) {
++		dev_err(dev, "Missing ACPI info: No uid\n");
++		return -ENODEV;
++	}
++
++	ret = kstrtoint(info->unique_id.string, 0, &uid);
++	if (ret) {
++		dev_err(dev, "Failed converting UID to int ret=[%d]\n", ret);
++		return ret;
++	}
++
++	if (0 > uid || DWC_ETH_QOS_MAX_NUM_NETDEV < uid) {
++		dev_err(dev, "Bad ACPI info: uid=%d\n", uid);
++		return -ENODEV;
++	}
++	if (uid == 4) {
++		dev_info(dev, "No xGMII power control for GMAC 5\n");
++		return 0;
++	}
++
++	priv = kzalloc(sizeof(struct xgmii_interface_data), GFP_KERNEL);
++
++	if (!priv) {
++		dev_err(dev, "ERROR, NOMEM for priv data UID %d\n", uid);
++		return -ENOMEM;
++	}
++	priv->dev = &pdev->dev;
++	priv->uid = uid;
++
++	ret = create_sysfs_attrs(priv);
++	if (ret) {
++		dev_err(dev, "Failed to create sysfs attr uid %d\n", uid);
++		kfree(priv);
++		return ret;
++	}
++
++	platform_set_drvdata(pdev, priv);
++
++	if (!g_registered_pce_rsp_msg_cb) {
++		ret = hwMbox_registerRecvOpcode(HW_MBOX_MASTER_NP_CPU,
++					xgmii_pce_rsp_msg_cb,
++					HW_MBOX_LAN_MSG_TAG, 0);
++		if (ret) {
++			dev_err(dev,
++			"Failed to register pce reply msg callback ret = %d\n",
++			ret);
++			remove_sysfs_attrs(priv);
++			kfree(priv);
++			return ret;
++		}
++		g_registered_pce_rsp_msg_cb =  true;
++	}
++#ifdef CONFIG_PM_RUNTIME
++	/* NetIP bring xGMII interfaces in ON state. If NetIP keep them
++	 * in OFF state, pm_runtime_set_active can be deleted */
++	priv->power_state = XGMII_PWR_STATE_ACTIVE;
++	pm_runtime_enable(&pdev->dev);
++	pm_runtime_get_sync(&pdev->dev);
++#endif
++
++	dev_info(dev, "\nxGMII uid %d probed ret %d\n", uid, ret);
++	return ret;
++}
++
++
++static int xgmii_pwr_ctrl_remove(struct platform_device *pdev)
++{
++	struct xgmii_interface_data *priv = platform_get_drvdata(pdev);
++
++	pm_runtime_disable(&pdev->dev);
++	remove_sysfs_attrs(priv);
++	kfree(priv);
++	dev_info(&pdev->dev, "xGMII uid %d removed\n", priv->uid);
++
++	return 0;
++}
++
++static const struct acpi_device_id intelce2700_xgmii_acpi_match[] = {
++	{ "INT351B", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(acpi, intelce2700_xgmii_acpi_match);
++
++static struct platform_driver xgmii_pwr_ctrl_driver = {
++	.probe          = xgmii_pwr_ctrl_probe,
++	.remove         = xgmii_pwr_ctrl_remove,
++	.driver = {
++		.name   = "intelce2700_xgmii_pwr_ctrl_driver",
++		.owner  = THIS_MODULE,
++		.acpi_match_table = ACPI_PTR(intelce2700_xgmii_acpi_match),
++#ifdef CONFIG_PM_RUNTIME
++		.pm = &xgmii_pm_ops,
++#endif
++	}
++};
++
++static int xgmii_pwr_ctrl_init(void)
++{
++	mutex_init(&g_pce_msg_lock);
++	return platform_driver_register(&xgmii_pwr_ctrl_driver);
++}
++
++static int xgmii_pwr_ctrl_exit(void)
++{
++	mutex_destroy(&g_pce_msg_lock);
++	platform_driver_unregister(&xgmii_pwr_ctrl_driver);
++	return 0;
++}
++
++device_initcall(xgmii_pwr_ctrl_init);
++module_exit(xgmii_pwr_ctrl_exit);
++
++MODULE_DESCRIPTION("Intel(R) CE 2700 xGMII Power Control Driver");
++MODULE_AUTHOR("Intel Corporation");
++MODULE_LICENSE("GPL");
+-- 
+2.10.1
+

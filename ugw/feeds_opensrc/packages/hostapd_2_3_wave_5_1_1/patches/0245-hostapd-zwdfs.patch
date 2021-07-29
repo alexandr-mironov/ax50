@@ -1,0 +1,482 @@
+--- a/hostapd/ctrl_iface.c
++++ b/hostapd/ctrl_iface.c
+@@ -2059,55 +2059,56 @@ static int hostapd_ctrl_iface_chan_switc
+ 	int ret;
+ 	unsigned int i;
+ 	struct hostapd_channel_data *channel;
+-	int tx_ant = 0, rx_ant = 0;
+-	u32 tx_ant_mask, rx_ant_mask;
+-	char *str;
++	int tx_ant_mask = -1, rx_ant_mask = -1;
++	char *str, *pos2;
++	Boolean switch_type_scan = FALSE;
+ 
+ 	ret = hostapd_parse_csa_settings(pos, &settings);
+ 	if (ret)
+ 		return ret;
+ 
+-	str = os_strstr(pos, "tx_ant=");
++	str = os_strstr(pos, "tx_ant_mask=");
+   if (str) {
+-    str += strlen("tx_ant=");
+-    tx_ant = atoi(str);
+-    if (tx_ant <= 0){
+-      wpa_printf(MSG_ERROR, "chan_switch: invalid tx_ant provided");
++    str += strlen("tx_ant_mask=");
++
++    tx_ant_mask = strtol(str, &pos2, 10);
++    if (str == pos2 || tx_ant_mask < 0) {
++      wpa_printf(MSG_ERROR, "chan_switch: invalid tx_ant_mask provided");
+       return -1;
+     }
+   }
+-  str = os_strstr(pos, "rx_ant=");
++  str = os_strstr(pos, "rx_ant_mask=");
+   if (str) {
+-    str += strlen("rx_ant=");
+-    rx_ant = atoi(str);
+-    if (rx_ant <= 0){
+-      wpa_printf(MSG_ERROR, "chan_switch: invalid rx_ant provided");
++    str += strlen("rx_ant_mask=");
++
++    rx_ant_mask = strtol(str, &pos2, 10);
++    if (str == pos2 || rx_ant_mask < 0) {
++      wpa_printf(MSG_ERROR, "chan_switch: invalid rx_ant_mask provided");
+       return -1;
+     }
+   }
+-  if ((tx_ant > 0 && rx_ant == 0) || (rx_ant > 0 && tx_ant == 0)) {
+-    wpa_printf(MSG_ERROR, "chan_switch: changing only number of TX or RX "
+-      "antennas is not possible");
++  if ((tx_ant_mask >= 0 && rx_ant_mask < 0) || (rx_ant_mask >= 0 && tx_ant_mask < 0)) {
++    wpa_printf(MSG_ERROR, "chan_switch: changing only TX or RX "
++      "antenna mask is not possible");
+     return -1;
+   }
++  str = os_strstr(pos, "switch_type=");
++  if (str) {
++    str += strlen("switch_type=");
++    if (!strncmp(str, "scan", strlen("scan")))
++      switch_type_scan = TRUE;
++  }
+ 
+   /* Check if active CAC */
+   if (iface->cac_started)
+     return -1;
+ 
+-  if (tx_ant > 0) {
+-    ret = hostapd_hw_get_antenna_mask(iface->bss[0], tx_ant, rx_ant,
+-      &tx_ant_mask, &rx_ant_mask);
+-    if (ret < 0) {
+-      wpa_printf(MSG_ERROR, "chan_switch: getting antenna mask from antenna "
+-        "number failed: %s", strerror(errno));
+-    } else {
++  if (tx_ant_mask >= 0) {
+       ret = hostapd_drv_set_antenna(iface->bss[0], tx_ant_mask, rx_ant_mask);
+       if (ret < 0) {
+-        wpa_printf(MSG_ERROR, "chan_switch: setting antenna failed: %s",
++        wpa_printf(MSG_ERROR, "chan_switch: setting antenna mask failed: %s",
+           strerror(errno));
+       }
+-    }
+   }
+ 
+ 	/* ACS */
+@@ -2125,10 +2126,15 @@ static int hostapd_ctrl_iface_chan_switc
+   if (channel->flag & HOSTAPD_CHAN_DISABLED)
+     return -1;
+ 
++  iface->block_tx = FALSE;
+   /* check CAC required */
+   if ((channel->flag & HOSTAPD_CHAN_RADAR) &&
+       ((channel->flag & HOSTAPD_CHAN_DFS_MASK) != HOSTAPD_CHAN_DFS_AVAILABLE))
+   {
++    if (switch_type_scan && iface->bss[0]->driver && iface->bss[0]->driver->block_tx) {
++      iface->bss[0]->driver->block_tx(iface->bss[0]->drv_priv);
++      iface->block_tx = TRUE;
++    }
+     settings.freq_params.channel = channel->chan;
+     set_iface_conf(iface, &settings.freq_params);
+     hostapd_setup_interface_complete(iface, 0);
+@@ -5700,11 +5706,10 @@ int hostapd_ctrl_iface_unconnected_sta(s
+ 
+ int hostapd_ctrl_iface_set_failsafe_chan(struct hostapd_iface *iface, const char *cmd)
+ {
+-  char *pos;
++  char *pos, *pos2;
+   struct hostapd_channel_data *channel;
+   struct hostapd_failsafe_freq_params old_freq_params;
+-  int tx_ant = 0, rx_ant = 0;
+-  int ret;
++  int tx_ant_mask = -1, rx_ant_mask = -1;
+ 
+   memcpy(&old_freq_params, &iface->failsafe, sizeof(iface->failsafe));
+   iface->failsafe.freq = atoi(cmd);
+@@ -5769,36 +5774,31 @@ int hostapd_ctrl_iface_set_failsafe_chan
+     goto err;
+   }
+ 
+-  pos = os_strstr(cmd, "tx_ant=");
++  pos = os_strstr(cmd, "tx_ant_mask=");
+   if (pos) {
+-    pos += strlen("tx_ant=");
+-    tx_ant = atoi(pos);
+-    if (tx_ant <= 0){
+-      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid tx_ant provided");
+-      goto err;
++    pos += strlen("tx_ant_mask=");
++    tx_ant_mask = strtol(pos, &pos2, 10);
++    if (pos == pos2 || tx_ant_mask < 0) {
++      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid tx_ant_mask provided");
++      return -1;
+     }
+   }
+-  pos = os_strstr(cmd, "rx_ant=");
++  pos = os_strstr(cmd, "rx_ant_mask=");
+   if (pos) {
+-    pos += strlen("rx_ant=");
+-    rx_ant = atoi(pos);
+-    if (rx_ant <= 0){
+-      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid rx_ant provided");
+-      goto err;
++    pos += strlen("rx_ant_mask=");
++    rx_ant_mask = strtol(pos, &pos2, 10);
++    if (pos == pos2 || rx_ant_mask < 0) {
++      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid rx_ant_mask provided");
++      return -1;
+     }
+   }
+-  if ((tx_ant > 0 && rx_ant == 0) || (rx_ant > 0 && tx_ant == 0)) {
+-    wpa_printf(MSG_ERROR, "set_failsafe_chan: changing only number of TX or RX "
+-      "antennas is not possible");
++  if ((tx_ant_mask >= 0 && rx_ant_mask < 0) || (rx_ant_mask >= 0 && tx_ant_mask < 0)) {
++    wpa_printf(MSG_ERROR, "set_failsafe_chan: changing only TX or RX "
++      "antenna mask is not possible");
+     goto err;
+   }
+-  ret = hostapd_hw_get_antenna_mask(iface->bss[0], tx_ant, rx_ant,
+-    &iface->failsafe.tx_ant, &iface->failsafe.rx_ant);
+-  if (ret != 0) {
+-      wpa_printf(MSG_ERROR, "chan_switch: getting antenna mask from antenna number failed: %s",
+-        strerror(errno));
+-      return ret;
+-  }
++  iface->failsafe.tx_ant = tx_ant_mask;
++  iface->failsafe.rx_ant = rx_ant_mask;
+ 
+   return 0;
+ 
+@@ -6044,6 +6044,47 @@ int hostapd_ctrl_iface_get_restricted_ch
+   return len;
+ }
+ 
++
++int hostapd_ctrl_iface_get_hw_features(struct hostapd_iface *iface,
++  const char *cmd, char *buf, size_t buflen)
++{
++  int ret = 0, len = 0;
++  struct hostapd_data *hapd = iface->bss[0];
++  int i, j;
++
++  for (i = 0; i < iface->num_hw_features; i++) {
++    struct hostapd_hw_modes *feature = &iface->hw_features[i];
++    int dfs_enabled = hapd->iconf->ieee80211h &&
++      (iface->drv_flags & WPA_DRIVER_FLAGS_RADAR);
++
++    for (j = 0; j < feature->num_channels; j++) {
++      int dfs = 0;
++
++      if ((feature->channels[j].flag &
++           HOSTAPD_CHAN_RADAR) && dfs_enabled) {
++        dfs = 1;
++      }
++
++      if (feature->channels[j].flag & HOSTAPD_CHAN_DISABLED)
++        continue;
++
++      ret = os_snprintf(buf + len, buflen - len, "Allowed channel: mode=%d "
++           "chan=%d freq=%d MHz max_tx_power=%d dBm%s\n",
++           feature->mode,
++           feature->channels[j].chan,
++           feature->channels[j].freq,
++           feature->channels[j].max_tx_power,
++           dfs ? dfs_info(&feature->channels[j]) : "");
++      if (ret >= buflen - len || ret < 0)
++        return len;
++      len += ret;
++    }
++  }
++
++  return len;
++}
++
++
+ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
+ 					      char *buf, char *reply,
+ 					      int reply_size,
+@@ -6405,6 +6446,9 @@ static int hostapd_ctrl_iface_receive_pr
+ 	} else if (os_strcmp(buf, "DRIVER_FLAGS") == 0) {
+ 		reply_len = hostapd_ctrl_driver_flags(hapd->iface, reply,
+ 						      reply_size);
++  } else if (os_strncmp(buf, "GET_HW_FEATURES", 15) == 0) {
++    reply_len = hostapd_ctrl_iface_get_hw_features(hapd->iface, NULL, reply,
++      reply_size);
+ 	} else {
+ 		os_memcpy(reply, "UNKNOWN COMMAND\n", 16);
+ 		reply_len = 16;
+--- a/src/ap/hw_features.c
++++ b/src/ap/hw_features.c
+@@ -43,7 +43,7 @@ void hostapd_free_hw_features(struct hos
+ 
+ 
+ #ifndef CONFIG_NO_STDOUT_DEBUG
+-static char * dfs_info(struct hostapd_channel_data *chan)
++char * dfs_info(struct hostapd_channel_data *chan)
+ {
+ 	static char info[256];
+ 	char *state;
+--- a/src/ap/hw_features.h
++++ b/src/ap/hw_features.h
+@@ -28,6 +28,9 @@ struct hostapd_channel_data* hostapd_hw_
+ struct hostapd_channel_data* hostapd_hw_get_channel_data_from_ch(struct hostapd_iface *iface, int chan);
+ int hostapd_hw_get_antenna_mask(struct hostapd_data *hapd, int tx_ant,
+   int rx_ant, u32 *tx_ant_mask, u32 *rx_ant_mask);
++#ifndef CONFIG_NO_STDOUT_DEBUG
++char * dfs_info(struct hostapd_channel_data *chan);
++#endif
+ #else /* NEED_AP_MLME */
+ static inline void
+ hostapd_free_hw_features(struct hostapd_hw_modes *hw_features,
+@@ -89,6 +92,12 @@ static inline int hostapd_hw_get_antenna
+ {
+   return 0;
+ }
++#ifndef CONFIG_NO_STDOUT_DEBUG
++static inline char * dfs_info(struct hostapd_channel_data *chan)
++{
++  return NULL;
++}
++#endif
+ #endif /* NEED_AP_MLME */
+ 
+ #endif /* HW_FEATURES_H */
+--- a/hostapd/hostapd_cli.c
++++ b/hostapd/hostapd_cli.c
+@@ -1152,7 +1152,8 @@ static int hostapd_cli_cmd_chan_switch(s
+ 		       "arguments (count and freq)\n"
+ 		       "usage: <cs_count> <freq> [sec_channel_offset=] "
+ 		       "[center_freq1=] [center_freq2=] [bandwidth=] "
+-		       "[blocktx] [ht|vht] [tx_ant=] [rx_ant=]\n");
++		       "[blocktx] [ht|vht] [tx_ant_mask=<> rx_ant_mask=<>] "
++		       "[switch_type=<normal/scan>]\n");
+ 		return -1;
+ 	}
+ 
+@@ -1765,7 +1766,7 @@ static int hostapd_cli_cmd_set_failsafe_
+   if (argc < 3 || argc > 6) {
+     printf("Invalid set_failsafe_chan command\n"
+            "usage: <freq> <center_freq1=> [center_freq2=] "
+-           "<bandwidth=> [tx_ant=] [rx_ant=]\n");
++           "<bandwidth=> [tx_ant_mask=<> rx_ant_mask=<>]\n");
+     return -1;
+   }
+ 
+@@ -1902,6 +1903,27 @@ static int hostapd_cli_cmd_cellular_pref
+ }
+ #endif /* CONFIG_MBO */
+ 
++
++static int hostapd_cli_cmd_get_hw_features(struct wpa_ctrl *ctrl, int argc,
++  char *argv[])
++{
++  char cmd[256];
++  int res;
++
++  if (argc != 0) {
++    printf("get_hw_features doesn't require parameters\n");
++    return -1;
++  }
++
++  res = os_snprintf(cmd, sizeof(cmd), "GET_HW_FEATURES");
++  if (res < 0 || (size_t) res >= sizeof(cmd) - 1) {
++    printf("Too long GET_HW_FEATURES command.\n");
++    return -1;
++  }
++
++  return wpa_ctrl_command(ctrl, cmd);
++}
++
+ struct hostapd_cli_cmd {
+ 	const char *cmd;
+ 	int (*handler)(struct wpa_ctrl *ctrl, int argc, char *argv[]);
+@@ -2059,6 +2081,10 @@ static const struct hostapd_cli_cmd host
+ 	{ "mbo_bss_assoc_disallow", hostapd_cli_cmd_mbo_bss_assoc_disallow, NULL, NULL },
+ 	{ "cellular_pref_set", hostapd_cli_cmd_cellular_pref_set, NULL, NULL },
+ #endif /* CONFIG_MBO */
++  { "get_hw_features", hostapd_cli_cmd_get_hw_features, NULL, "get hardware features" },
++#if 0
++  { "antennas_set", hostapd_cli_cmd_antennas_set, NULL, "<mask> set antenna mask"},
++#endif
+ 	{ NULL, NULL, NULL, NULL }
+ };
+ 
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -4151,6 +4151,16 @@ struct wpa_driver_ops {
+    */
+   int (*set_wds_wpa_sta)(void *priv, const u8 *addr, const u8 remove);
+ #endif
++
++  /**
++   * block_tx - Block TX after the next switch to DFS USABLE channel.
++   * @priv: Private driver interface data
++   * Returns: 0 on success, -1 on failure
++   *
++   * This function is used to request driver not to transmit after next switch
++   * to DFS USABLE channel.
++   */
++  int (*block_tx)(void *priv);
+ };
+ 
+ /**
+--- a/src/common/ltq-vendor.h
++++ b/src/common/ltq-vendor.h
+@@ -46,6 +46,7 @@ enum ltq_nl80211_vendor_subcmds {
+ 	LTQ_NL80211_VENDOR_SUBCMD_GET_RADIO_INFO       = 13,
+ 	LTQ_NL80211_VENDOR_SUBCMD_SET_ATF_QUOTAS       = 14,  /* Air time fairness data */
+ 	LTQ_NL80211_VENDOR_SUBCMD_SET_WDS_WPA_STA      = 15,
++  LTQ_NL80211_VENDOR_SUBCMD_BLOCK_TX             = 16, /* Block TX after next channel switch */
+ };
+ 
+ enum ltq_nl80211_vendor_events {
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -9702,6 +9702,18 @@ int nl80211_set_wds_wpa_sta(void *priv,
+ }
+ #endif
+ 
++static int nl80211_block_tx(void *priv)
++{
++  int ret;
++
++  ret = nl80211_vendor_cmd(priv, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_BLOCK_TX,
++               NULL, 0, NULL);
++  if (ret < 0)
++    wpa_printf(MSG_ERROR, "nl80211: BLOCK TX: %s",
++         strerror(errno));
++
++  return ret;
++}
+ 
+ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.name = "nl80211",
+@@ -9837,4 +9849,5 @@ const struct wpa_driver_ops wpa_driver_n
+ #ifdef CONFIG_WDS_WPA
+ 	.set_wds_wpa_sta = nl80211_set_wds_wpa_sta,
+ #endif
++	.block_tx = nl80211_block_tx,
+ };
+--- a/src/ap/dfs.c
++++ b/src/ap/dfs.c
+@@ -820,6 +820,9 @@ int hostapd_dfs_complete_cac(struct host
+ 			     int ht_enabled, int chan_offset, int chan_width,
+ 			     int cf1, int cf2)
+ {
++  int err;
++  struct hostapd_freq_params freq_params;
++
+ 	wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, DFS_EVENT_CAC_COMPLETED
+ 		"success=%d freq=%d ht_enabled=%d chan_offset=%d chan_width=%d cf1=%d cf2=%d"
+ 	  " timeout=%d",
+@@ -838,8 +841,64 @@ int hostapd_dfs_complete_cac(struct host
+ 			set_dfs_state(iface, freq, ht_enabled, chan_offset,
+ 				      chan_width, cf1, cf2,
+ 				      HOSTAPD_CHAN_DFS_AVAILABLE);
+-			iface->cac_started = 0;
+-			hostapd_setup_interface_complete(iface, 0);
++#ifdef CONFIG_ACS
++      if (iface->conf->acs_init_done)
++        acs_update_radar(iface);
++#endif
++      err = hostapd_set_freq_params(&freq_params,
++        iface->conf->hw_mode,
++        iface->freq,
++        iface->conf->channel,
++        iface->conf->ieee80211n,
++        iface->conf->ieee80211ac,
++        iface->conf->secondary_channel,
++        iface->conf->vht_oper_chwidth,
++        iface->conf->vht_oper_centr_freq_seg0_idx,
++        iface->conf->vht_oper_centr_freq_seg1_idx,
++        iface->current_mode->vht_capab);
++      if (err) {
++        wpa_printf(MSG_ERROR, "failed to calculate freq params");
++        return 0;
++      }
++      /* check if CAC was on our channel */
++#if 0
++      printf("Interface cac started %d freq %d ht_enabled %d secondary_channel %d "
++        "width %d freq1 %d freq2 %d\n",
++        iface->cac_started,
++        iface->freq,
++        iface->conf->ieee80211n,
++        iface->conf->secondary_channel,
++        get_num_width(iface->conf->vht_oper_chwidth, chan_offset),
++        acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg0_idx),
++        acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg1_idx));
++      printf("Interface cac started %d freq %d "
++        "width %d freq1 %d freq2 %d\n",
++        iface->cac_started,
++        freq_params.freq,
++        freq_params.bandwidth,
++        freq_params.center_freq1,
++        freq_params.center_freq2);
++      printf("CAC complete cac started %d freq %d ht_enabled %d secondary_channel %d "
++        "width %d freq1 %d freq2 %d\n",
++        iface->cac_started,
++        freq,
++        ht_enabled,
++        chan_offset,
++        chan_width_enum_to_freq(chan_width),
++        cf1,
++        cf2);
++#endif
++			if (iface->cac_started &&
++			  freq_params.freq == freq &&
++			  freq_params.bandwidth == chan_width_enum_to_freq(chan_width) &&
++			  freq_params.center_freq1 == cf1 &&
++			  freq_params.center_freq2 == cf2) {
++			    iface->cac_started = 0;
++			    if (!iface->block_tx) {
++			      printf("CAC hostapd_setup_interface_complete\n");
++			      hostapd_setup_interface_complete(iface, 0);
++			    }
++			}
+ 		}
+ 	}
+ 
+--- a/src/ap/acs.c
++++ b/src/ap/acs.c
+@@ -3126,8 +3126,10 @@ void acs_radar_switch(struct hostapd_ifa
+   else
+     ret = acs_recalc_ranks_and_set_chan(iface, SWR_RADAR);
+ 
+-  if (ret)
++  if (ret) {
++    iface->chan_switch_reason = HAPD_CHAN_SWITCH_RADAR_DETECTED;
+     acs_do_switch_channel(iface, 1);
++  }
+   else
+     wpa_printf(MSG_ERROR, "Must switch, radar !");
+ }
+--- a/src/ap/hostapd.h
++++ b/src/ap/hostapd.h
+@@ -487,6 +487,8 @@ struct hostapd_iface {
+ 	int atf_enabled; /* If ATF is currently enabled in FW */
+ 	u32 atf_sta_in_driver[2048/32]; // One bit per aid
+ 	u32 atf_sta_has_quota[2048/32]; // One bit per aid
++
++	int block_tx; /* Is TX block on or off */
+ };
+ 
+ /* hostapd.c */

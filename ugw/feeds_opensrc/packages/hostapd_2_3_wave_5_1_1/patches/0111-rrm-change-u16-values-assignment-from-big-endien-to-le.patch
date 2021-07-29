@@ -1,0 +1,128 @@
+From a791183bcde3dedf252319fe88caadf5e5689e04 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Sun, 2 Jul 2017 11:30:11 +0300
+Subject: [PATCH] rrm: change u16 values assignment from big endien to little
+ endian
+
+random_interval, measurement_duration and num_of_repetitions value
+was set incorrectly.
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ src/ap/rrm.c | 30 +++++++++++++++---------------
+ 1 file changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/src/ap/rrm.c b/src/ap/rrm.c
+index 0f89769..1312480 100644
+--- a/src/ap/rrm.c
++++ b/src/ap/rrm.c
+@@ -1656,7 +1656,7 @@ static void hostapd_build_beacon_report_resp(struct wpabuf *buf,
+ 	wpabuf_put_u8(buf, op_class); /* op class */
+ 	wpabuf_put_u8(buf, channel); /* channel number */
+ 	wpabuf_put_data(buf, &start_time, 8); /* start time */
+-	wpabuf_put_be16(buf, measurement_duration); /* duration */
++	wpabuf_put_le16(buf, measurement_duration); /* duration */
+ 	wpabuf_put_u8(buf, frame_info); /* frame info */
+ 	wpabuf_put_u8(buf, rcpi); /* rcpi */
+ 	wpabuf_put_u8(buf, rsni); /* rsni */
+@@ -1805,7 +1805,7 @@ int hostapd_send_channel_load_req(struct hostapd_data *hapd, const u8 *addr,
+ 	wpabuf_put_u8(buf, WLAN_ACTION_RADIO_MEASUREMENT);
+ 	wpabuf_put_u8(buf, WLAN_RRM_RADIO_MEASUREMENT_REQUEST);
+ 	wpabuf_put_u8(buf, hapd->channel_load_token); /* Dialog Token */
+-	wpabuf_put_be16(buf, num_of_repetitions); /* Number of Repetitions */
++	wpabuf_put_le16(buf, num_of_repetitions); /* Number of Repetitions */
+ 
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.21 */
+ 	wpabuf_put_u8(buf, WLAN_EID_MEASURE_REQUEST);
+@@ -1818,8 +1818,8 @@ int hostapd_send_channel_load_req(struct hostapd_data *hapd, const u8 *addr,
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.21.5 */
+ 	wpabuf_put_u8(buf, oper_class); /* Operating class */
+ 	wpabuf_put_u8(buf, channel); /* Channel Number */
+-	wpabuf_put_be16(buf, random_interval); /* Randomization Interval */
+-	wpabuf_put_be16(buf, measurement_duration); /* Measurement Duration */
++	wpabuf_put_le16(buf, random_interval); /* Randomization Interval */
++	wpabuf_put_le16(buf, measurement_duration); /* Measurement Duration */
+ 
+ 	/* optional sub-elements should go here */
+ 	if (rep_cond && ch_load_ref_val) {
+@@ -1905,7 +1905,7 @@ int hostapd_send_channel_load_report(struct hostapd_data *hapd, const u8 *addr,
+ 	wpabuf_put_u8(buf, op_class); /* Operating class */
+ 	wpabuf_put_u8(buf, channel); /* Channel Number */
+ 	wpabuf_put_data(buf, (const void *) &start_time, 8); /* actual measurement start time */
+-	wpabuf_put_be16(buf, measurement_duration); /* Measurement Duration */
++	wpabuf_put_le16(buf, measurement_duration); /* Measurement Duration */
+ 	wpabuf_put_u8(buf, channel_load); /* channel_load */
+ 
+ 	if (ch_width && ch_center_freq0 && ch_center_freq1) {
+@@ -1974,7 +1974,7 @@ int hostapd_send_noise_histogram_req(struct hostapd_data *hapd, const u8 *addr,
+ 	wpabuf_put_u8(buf, WLAN_ACTION_RADIO_MEASUREMENT);
+ 	wpabuf_put_u8(buf, WLAN_RRM_RADIO_MEASUREMENT_REQUEST);
+ 	wpabuf_put_u8(buf, hapd->noise_histogram_token); /* Dialog Token */
+-	wpabuf_put_be16(buf, num_of_repetitions); /* Number of Repetitions */
++	wpabuf_put_le16(buf, num_of_repetitions); /* Number of Repetitions */
+ 
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.21 */
+ 	wpabuf_put_u8(buf, WLAN_EID_MEASURE_REQUEST);
+@@ -1987,8 +1987,8 @@ int hostapd_send_noise_histogram_req(struct hostapd_data *hapd, const u8 *addr,
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.21.6 */
+ 	wpabuf_put_u8(buf, oper_class); /* Operating class */
+ 	wpabuf_put_u8(buf, channel); /* Channel Number */
+-	wpabuf_put_be16(buf, random_interval); /* Randomization Interval */
+-	wpabuf_put_be16(buf, measurement_duration); /* Measurement Duration */
++	wpabuf_put_le16(buf, random_interval); /* Randomization Interval */
++	wpabuf_put_le16(buf, measurement_duration); /* Measurement Duration */
+ 
+ 	/* optional sub-elements should go here */
+ 	if (rep_cond && anpi_ref_val) {
+@@ -2075,7 +2075,7 @@ int hostapd_send_noise_histogram_report(struct hostapd_data *hapd, const u8 *add
+ 	wpabuf_put_u8(buf, op_class); /* Operating class */
+ 	wpabuf_put_u8(buf, channel); /* Channel Number */
+ 	wpabuf_put_data(buf, (const void *) &start_time, 8); /* actual measurement start time */
+-	wpabuf_put_be16(buf, measurement_duration); /* Measurement Duration */
++	wpabuf_put_le16(buf, measurement_duration); /* Measurement Duration */
+ 	wpabuf_put_u8(buf, ant_id); /* antenna id */
+ 	wpabuf_put_u8(buf, anpi); /* anpi */
+ 
+@@ -2263,8 +2263,8 @@ static void fill_trig_rep_counters(struct wpabuf *buf,
+ 		wpabuf_put_u8(buf, 1);
+ 		wpabuf_put_u8(buf, 8 + (4 * (*trig_rep_counters).num_of_counters));
+ 		wpabuf_put_be32(buf, (*trig_rep_counters).measurement_count);
+-		wpabuf_put_be16(buf, (*trig_rep_counters).trigger_timeout);
+-		wpabuf_put_be16(buf, (*trig_rep_counters).counters_trigger_condition);
++		wpabuf_put_le16(buf, (*trig_rep_counters).trigger_timeout);
++		wpabuf_put_le16(buf, (*trig_rep_counters).counters_trigger_condition);
+ 		for (i = 0; i < 7; i++)
+ 			if ((*trig_rep_counters).counters[i] != 0)
+ 				wpabuf_put_be32(buf, (*trig_rep_counters).counters[i]);
+@@ -2319,7 +2319,7 @@ int hostapd_send_sta_statistics_req(struct hostapd_data *hapd, const u8 *addr,
+ 	wpabuf_put_u8(buf, WLAN_ACTION_RADIO_MEASUREMENT);
+ 	wpabuf_put_u8(buf, WLAN_RRM_RADIO_MEASUREMENT_REQUEST);
+ 	wpabuf_put_u8(buf, hapd->sta_statistics_token); /* Dialog Token */
+-	wpabuf_put_be16(buf, num_of_repetitions); /* Number of Repetitions */
++	wpabuf_put_le16(buf, num_of_repetitions); /* Number of Repetitions */
+ 
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.21 */
+ 	wpabuf_put_u8(buf, WLAN_EID_MEASURE_REQUEST);
+@@ -2331,8 +2331,8 @@ int hostapd_send_sta_statistics_req(struct hostapd_data *hapd, const u8 *addr,
+ 
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.21.9 */
+ 	wpabuf_put_data(buf, (const void *) peer_addr, ETH_ALEN); /* peer mac addr */
+-	wpabuf_put_be16(buf, random_interval); /* Randomization Interval */
+-	wpabuf_put_be16(buf, measurement_duration); /* Measurement Duration */
++	wpabuf_put_le16(buf, random_interval); /* Randomization Interval */
++	wpabuf_put_le16(buf, measurement_duration); /* Measurement Duration */
+ 	wpabuf_put_u8(buf, group_identity); /* group identity */
+ 
+ 	fill_trig_rep_counters(buf, trig_rep_sta_counters);
+@@ -2403,7 +2403,7 @@ int hostapd_send_sta_statistics_report(struct hostapd_data *hapd, const u8 *addr
+ 	wpabuf_put_u8(buf, MEASURE_TYPE_STA_STATISTICS); /* Measurement Type */
+ 
+ 	/* IEEE P802.11-REVmc/D6.0, 9.4.2.22.9 */
+-	wpabuf_put_be16(buf, measurement_duration); /* Measurement Duration */
++	wpabuf_put_le16(buf, measurement_duration); /* Measurement Duration */
+ 	wpabuf_put_u8(buf, group_identity); /* group_identity */
+ 	for (i = 0; i < statistics_group_data_len; i++)
+ 		if (((group_identity == 11) && ((i == 4) || (i == 8)))
+-- 
+2.10.1
+

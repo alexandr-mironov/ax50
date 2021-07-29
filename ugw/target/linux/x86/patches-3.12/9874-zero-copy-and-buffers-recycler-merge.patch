@@ -1,0 +1,747 @@
+# HG changeset patch
+# Parent 1c70fa3fd2c2e847d49e45b9b84b84f944e36d34
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -47,6 +47,13 @@
+     help
+        Packet Processor mrpc client
+ 
+++config MRPC_CPPI_SERVER
++    tristate "cppi MRPC server"
++    depends on MRPC
++    default n
++    help
++       cppi MRPC server driver support
++
+ config MRPC_CPPI_CLIENT
+     tristate "cppi mrpc client"
+     depends on MRPC
+diff --git a/drivers/mrpc/Makefile b/drivers/mrpc/Makefile
+--- a/drivers/mrpc/Makefile
++++ b/drivers/mrpc/Makefile
+@@ -3,5 +3,6 @@
+ obj-$(CONFIG_MRPC_MODPHY_CLIENT) += modphy_client.o
+ obj-$(CONFIG_MRPC_HANDSHAKE)	 += handshake_client.o
+ obj-$(CONFIG_MRPC_CPPI_CLIENT)	 += cppi_client.o
++obj-$(CONFIG_MRPC_CPPI_SERVER) 	 += cppi_server.o
+ obj-$(CONFIG_MRPC_SGC_SERVER)    += sgc_server.o
+ obj-$(CONFIG_MRPC_PP_CLIENT)	 += pp_client.o
+diff --git a/drivers/mrpc/cppi_server.c b/drivers/mrpc/cppi_server.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/mrpc/cppi_server.c
+@@ -0,0 +1,257 @@
++/*
++ *
++ * cppi_server.c
++ * Description:
++ * cppi over MRPC server driver
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++#define pr_fmt(fmt) KBUILD_MODNAME ":%s:%d " fmt "\n", __func__, __LINE__
++
++/************************************************/
++/**                    Includes                 */
++/************************************************/
++#include <linux/platform_device.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
++#include <linux/byteorder/generic.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/mutex.h>
++#include <linux/workqueue.h>
++#include <linux/err.h>
++#include <linux/netdevice.h>
++#include <linux/ethtool.h>
++#include <linux/mrpc.h>
++#include <linux/avalanche/generic/pal_cppi41.h>
++#include <asm/io.h>
++
++
++
++#define DEBUG
++
++#ifdef DEBUG
++#define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
++#else
++#define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
++#endif
++
++/* driver private database */
++struct cppi_private {
++    struct platform_device *pdev;   /* platform device */
++    struct mrpc_server *mrpc;       /* mrpc server handle */
++};
++
++struct mrpc_cppi_init_pp_buffer_pool_args {
++    Uint32 size;
++};
++
++/* p_arglen is assigned the sizof(func_args), therefor each arguments struct name should begin with the function's name */
++#define CPPI_PROC_32(proc, func)                      \
++[proc] = {                                            \
++        .procid   = proc,                             \
++        .p_func   = func,                             \
++        .p_arglen = sizeof(struct func ## _args),     \
++        .p_replen = sizeof(Uint32),                   \
++        .p_name   = #func,                            \
++}
++
++enum {
++    CPPI_INIT_PP_BUFFER_POOL = 0,
++};
++
++static int mrpc_cppi_init_pp_buffer_pool(void *arg, ssize_t arglen,
++					      void *rep, ssize_t replen)
++{
++    Uint32 *p_rep = rep;
++    struct mrpc_cppi_init_pp_buffer_pool_args *p_arg = arg;
++    Uint32 size;
++    Uint32 *buf;
++
++    *p_rep = NULL;
++    size = be32_to_cpu(p_arg->size);
++
++    printk(KERN_ERR "MRPC server mrpc_cppi_init_pp_buffer_pool with size: %d\n", size);
++
++
++    buf = PAL_osMemAllocSizeAligned(size);
++
++    if (NULL != buf)
++    {
++        memset(buf, 0, size);
++        *p_rep = virt_to_phys(buf);
++    }
++
++    DBG("init_pp_buffer_pool: size: %d phys_addr: 0x%x\n", size, *p_rep);
++
++    *p_rep = cpu_to_be32(*p_rep);
++
++    return 0;
++}
++
++
++
++static struct mrpc_procinfo cppi_server_procs[] = {
++    CPPI_PROC_32(CPPI_INIT_PP_BUFFER_POOL, mrpc_cppi_init_pp_buffer_pool),	
++};
++
++/* sysfs for future use */
++static ssize_t status_show(struct device *dev,
++                           struct device_attribute *attr, char *buf)
++{
++    struct cppi_private *priv = dev_get_drvdata(dev);
++
++    if (!priv)
++        return -EINVAL;
++
++    return scnprintf(buf, PAGE_SIZE, "status ok");
++}
++
++static DEVICE_ATTR(status, S_IRUGO, status_show, NULL);
++
++static struct attribute *cppi_attrs[] = {
++    &dev_attr_status.attr,
++    NULL
++};
++
++static struct attribute_group cppi_attrs_group = {
++    .attrs = cppi_attrs,
++};
++
++/**
++ * cppi_probe
++ *
++ * @param pdev   platform device
++ *
++ * @return 0 for success, error code otherwise
++ */
++static int cppi_probe(struct platform_device *pdev)
++{
++    struct cppi_private *priv;
++    int ret;
++
++    priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
++    if (!priv) {
++        pr_err("memory allocation failed");
++        return -ENOMEM;
++    }
++
++    dev_set_drvdata(&pdev->dev, priv);
++    priv->pdev = pdev;
++
++    ret = sysfs_create_group(&priv->pdev->dev.kobj, &cppi_attrs_group);
++    if (ret) {
++        pr_err("sysfs_create_group failed (ret=%d)", ret);
++        return ret;
++    }
++
++    priv->mrpc = mrpc_server_register(MRPC_RESERVED_ID_CPPI, "cppi_server", 
++                                      cppi_server_procs,
++                                      ARRAY_SIZE(cppi_server_procs));
++    if (!priv->mrpc) {
++        pr_err("failed to register cppi");
++        ret = -ENODEV;
++        goto out_remove_group;
++    }
++
++    return 0;
++
++out_remove_group:
++    sysfs_remove_group(&priv->pdev->dev.kobj, &cppi_attrs_group);
++    return 0;
++}
++
++/**
++ * cppi_remove
++ *
++ * This function is called when the cppi driver is removed.
++ *
++ * @param pdev   platform device
++ *
++ * @return 0 for success, error code otherwise
++ */
++static int cppi_remove(struct platform_device *pdev)
++{
++    struct cppi_private *priv = platform_get_drvdata(pdev);
++
++    mrpc_server_unregister(priv->mrpc);
++    sysfs_remove_group(&priv->pdev->dev.kobj, &cppi_attrs_group);
++    dev_set_drvdata(&pdev->dev, NULL);
++
++    return 0;
++}
++
++static struct platform_driver cppi_driver = {
++    .driver = {
++        .name   = "cppi_server",
++    },
++    .probe = cppi_probe,
++    .remove = cppi_remove,
++};
++
++static struct platform_device *cppi_device;
++
++static int __init cppi_server_init(void)
++{
++    int ret;
++
++    ret = platform_driver_register(&cppi_driver);
++    if (ret < 0) {
++        pr_err("Failed to register cppi platform driver: %d\n", ret);
++        return ret;
++    }
++
++    cppi_device = platform_device_register_simple("cppi_server", -1, NULL, 0);
++    if (IS_ERR(cppi_device)) {
++        pr_err("Failed to register cppi platform device\n");
++        platform_driver_unregister(&cppi_driver);
++        return PTR_ERR(cppi_device);
++    }
++
++    return 0;
++}
++
++static void __exit cppi_server_exit(void)
++{
++    platform_device_unregister(cppi_device);
++    platform_driver_unregister(&cppi_driver);
++}
++
++/******************************************************/
++/**    Module Declarations                           **/
++/******************************************************/
++module_init(cppi_server_init);
++module_exit(cppi_server_exit);
++
++MODULE_AUTHOR("Intel Corporation");
++MODULE_AUTHOR("Yair Weiss yair.weiss@intel.com");
++MODULE_DESCRIPTION("cppi mrpc server");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.0");
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -175,7 +175,6 @@ typedef enum
+ 
+ #ifdef CONFIG_WIFI_PROXY
+     //Wifi TX commands
+-    PDSP_CMD_WIFI_TX_INIT                = 0x83,
+     PDSP_CMD_WIFI_TX_ADD_CHANNEL         = 0x84,
+     PDSP_CMD_WIFI_TX_REMOVE_CHANNEL      = 0x85,
+     PDSP_CMD_WIFI_TX_START_CHANNEL       = 0x86,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1499,8 +1499,8 @@ typedef struct
+     Uint32 req_addr_out_of_range;
+     Uint32 req_out_of_order     ;
+     Uint32 req_int_desc_starv   ;
+-    Uint32 cnt11                ;
+-    Uint32 cnt12                ;
++    Uint32 cmp_buffptr_error    ;
++    Uint32 cmp_bpq_empty        ;
+     Uint32 cnt13                ;
+     Uint32 cnt14                ;
+     Uint32 cnt15                ;
+@@ -2115,11 +2115,6 @@ struct wifi_proxy_dev_ch_t {
+ struct wifi_proxy_fw_init_info_t {
+     Uint32 rx_bMgr;
+     Uint32 rx_bPool;
+-    Uint32 tx_bMgr;
+-    Uint32 tx_bPool;
+-    Uint32 tx_int_qMgr;
+-    Uint32 tx_int_qNum;
+-    Uint32 tx_int_cnt;
+     Uint32 rx_freeQNum;
+     Uint32 rx_freeQMgr;
+     Uint32 rx_destQNum;
+@@ -2235,12 +2230,35 @@ struct pp_hal_wifi_device_stats{
+     Uint32 rx_req_recv_pkt_num;
+ };
+ 
+-#define WIFI_TX_PDSP_DMEM_DEVICE_CTRL_OFFSET        0x100
+-#define WIFI_TX_PDSP_DMEM_DEVICE_MARKS_DB           0x120
+-#define WIFI_TX_PDSP_DMEM_CTRL_DESC_PER_DEVS        0x130
+-#define WIFI_TX_PDSP_DMEM_DEVICE_DB_OFFSET          0x200
+-#define WIFI_RX_PDSP_DMEM_DEVICE_CTRL_OFFSET        0x100
+-#define WIFI_RX_PDSP_DMEM_DEVICE_DB_OFFSET          0x200
++#define WIFI_TX_PDSP_DMEM_DEVICE_CTRL_OFFSET            0x100
++#define WIFI_TX_PDSP_DMEM_DEVICE_MARKS_DB               0x120
++#define WIFI_TX_PDSP_DMEM_CTRL_DESC_PER_DEVS            0x130
++#define WIFI_TX_PDSP_DMEM_DEVICE_DB_OFFSET              0x200
++#define WIFI_TX_PDSP_DMEM_BUFFER_POOLS_DB_OFFSET        0xC00
++#define WIFI_TX_PDSP_BUFFER_POOLS_DB_MAX_NUM_ENTRIES    PAL_CPPI41_BMGR_MAX_POOLS
++#define WIFI_RX_PDSP_DMEM_DEVICE_CTRL_OFFSET            0x100
++#define WIFI_RX_PDSP_DMEM_DEVICE_DB_OFFSET              0x200
++
++/**
++ * proxy tx pdsp buffer pool info entry layout
++ *
++ * @buffStart specify the bottom address for buffer in BP
++ * @buffEnd specify the top address for buffer in BP
++ * @bpqAddr address for buffer pool corresponding queue (BPQ)
++ * @poolNum buffer pool number
++ * @poolOffset buffer pool offset in buffer manager
++ *req_ring_head
++ * @note the struct contains reserved fields in order to be
++ * aligned to the actual memory layout
++ */
++struct __attribute__((packed)) fw_tx_pdsp_bp_info_entry {
++    __be32    buffStart;
++    __be32    buffEnd;
++    __be32    bpqAddr;
++    __u8      poolNum;
++    __u8      poolOffset;
++    __be16    reserved;
++};
+ 
+ /**
+  * proxy tx pdsp devices control register layout
+@@ -2306,12 +2324,10 @@ struct __attribute__((packed)) fw_tx_pds
+     __be32             req_ring_head;
+     __be32             req_ring_tail;
+     /* request ring control */
+-    __be16             internal_q_off;
+-    __be16             infra_dma_q;
+-    __u8               seq_num;
+-    __u8               next_exp_seq_num;
+-    __u8               internal_desc_use_cnt;
++    __be16             input_q_off;
++    __u8               rsvd1;
+     __u8               num_elemments_pushed;
++    __be32             rsvd2;
+     /* complete ring */
+     struct recv_ring_t cmp_ring;
+     __be32             cmp_ring_head;
+@@ -2403,6 +2419,8 @@ struct __attribute__((packed, aligned(64
+ };
+ 
+ AVALANCHE_PP_RET_e avalanche_pp_wifi_init(struct wifi_proxy_fw_init_info_t *init_info);
++AVALANCHE_PP_RET_e avalanche_pp_wifi_dmem_init(void);
++AVALANCHE_PP_RET_e avalanche_pp_wifi_dmem_buffer_pools_init(void);
+ AVALANCHE_PP_RET_e avalanche_pp_add_wifi_dev_ch(struct wifi_proxy_add_ch_info_t *info,
+                                                 struct wifi_proxy_add_ch_ret_info_t *ret_vals);
+ AVALANCHE_PP_RET_e avalanche_pp_rem_wifi_dev_ch(wifi_dev_id_e wifi_dev_id);
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -626,6 +626,18 @@ int PAL_cppi4QueueGetEntryCount(PAL_Hand
+  */
+ PAL_Result PAL_cppi4GetBufferPoolInfo(PAL_Handle hnd, Cppi4BufPool pool, Cppi4BufPoolInfo* bp_info);
+ /**
++
++ *  \brief Get buffer pool info for WiFi TX Zero Copy feature
++ *
++ *  @param  hnd           [IN]      Handle to the PAL Layer.
++ *  @param  pool          [IN]      Buffer pool num.
++ *  @param  bp_info       [OUT]     Buffer Pool Info structure
++ *                        Ptr.
++ *
++ *  @return PAL_SOK on success
++ */
++PAL_Result PAL_cppi4GetBufferPoolInfo(PAL_Handle hnd, Cppi4BufPool pool, Cppi4BufPoolInfo* bp_info);
++/**
+  *  \brief PAL CPPI 4.1 accumulator channel enable rate limit.
+  *
+  * Sets up an accumulator channel rate limit onfiguration
+diff --git a/include/linux/avalanche/generic/pal_osMem_inline.h b/include/linux/avalanche/generic/pal_osMem_inline.h
+--- a/include/linux/avalanche/generic/pal_osMem_inline.h
++++ b/include/linux/avalanche/generic/pal_osMem_inline.h
+@@ -262,7 +262,7 @@ PAL_INLINE PAL_Result PAL_osMemReport (U
+  *  memory chunks (less than page size) use PAL_osMemAlloc
+  */
+ 
+-PAL_INLINE void* PAL_osMemAllocSizeAligned(Uint32 segId, Uint32 numBytes)
++PAL_INLINE void* PAL_osMemAllocSizeAligned(Uint32 numBytes)
+ {
+     Uint32 order;
+     Uint32 ret;
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h b/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
+@@ -65,7 +65,7 @@ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_R
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_LOW_4KB_BUFFER_POOL)                  /* PAL_CPPI_PP_BUFFER_POOL2  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_HIGH_BUFFER_POOL)                     /* PAL_CPPI_PP_BUFFER_POOL3  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_WIFI_RX_POOL)                                   /* PAL_CPPI_PP_BUFFER_POOL4  */ \
+-PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_WIFI_TX_POOL)                                   /* PAL_CPPI_PP_BUFFER_POOL5  */ \
++PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL5)                                   /* PAL_CPPI_PP_BUFFER_POOL5  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL6)                                   /* PAL_CPPI_PP_BUFFER_POOL6  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL7)                                   /* PAL_CPPI_PP_BUFFER_POOL7  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL8)                                   /* PAL_CPPI_PP_BUFFER_POOL8  */ \
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+@@ -426,14 +426,14 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_2_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q363 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_3_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q364 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_3_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q365 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_4_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q366 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_4_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q367 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_5_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q368 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_5_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q369 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_6_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q370 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_6_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q371 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_7_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q372 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_7_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q373 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE0_HOST_TX_HI_Q_NUM)       /* PAL_CPPI_PP_QMGR_G1_Q366 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE0_HOST_TX_LOW_Q_NUM)      /* PAL_CPPI_PP_QMGR_G1_Q367 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE1_HOST_TX_HI_Q_NUM)       /* PAL_CPPI_PP_QMGR_G1_Q368 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE1_HOST_TX_LOW_Q_NUM)      /* PAL_CPPI_PP_QMGR_G1_Q369 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE2_HOST_TX_HI_Q_NUM)       /* PAL_CPPI_PP_QMGR_G1_Q370 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE2_HOST_TX_LOW_Q_NUM)      /* PAL_CPPI_PP_QMGR_G1_Q371 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE3_HOST_TX_Hi_Q_NUM)       /* PAL_CPPI_PP_QMGR_G1_Q372 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE3_HOST_TX_LOW_Q_NUM)      /* PAL_CPPI_PP_QMGR_G1_Q373 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_8_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q374 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_LOW_TX_CH_8_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q375 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_HI_TX_CH_9_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q376 */\
+@@ -484,22 +484,22 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_QOS_UNUSED_INPUT_Q5)                                    /* PAL_CPPI_PP_QMGR_G1_Q421 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_QOS_UNUSED_INPUT_Q6)                                    /* PAL_CPPI_PP_QMGR_G1_Q422 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_QOS_UNUSED_INPUT_Q7)                                    /* PAL_CPPI_PP_QMGR_G1_Q423 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV0_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q424 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV1_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q425 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV2_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q426 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV3_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q427 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV4_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q428 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV5_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q429 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV6_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q430 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV7_INTERNAL_Q)                                /* PAL_CPPI_PP_QMGR_G1_Q431 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV0_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q432 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV1_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q433 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV2_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q434 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV3_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q435 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV4_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q436 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV5_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q437 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV6_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q438 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV7_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q439 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV0_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q424 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV1_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q425 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV2_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q426 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV3_INPUT_Q)                                   /* PAL_CPPI_PP_QMGR_G1_Q427 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_0)                                          /* PAL_CPPI_PP_QMGR_G1_Q428 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_1)                                          /* PAL_CPPI_PP_QMGR_G1_Q429 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_2)                                          /* PAL_CPPI_PP_QMGR_G1_Q430 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_3)                                          /* PAL_CPPI_PP_QMGR_G1_Q431 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_4)                                          /* PAL_CPPI_PP_QMGR_G1_Q432 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_5)                                          /* PAL_CPPI_PP_QMGR_G1_Q433 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_6)                                          /* PAL_CPPI_PP_QMGR_G1_Q434 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_7)                                          /* PAL_CPPI_PP_QMGR_G1_Q435 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_8)                                          /* PAL_CPPI_PP_QMGR_G1_Q436 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_9)                                          /* PAL_CPPI_PP_QMGR_G1_Q437 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_10)                                         /* PAL_CPPI_PP_QMGR_G1_Q438 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_11)                                         /* PAL_CPPI_PP_QMGR_G1_Q439 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q0)                                               /* PAL_CPPI_PP_QMGR_G1_Q440 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q1)                                               /* PAL_CPPI_PP_QMGR_G1_Q441 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q2)                                               /* PAL_CPPI_PP_QMGR_G1_Q442 */\
+@@ -532,38 +532,38 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q29)                                              /* PAL_CPPI_PP_QMGR_G1_Q469 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q30)                                              /* PAL_CPPI_PP_QMGR_G1_Q470 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q31)                                              /* PAL_CPPI_PP_QMGR_G1_Q471 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q32)                                              /* PAL_CPPI_PP_QMGR_G1_Q472 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q33)                                              /* PAL_CPPI_PP_QMGR_G1_Q473 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q34)                                              /* PAL_CPPI_PP_QMGR_G1_Q474 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q35)                                              /* PAL_CPPI_PP_QMGR_G1_Q475 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q36)                                              /* PAL_CPPI_PP_QMGR_G1_Q476 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q37)                                              /* PAL_CPPI_PP_QMGR_G1_Q477 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q38)                                              /* PAL_CPPI_PP_QMGR_G1_Q478 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q39)                                              /* PAL_CPPI_PP_QMGR_G1_Q479 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q40)                                              /* PAL_CPPI_PP_QMGR_G1_Q480 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q41)                                              /* PAL_CPPI_PP_QMGR_G1_Q481 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q42)                                              /* PAL_CPPI_PP_QMGR_G1_Q482 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q43)                                              /* PAL_CPPI_PP_QMGR_G1_Q483 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q44)                                              /* PAL_CPPI_PP_QMGR_G1_Q484 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q45)                                              /* PAL_CPPI_PP_QMGR_G1_Q485 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q46)                                              /* PAL_CPPI_PP_QMGR_G1_Q486 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q47)                                              /* PAL_CPPI_PP_QMGR_G1_Q487 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q48)                                              /* PAL_CPPI_PP_QMGR_G1_Q488 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q49)                                              /* PAL_CPPI_PP_QMGR_G1_Q489 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q50)                                              /* PAL_CPPI_PP_QMGR_G1_Q490 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q51)                                              /* PAL_CPPI_PP_QMGR_G1_Q491 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q52)                                              /* PAL_CPPI_PP_QMGR_G1_Q492 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q53)                                              /* PAL_CPPI_PP_QMGR_G1_Q493 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q54)                                              /* PAL_CPPI_PP_QMGR_G1_Q494 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q55)                                              /* PAL_CPPI_PP_QMGR_G1_Q495 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q56)                                              /* PAL_CPPI_PP_QMGR_G1_Q496 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q57)                                              /* PAL_CPPI_PP_QMGR_G1_Q497 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q58)                                              /* PAL_CPPI_PP_QMGR_G1_Q498 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q59)                                              /* PAL_CPPI_PP_QMGR_G1_Q499 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q60)                                              /* PAL_CPPI_PP_QMGR_G1_Q500 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q61)                                              /* PAL_CPPI_PP_QMGR_G1_Q501 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q62)                                              /* PAL_CPPI_PP_QMGR_G1_Q502 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SYNCH_Q63)                                              /* PAL_CPPI_PP_QMGR_G1_Q503 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q472)                                                   /* PAL_CPPI_PP_QMGR_G1_Q472 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q473)                                                   /* PAL_CPPI_PP_QMGR_G1_Q473 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q474)                                                   /* PAL_CPPI_PP_QMGR_G1_Q474 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q475)                                                   /* PAL_CPPI_PP_QMGR_G1_Q475 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q476)                                                   /* PAL_CPPI_PP_QMGR_G1_Q476 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q477)                                                   /* PAL_CPPI_PP_QMGR_G1_Q477 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q478)                                                   /* PAL_CPPI_PP_QMGR_G1_Q478 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q479)                                                   /* PAL_CPPI_PP_QMGR_G1_Q479 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q480)                                                   /* PAL_CPPI_PP_QMGR_G1_Q480 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q481)                                                   /* PAL_CPPI_PP_QMGR_G1_Q481 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q482)                                                   /* PAL_CPPI_PP_QMGR_G1_Q482 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q483)                                                   /* PAL_CPPI_PP_QMGR_G1_Q483 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q484)                                                   /* PAL_CPPI_PP_QMGR_G1_Q484 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q485)                                                   /* PAL_CPPI_PP_QMGR_G1_Q485 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q486)                                                   /* PAL_CPPI_PP_QMGR_G1_Q486 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q487)                                                   /* PAL_CPPI_PP_QMGR_G1_Q487 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q488)                                                   /* PAL_CPPI_PP_QMGR_G1_Q488 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q489)                                                   /* PAL_CPPI_PP_QMGR_G1_Q489 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q490)                                                   /* PAL_CPPI_PP_QMGR_G1_Q490 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q491)                                                   /* PAL_CPPI_PP_QMGR_G1_Q491 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q492)                                                   /* PAL_CPPI_PP_QMGR_G1_Q492 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q493)                                                   /* PAL_CPPI_PP_QMGR_G1_Q493 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q494)                                                   /* PAL_CPPI_PP_QMGR_G1_Q494 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q495)                                                   /* PAL_CPPI_PP_QMGR_G1_Q495 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q496)                                                   /* PAL_CPPI_PP_QMGR_G1_Q496 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q497)                                                   /* PAL_CPPI_PP_QMGR_G1_Q497 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q498)                                                   /* PAL_CPPI_PP_QMGR_G1_Q498 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q499)                                                   /* PAL_CPPI_PP_QMGR_G1_Q499 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q500)                                                   /* PAL_CPPI_PP_QMGR_G1_Q500 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q501)                                                   /* PAL_CPPI_PP_QMGR_G1_Q501 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q502)                                                   /* PAL_CPPI_PP_QMGR_G1_Q502 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q503)                                                   /* PAL_CPPI_PP_QMGR_G1_Q503 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_MoCA_PDSP_Q0)                                           /* PAL_CPPI_PP_QMGR_G1_Q504 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_MoCA_PDSP_Q1)                                           /* PAL_CPPI_PP_QMGR_G1_Q505 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_MoCA_PDSP_Q2)                                           /* PAL_CPPI_PP_QMGR_G1_Q506 */\
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+@@ -395,14 +395,14 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE2_HOST_RX_LOW_Q_NUM)     /* PAL_CPPI_PP_QMGR_G2_Q332 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE3_HOST_RX_Hi_Q_NUM)      /* PAL_CPPI_PP_QMGR_G2_Q333 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE3_HOST_RX_LOW_Q_NUM)     /* PAL_CPPI_PP_QMGR_G2_Q334 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE0_TX_FW_HI_Q_NUM)        /* PAL_CPPI_PP_QMGR_G2_Q335 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE0_TX_FW_LOW_Q_NUM)       /* PAL_CPPI_PP_QMGR_G2_Q336 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE1_TX_FW_HI_Q_NUM)        /* PAL_CPPI_PP_QMGR_G2_Q337 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE1_TX_FW_LOW_Q_NUM)       /* PAL_CPPI_PP_QMGR_G2_Q338 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE2_TX_FW_HI_Q_NUM)        /* PAL_CPPI_PP_QMGR_G2_Q339 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE2_TX_FW_LOWQ_NUM)        /* PAL_CPPI_PP_QMGR_G2_Q340 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE3_TX_FW_HI_Q_NUM)        /* PAL_CPPI_PP_QMGR_G2_Q341 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE3_TX_FW_LOWQ_NUM)        /* PAL_CPPI_PP_QMGR_G2_Q342 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q335)                                                 /* PAL_CPPI_PP_QMGR_G2_Q335 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q336)                                                 /* PAL_CPPI_PP_QMGR_G2_Q336 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q337)                                                 /* PAL_CPPI_PP_QMGR_G2_Q337 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q338)                                                 /* PAL_CPPI_PP_QMGR_G2_Q338 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q339)                                                 /* PAL_CPPI_PP_QMGR_G2_Q339 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q340)                                                 /* PAL_CPPI_PP_QMGR_G2_Q340 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q341)                                                 /* PAL_CPPI_PP_QMGR_G2_Q341 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q342)                                                 /* PAL_CPPI_PP_QMGR_G2_Q342 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q343)                                                 /* PAL_CPPI_PP_QMGR_G2_Q343 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_PP_EVENTS_Q0)                                         /* PAL_CPPI_PP_QMGR_G2_Q344 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_PP_EVENTS_Q1)                                         /* PAL_CPPI_PP_QMGR_G2_Q345 */\
+@@ -548,7 +548,7 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_SGMII1_DDR_LONG_RX_HIGH_EMB_FD_Q_NUM)                 /* PAL_CPPI_PP_QMGR_G2_Q485 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_HOST2PP_INFRA_LOW_EMB_FD_Q_NUM)                       /* PAL_CPPI_PP_QMGR_G2_Q486 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_HOST2PP_INFRA_HIGH_EMB_FD_Q_NUM)                      /* PAL_CPPI_PP_QMGR_G2_Q487 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_WIFI_FW_TX_INTERNAL_EMB_FD_Q_NUM)                     /* PAL_CPPI_PP_QMGR_G2_Q488 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_Q488)                                                 /* PAL_CPPI_PP_QMGR_G2_Q488 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_WIFI_FW_RX_EMB_FD_Q_NUM)                              /* PAL_CPPI_PP_QMGR_G2_Q489 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_VOICE_DSP_RX_EMB_FD_Q_NUM)                            /* PAL_CPPI_PP_QMGR_G2_Q490 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_VOICE_INFRA_RX_EMB_FD_Q_NUM)                          /* PAL_CPPI_PP_QMGR_G2_Q491 */\
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -195,6 +195,18 @@
+     PAL_CPPI_PP_QMGR_G2_TOTAL_Q_COUNT
+ }PAL_CPPI_PP_QMGR_G2_Qs_e;
+ 
++#define PAL_CPPI_PP_QMGR_QUEUES_BASE(qMgr)                                      \
++    PAL_CPPI_PP_QMGR_G##qMgr##_QUEUES_BASE
++
++
++#if 0
++#define PAL_CPPI_PP_QMGR_QUEUES_PHY_ADDR(qMgr, qNum)                            \
++    ((qNum << 4) + PAL_CPPI_PP_QMGR_QUEUES_BASE(qMgr))
++#endif
++
++/* Workaround for UGW WiFi TX ZeroCopy */
++#define PAL_CPPI_PP_QMGR_QUEUES_PHY_ADDR(qMgr, qNum)                            \
++    ((qNum << 4) + 0xF9220000)
+ 
+ /*
+ +-+-+-+ +-+-+-+-+-+ +-+-+-+-+-+-+-+-+
+@@ -473,10 +485,9 @@
+ 
+     // On-Chip regions...
+     PAL_CPPI_PP_INTERNAL_EMB_GLOBAL_DESC_REGION,                        // 11
+-    PAL_CPPI_PP_WIFI_FW_TX_INTERNAL_EMB_DESC_REGION,                    // 12
+-    PAL_CPPI_PP_IPSEC_MONOLITHIC_GLOBAL_DESC_REGION,                    // 13
+-    PAL_CPPI_PP_US_FW_MONO_DESC_REGION,                                 // 14
+-    PAL_CPPI_PP_PACKET_RAM_GLOBAL_DESC_REGION,                          // 15
++    PAL_CPPI_PP_IPSEC_MONOLITHIC_GLOBAL_DESC_REGION,                    // 12
++    PAL_CPPI_PP_US_FW_MONO_DESC_REGION,                                 // 13
++    PAL_CPPI_PP_PACKET_RAM_GLOBAL_DESC_REGION,                          // 14
+ 
+     PAL_CPPI41_MAX_DESC_REGIONS
+ }PAL_CPPI_PP_DESC_REGIONs_e;
+@@ -635,8 +646,7 @@
+ #endif
+ 
+ #define PAL_CPPI_PP_WIFI_FW_TX_FD_BASE                                                      (IO_ADDRESS(0xF3508000))
+-#define PAL_CPPI_PP_WIFI_FW_TX_INTERNAL_EMB_FD_DESC_COUNT                                   (128)
+-#define PAL_CPPI_PP_WIFI_FW_RX_EMB_FD_DESC_COUNT                                            (8192)  /* must be aligned to number of buffers allocated by app-cpu for wifi rx pool */
++#define PAL_CPPI_PP_WIFI_FW_RX_EMB_FD_DESC_COUNT                                            (16384)  /* must be aligned to number of buffers allocated by app-cpu for wifi rx pool */
+ #define PAL_CPPI_PP_WIFI_FW_RX_REASSEMBLY_EMB_FD_DESC_COUNT                                 (32)
+ 
+ #ifdef CONFIG_MACH_PUMA7_BOARD
+@@ -1131,10 +1141,10 @@
+     PAL_CPPI_PP_DMA08_WIFI_DEVICE1_HOST_RX_INFRA_RX_CH,
+     PAL_CPPI_PP_DMA08_WIFI_DEVICE2_HOST_RX_INFRA_RX_CH,
+     PAL_CPPI_PP_DMA08_WIFI_DEVICE3_HOST_RX_INFRA_RX_CH,
+-    PAL_CPPI_PP_DMA08_WIFI_DEVICE0_TX_FW_INFRA_RX_CH,
+-    PAL_CPPI_PP_DMA08_WIFI_DEVICE1_TX_FW_INFRA_RX_CH,
+-    PAL_CPPI_PP_DMA08_WIFI_DEVICE2_TX_FW_INFRA_RX_CH,
+-    PAL_CPPI_PP_DMA08_WIFI_DEVICE3_TX_FW_INFRA_RX_CH,
++    PAL_CPPI_PP_DMA08_UNUSED_RX_CH_20,
++    PAL_CPPI_PP_DMA08_UNUSED_RX_CH_21,
++    PAL_CPPI_PP_DMA08_UNUSED_RX_CH_22,
++    PAL_CPPI_PP_DMA08_UNUSED_RX_CH_23,
+     PAL_CPPI_PP_DMA08_RX_WIFI_PROXY_INFRA_RX_CHANNELS_NUM
+ }PAL_CPPI_PP_DMA08_RX_WIFI_PROXY_INFRA_RX_CHANNELS_e;
+ // PAL_CPPI_PP_DMA08_RX_WIFI_PROXY_INFRA_TX_CHANNELS
+@@ -1306,10 +1316,10 @@
+     PAL_CPPI_PP_DMA11_HOST2PP_HIGH_INFRA_RX_CH,
+     PAL_CPPI_PP_DMA11_INFRA_RX_CH_2,
+     PAL_CPPI_PP_DMA11_INFRA_RX_CH_3,
+-    PAL_CPPI_PP_DMA11_INFRA_RX_CH_4,
+-    PAL_CPPI_PP_DMA11_INFRA_RX_CH_5,
+-    PAL_CPPI_PP_DMA11_INFRA_RX_CH_6,
+-    PAL_CPPI_PP_DMA11_INFRA_RX_CH_7,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE0_TX_FW_INFRA_RX_CH,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE1_TX_FW_INFRA_RX_CH,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE2_TX_FW_INFRA_RX_CH,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE3_TX_FW_INFRA_RX_CH,
+     PAL_CPPI_PP_DMA11_INFRA_RX_CH_8,
+     PAL_CPPI_PP_DMA11_INFRA_RX_CH_9,
+     PAL_CPPI_PP_DMA11_INFRA_RX_CH_10,
+@@ -1335,10 +1345,10 @@
+     PAL_CPPI_PP_DMA11_HOST2PP_HIGH_INFRA_TX_CH,
+     PAL_CPPI_PP_DMA11_INFRA_TX_CH_2,
+     PAL_CPPI_PP_DMA11_INFRA_TX_CH_3,
+-    PAL_CPPI_PP_DMA11_INFRA_TX_CH_4,
+-    PAL_CPPI_PP_DMA11_INFRA_TX_CH_5,
+-    PAL_CPPI_PP_DMA11_INFRA_TX_CH_6,
+-    PAL_CPPI_PP_DMA11_INFRA_TX_CH_7,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE0_TX_FW_INFRA_TX_CH,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE1_TX_FW_INFRA_TX_CH,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE2_TX_FW_INFRA_TX_CH,
++    PAL_CPPI_PP_DMA11_WIFI_DEVICE3_TX_FW_INFRA_TX_CH,
+     PAL_CPPI_PP_DMA11_INFRA_TX_CH_8,
+     PAL_CPPI_PP_DMA11_INFRA_TX_CH_9,
+     PAL_CPPI_PP_DMA11_INFRA_TX_CH_10,
+@@ -1900,10 +1910,14 @@
+ #define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_09_RX_CH(dev_id)                        \
+     ((dev_id) + PAL_CPPI_PP_DMA09_WIFI_DEVICE0_TX_FW_INFRA_RX_CH)
+ 
++/* tx fw - rx channels */
++/* convert wifi device id to tx fw infra dma 11 rx channel */
++#define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_11_RX_CH(dev_id)                        \
++    ((dev_id) + PAL_CPPI_PP_DMA11_WIFI_DEVICE0_TX_FW_INFRA_RX_CH)
+ 
+ /* convert wifi device id to tx fw infra dma rx channel output queue */
+ #define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_RX_CH_OUT_Q(dev_id)                     \
+-    ((dev_id) + PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV0_INTERNAL_Q)
++    ((dev_id) + PAL_CPPI_PP_QMGR_G1_WIFI_TX_DEV0_INPUT_Q)
+ 
+ /* tx fw infra dma rx channel output queue manager */
+ #define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_RX_CH_OUT_Q_MGR                         \
+@@ -1926,14 +1940,25 @@
+ #define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_09_TX_CH(dev_id)                        \
+     ((dev_id) + PAL_CPPI_PP_DMA09_WIFI_DEVICE0_TX_FW_INFRA_TX_CH)
+ 
++/* tx fw - tx channels */
++/* convert wifi device id to tx fw infra dma 11 tx channel */
++#define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_11_TX_CH(dev_id)                        \
++    ((dev_id) + PAL_CPPI_PP_DMA11_WIFI_DEVICE0_TX_FW_INFRA_TX_CH)
++
+ /* convert wifi device id to tx fw infra dma tx channel input queue */
+ #define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_TX_CH_INPUT_Q(dev_id)                   \
+-    (((dev_id)*2) + PAL_CPPI_PP_QMGR_G2_CDMA8_INFRA_INPUT_WIFI_DEVICE0_TX_FW_HI_Q_NUM)
++    (((dev_id)*2) + PAL_CPPI_PP_QMGR_G1_CDMA11_INFRA_INPUT_WIFI_DEVICE0_HOST_TX_HI_Q_NUM)
+ 
+ /* tx fw infra dma tx channel input queue manager */
+ #define WIFI_DEVICE_TO_WIFI_TX_FW_INFRA_TX_CH_INPUT_Q_MGR                       \
+-    (PAL_CPPI_PP_QMGR_G2)
++    (PAL_CPPI_PP_QMGR_G1)
++
++/* convert buffer pool num to BPQ address */
++#define WIFI_TX_BUFFER_POOL_NUM_TO_QUEUE_NUM(poolNum)                           \
++    ((poolNum) + PAL_CPPI_PP_QMGR_G1_WIFI_TX_BPQ_0)
+ 
++#define WIFI_TX_BUFFER_POOL_NUM_TO_BPQ_ADDR(poolNum)                            \
++    PAL_CPPI_PP_QMGR_QUEUES_PHY_ADDR(1, WIFI_TX_BUFFER_POOL_NUM_TO_QUEUE_NUM(poolNum))
+ 
+ /* VOICE */
+ #define PAL_CPPI_PP_VOICE_DSP_C55_EMB_BD_COUNT                                  (256)

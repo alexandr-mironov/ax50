@@ -1,0 +1,1069 @@
+# HG changeset patch
+# Parent 7a93143252d34ebdc8c6fc2c32e4958803166724
+diff --git a/arch/x86/pal_cppi41/Makefile b/arch/x86/pal_cppi41/Makefile
+--- a/arch/x86/pal_cppi41/Makefile
++++ b/arch/x86/pal_cppi41/Makefile
+@@ -22,4 +22,5 @@ obj-$(CONFIG_PAL_CPPI41_APPCPU) += cru_c
+ 
+ ccflags-y :=	-DCONFIG_X86_AVALANCHE_SOC \
+ 		-DCONFIG_TI_META_DATA\
+-		-DCONFIG_INET_LRO
++		-DCONFIG_INET_LRO\
++		-Werror
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -81,19 +81,34 @@
+ #include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/spinlock.h>
++#include <linux/proc_fs.h>
++#include <linux/seq_file.h>
++#include <linux/uaccess.h>
+ #include <asm/io.h>
+ #include <asm/byteorder.h>
+-#include <linux/avalanche/puma7/puma7.h>
+-#include <linux/avalanche/puma7/puma7_cppi_prv.h>
++#include <linux/avalanche/generic/_tistdtypes.h>
+ #include <linux/avalanche/generic/avalanche_pp_api.h>
+ #include <linux/avalanche/generic/pal_cppi41.h>
+ #include <linux/avalanche/generic/cslr_cppi41.h>
+ #include <linux/avalanche/generic/pal_os.h>
+ #include <linux/avalanche/generic/pal_osProtect.h>
+ #include <linux/avalanche/generic/pal_osProtect_inline.h>
+-
++#include <linux/avalanche/puma7/puma7.h>
++#include <linux/avalanche/puma7/puma7_cppi_prv.h>
++#include <linux/avalanche/puma7/puma7_cppi_lqmgr_q.h>
++#include <linux/avalanche/puma7/puma7_cppi_gqmgr0_q.h>
++#include <linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h>
++#include <linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h>
++#include <linux/avalanche/puma7/puma7_cppi_dsgqmgr_q.h>
++#include <linux/avalanche/puma7/puma7_cppi_usqmgr_q.h>
++#include <linux/avalanche/puma7/puma7_cppi_bmgr_pools.h>
+ #include "cppi41_hw_mbox_if.h"
+ #include <linux/hw_mailbox.h>
++
++extern PAL_Result PAL_cppi4GetBpoolBsmonInfo (u32 idx, qsmonRal_t *info      );
++extern PAL_Result PAL_cppi4GetPpFreeQueueInfo(u32 idx, FDqueue_t *fqueue_info);
++extern PAL_Result PAL_cppi4GetFreeQueuesCount(u32 *fqueues_count             );
++
+ /***************/
+ /**  Defines  **/
+ /***************/
+@@ -125,20 +140,90 @@
+ 
+ 
+ /* Error print, also print function name and line number */
+-#define EPRINTK(fmt, args...) printk(KERN_ERR "****** %s(%d): " fmt " ******\n", __FUNCTION__ , __LINE__, ## args)
++#define EPRINTK(fmt, args...)   pr_err("[CPPI ERR] %s(%d): " fmt, __FUNCTION__ , __LINE__, ## args)
++#define ERRSEQ(m, fmt, args...) seq_printf(m, "[CPPI ERR] %s(%d): " fmt, __FUNCTION__ , __LINE__, ## args)
+ 
+-#define QUEUE_MNG_TO_QUEUE_STAT_OFFSET                      (0x10000)
+-#define QUEUE_MNG_TO_QMGR_REGS_OFFSET                       (-0x20000)
+ #define QUEUE_NUMBER_TO_QUEUE_ADDR_SHIFT                    (sizeof(CSL_Queue_Mgmt_Regs) / 4)
+ #define QUEUE_NUM_TO_QUEUE_BASE_ADDR(qMgr_base, qNum)       ((qMgr_base) + ((qNum) << QUEUE_NUMBER_TO_QUEUE_ADDR_SHIFT))
+ 
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)     "LO." #qName,
++Uint8 *PalCppiPpLqmgrNames[PAL_CPPI_PP_QMGR_LOCAL_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_PP_QMGR_LOCAL_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiPpLqmgrNames);
++
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)        "G0." #qName,
++Uint8 *PalCppiPpGqmgr0Names[PAL_CPPI_PP_QMGR_G0_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_PP_QMGR_G0_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiPpGqmgr0Names);
++
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)        "G1." #qName,
++Uint8 *PalCppiPpGqmgr1Names[PAL_CPPI_PP_QMGR_G1_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_PP_QMGR_G1_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiPpGqmgr1Names);
++
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)        "G2." #qName,
++Uint8 *PalCppiPpGqmgr2Names[PAL_CPPI_PP_QMGR_G2_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_PP_QMGR_G2_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiPpGqmgr2Names);
++
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)        "DSG0." #qName,
++Uint8 *PalCppiDsg0qmgrNames[PAL_CPPI_DSG_QMGR_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_DSG_QMGR_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiDsg0qmgrNames);
++
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)        "DSG1." #qName,
++Uint8 *PalCppiDsg1qmgrNames[PAL_CPPI_DSG_QMGR_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_DSG_QMGR_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiDsg1qmgrNames);
++
++#undef PAL_CPPI_QMGR_Q_ADD
++#define PAL_CPPI_QMGR_Q_ADD(qName)        "DSG2." #qName,
++Uint8 *PalCppiDsg2qmgrNames[PAL_CPPI_DSG_QMGR_TOTAL_Q_COUNT] =
++{
++    PAL_CPPI_DSG_QMGR_Q_LIST
++};
++EXPORT_SYMBOL(PalCppiDsg2qmgrNames);
++
++#undef PAL_CPPI_BMGR_P_ADD
++#define PAL_CPPI_BMGR_P_ADD(pName)     #pName,
++Uint8 *PalCppiPpbmgrNames[PAL_CPPI41_BMGR_MAX_POOLS] =
++{
++    PAL_CPPI_PP_BMGR_POOL_LIST
++};
++EXPORT_SYMBOL(PalCppiPpbmgrNames);
++
++struct queue_mgr_regs {
++    u32 regs;
++    u32 desc;
++    u32 queues;
++    u32 stats;
++};
++
+ /***************/
+ /**  Globals  **/
+ /***************/
+-unsigned int qMgrs_qMngBase [PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };     /* queue manager's queue management base */
+-unsigned int qMgrs_qStatBase[PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };     /* queue manager's queue stats base */
+-unsigned int qMgrs_regsBase [PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };     /* queue manager's managment registers */
+-unsigned int bMgrBase = 0;                                          /* buffers pools manager base address */
++
++struct queue_mgr_regs q_mgrs[PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };
++u32 bmgr_base                                 =   0  ;  /* buffers pools manager base address    */
++u32 qsmon_base[PAL_CPPI_PP_NUM_QSMON_MGRs]    = { 0 };  /* queue status monitors base addresses  */
+ 
+ static bool initialized = false;
+ static spinlock_t init_lock;
+@@ -187,8 +272,6 @@ typedef enum
+ PAL_Handle PAL_cppi4Init (void * initCfg, Ptr param)
+ {
+     unsigned long flags;
+-    unsigned long qMgr1Base;
+-    unsigned long qMgr2Base;
+ 
+     /* currently on ATOM, only pp domain is suported */
+     BUG_ON(param != CPPI41_DOMAIN_PP);
+@@ -198,23 +281,36 @@ PAL_Handle PAL_cppi4Init (void * initCfg
+     if (initialized)
+         goto done;
+ 
+-    qMgr1Base = PAL_CPPI_PP_QMGR_G1_QUEUES_BASE;
+-    qMgr2Base = PAL_CPPI_PP_QMGR_G2_QUEUES_BASE;
+-    bMgrBase  = PAL_CPPI_PP_BUF_MGR_BASE;
++    /* init queue managers base addresses */
++    q_mgrs[PAL_CPPI_PP_QMGR_G0].queues     = (u32)(PAL_CPPI_PP_QMGR_G0_QUEUES_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G0].stats      = (u32)(PAL_CPPI_PP_QMGR_G0_Q_STATS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G0].regs       = (u32)(PAL_CPPI_PP_QMGR_G0_REGS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G0].desc       = (u32)(PAL_CPPI_PP_QMGR_G0_DESC_BASE);
+ 
+-    DPRINTK("qMgr1Base = 0x%08x, qMgr2Base = 0x%08x", qMgr1Base, qMgr2Base);
++    q_mgrs[PAL_CPPI_PP_QMGR_G1].queues     = (u32)(PAL_CPPI_PP_QMGR_G1_QUEUES_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G1].stats      = (u32)(PAL_CPPI_PP_QMGR_G1_Q_STATS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G1].regs       = (u32)(PAL_CPPI_PP_QMGR_G1_REGS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G1].desc       = (u32)(PAL_CPPI_PP_QMGR_G1_DESC_BASE);
+ 
+-    qMgrs_qMngBase [PAL_CPPI_PP_QMGR_G1] = (unsigned long)(qMgr1Base);
+-    qMgrs_qStatBase[PAL_CPPI_PP_QMGR_G1] = (unsigned long)(qMgr1Base) + QUEUE_MNG_TO_QUEUE_STAT_OFFSET;
+-    qMgrs_regsBase [PAL_CPPI_PP_QMGR_G1] = (unsigned long)(qMgr1Base) + QUEUE_MNG_TO_QMGR_REGS_OFFSET;
+-    qMgrs_qMngBase [PAL_CPPI_PP_QMGR_G2] = (unsigned long)(qMgr2Base);
+-    qMgrs_qStatBase[PAL_CPPI_PP_QMGR_G2] = (unsigned long)(qMgr2Base) + QUEUE_MNG_TO_QUEUE_STAT_OFFSET;
+-    qMgrs_regsBase [PAL_CPPI_PP_QMGR_G2] = (unsigned long)(qMgr2Base) + QUEUE_MNG_TO_QMGR_REGS_OFFSET;
++    q_mgrs[PAL_CPPI_PP_QMGR_G2].queues     = (u32)(PAL_CPPI_PP_QMGR_G2_QUEUES_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G2].stats      = (u32)(PAL_CPPI_PP_QMGR_G2_Q_STATS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G2].regs       = (u32)(PAL_CPPI_PP_QMGR_G2_REGS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_G2].desc       = (u32)(PAL_CPPI_PP_QMGR_G2_DESC_BASE);
+ 
+-    DPRINTK("qMgrs_qMngBase[PAL_CPPI_PP_QMGR_G1] = 0x%08x, qMgrs_qStatBase[PAL_CPPI_PP_QMGR_G1] = 0x%08x, qMgrs_regsBase[PAL_CPPI_PP_QMGR_G1] = 0x%08x\n",
+-	    qMgrs_qMngBase[PAL_CPPI_PP_QMGR_G1], qMgrs_qStatBase[PAL_CPPI_PP_QMGR_G1], qMgrs_regsBase [PAL_CPPI_PP_QMGR_G1]);
+-    DPRINTK("qMgrs_qMngBase[PAL_CPPI_PP_QMGR_G2] = 0x%08x, qMgrs_qStatBase[PAL_CPPI_PP_QMGR_G2] = 0x%08x, Mgrs_regsBase[PAL_CPPI_PP_QMGR_G2] = 0x%08x",
+-	    qMgrs_qMngBase[PAL_CPPI_PP_QMGR_G2], qMgrs_qStatBase[PAL_CPPI_PP_QMGR_G2], qMgrs_regsBase [PAL_CPPI_PP_QMGR_G2]);
++    q_mgrs[PAL_CPPI_PP_QMGR_LOCAL].queues  = (u32)(PAL_CPPI_PP_QMGR_LOCAL_QUEUES_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_LOCAL].stats   = (u32)(PAL_CPPI_PP_QMGR_LOCAL_Q_STATS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_LOCAL].regs    = (u32)(PAL_CPPI_PP_QMGR_LOCAL_REGS_BASE);
++    q_mgrs[PAL_CPPI_PP_QMGR_LOCAL].desc    = (u32)(PAL_CPPI_PP_QMGR_LOCAL_DESC_BASE);
++
++    /* init buffer manager monitors base addresses */
++    bmgr_base = PAL_CPPI_PP_BUF_MGR_BASE;
++    /* init queue status monitors base addresses */
++    qsmon_base[PAL_CPPI_PP_QSMON_MGR0] = PAL_CPPI_QSMON_0_CTRL_REGS_BASE;
++    qsmon_base[PAL_CPPI_PP_QSMON_MGR1] = PAL_CPPI_QSMON_1_CTRL_REGS_BASE;
++    qsmon_base[PAL_CPPI_PP_QSMON_MGR2] = PAL_CPPI_QSMON_2_CTRL_REGS_BASE;
++    qsmon_base[PAL_CPPI_PP_QSMON_MGR3] = PAL_CPPI_QSMON_3_CTRL_REGS_BASE;
++    qsmon_base[PAL_CPPI_PP_QSMON_MGR4] = PAL_CPPI_QSMON_4_CTRL_REGS_BASE;
++    qsmon_base[PAL_CPPI_PP_BSMON_MGR]  = PAL_CPPI_BSMON_CTRL_REGS_BASE  ;
+ 
+     initialized = true;
+ 
+@@ -224,7 +320,7 @@ done:
+ 
+     spin_unlock_irqrestore(&init_lock, flags);
+ 
+-    return 0xDEADBEEF;
++    return (PAL_Handle) 0xDEADBEEF;
+ }
+ EXPORT_SYMBOL(PAL_cppi4Init);
+ 
+@@ -236,7 +332,7 @@ EXPORT_SYMBOL(PAL_cppi4Exit);
+ 
+ int PAL_cppi4BufDecRefCnt (PAL_Handle hnd, Cppi4BufPool pool, Ptr bufPtr)
+ {
+-    CSL_BufMgr_Regs *bPoolRegs = (CSL_BufMgr_Regs *)bMgrBase;
++    CSL_BufMgr_Regs *bPoolRegs = (CSL_BufMgr_Regs *)bmgr_base;
+ 
+     bPoolRegs->Pointer_Size[pool.bPool].Buffer_Pool_Pointer = cpu_to_be32((__u32) bufPtr);
+ 
+@@ -246,12 +342,35 @@ EXPORT_SYMBOL(PAL_cppi4BufDecRefCnt);
+ 
+ Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool)
+ {
+-    CSL_BufMgr_Regs *bPoolRegs = (CSL_BufMgr_Regs *)bMgrBase;
++    CSL_BufMgr_Regs *bPoolRegs = (CSL_BufMgr_Regs *)bmgr_base;
+ 
+     return (Ptr)be32_to_cpu(bPoolRegs->Pointer_Size[pool.bPool].Buffer_Pool_Pointer);
+ }
+ EXPORT_SYMBOL(PAL_cppi4BufPopBuf);
+ 
++Bool Pal_cppi4IsQueueValid(Cppi4Queue *q)
++{
++    if (!q)
++        return False;
++
++    switch (q->qMgr) {
++        case PAL_CPPI_PP_QMGR_G0:
++            if (q->qNum < PAL_CPPI_PP_QMGR_G0_TOTAL_Q_COUNT)
++                return True;
++        case PAL_CPPI_PP_QMGR_G1:
++            if (q->qNum < PAL_CPPI_PP_QMGR_G1_TOTAL_Q_COUNT)
++                return True;
++        case PAL_CPPI_PP_QMGR_G2:
++            if (q->qNum < PAL_CPPI_PP_QMGR_G2_TOTAL_Q_COUNT)
++                return True;
++        case PAL_CPPI_PP_QMGR_LOCAL:
++            if (q->qNum < PAL_CPPI_PP_QMGR_LOCAL_TOTAL_Q_COUNT)
++                return True;
++    }
++
++    return False;
++}
++
+ /**
+  * Retrieve all cppi buffers pools information from cppi driver
+  * on ARM
+@@ -266,7 +385,7 @@ PAL_Result PAL_cppi4GetAllBufferPoolsInf
+     u32 i;
+ 
+     if (NULL == pools) {
+-        EPRINTK("pools is null");
++        EPRINTK("pools is null\n");
+         return PAL_ERROR_FLAG;
+     }
+ 
+@@ -293,12 +412,11 @@ EXPORT_SYMBOL(PAL_cppi4GetAllBufferPools
+ PAL_Cppi4QueueHnd PAL_cppi4QueueOpen(PAL_Handle hnd, Cppi4Queue  queue)
+ {
+     PAL_Cppi4QueueHnd qHnd;
+-    if (!qMgrs_qMngBase[queue.qMgr])
+-    {
+-        EPRINTK("PAL is not initialized, first call init function");
++    if (!q_mgrs[queue.qMgr].queues) {
++        EPRINTK("PAL is not initialized, first call init function\n");
+         return NULL;
+     }
+-    qHnd = (PAL_Cppi4QueueHnd *) QUEUE_NUM_TO_QUEUE_BASE_ADDR(qMgrs_qMngBase[queue.qMgr], queue.qNum);
++    qHnd = (PAL_Cppi4QueueHnd *) QUEUE_NUM_TO_QUEUE_BASE_ADDR(q_mgrs[queue.qMgr].queues, queue.qNum);
+     DPRINTK("Open queue G%d.%d, qHnd = %p", queue.qMgr, queue.qNum, qHnd);
+ 
+     return qHnd;
+@@ -359,7 +477,7 @@ EXPORT_SYMBOL(PAL_cppi4QueuePop);
+ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *entryCount)
+ {
+     CSL_Queue_Status_Regs *qStatRegs;
+-    qStatRegs = (CSL_Queue_Status_Regs *) QUEUE_NUM_TO_QUEUE_BASE_ADDR(qMgrs_qStatBase[queue.qMgr], queue.qNum);
++    qStatRegs = (CSL_Queue_Status_Regs *) QUEUE_NUM_TO_QUEUE_BASE_ADDR(q_mgrs[queue.qMgr].stats, queue.qNum);
+     DPRINTK("qStatRegs = 0x%08x", IO_VIRT2PHY(qStatRegs));
+     *entryCount = be32_to_cpu(qStatRegs->Queue_Status_Reg_A);
+ 
+@@ -494,7 +612,7 @@ PAL_Cppi4AccChHnd PAL_cppi4AccChOpen(PAL
+     APDSP_Command_Status_RegsOvly cmdRegs = initCfg->apdspInfo.pdspCmdBase;
+ #endif
+     if (PAL_osMemAlloc(0, sizeof(PAL_Cppi4AccChObj), 0, (Ptr *) &accChObj) != PAL_SOK) {
+-        EPRINTK ("\nERROR:PAL: PAL_cppi4AccChOpen: Failed to allocate Acc channel object structure.");
++        EPRINTK ("\nERROR:PAL: PAL_cppi4AccChOpen: Failed to allocate Acc channel object structure.\n");
+         return NULL;
+     }
+ 
+@@ -602,7 +720,7 @@ int PAL_cppi4AccChClose(PAL_Cppi4AccChHn
+ {
+     PAL_Cppi4AccChObj *accChObj = (PAL_Cppi4AccChObj *) hnd;
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-    AVALANCHE_PP_ACC_CH_INFO_t ptr_ch_cfg;
++    AVALANCHE_PP_ACC_CH_INFO_t ptr_ch_cfg = { 0 };
+     AVALANCHE_PP_RET_e rc; //return code
+ 
+     ptr_ch_cfg.Channel      =   accChObj->initCfg.accChanNum ;
+@@ -672,17 +790,20 @@ EXPORT_SYMBOL(PAL_cppi4AccChGetNextList)
+ 
+ int PAL_cppi4Control (PAL_Handle hnd, Uint32 cmd, Ptr cmdArg, Ptr param)
+ {
+-    PAL_CPPI_PP_QMGRs_e qMgr = *(Uint32 *)param;
++    CSL_Queue_Manager_Region_RegsOvly regs;
++    PAL_CPPI_PP_QMGRs_e qMgr;
++    Cppi4Queue          *queue;
++
+     switch (cmd)
+     {
+         case PAL_CPPI41_IOCTL_QUEUE_DIVERT:
+         {
+-            CSL_Queue_Manager_Region_RegsOvly regs;
++            qMgr = *(Uint32 *)param;
+             if (qMgr != PAL_CPPI_PP_QMGR_G1 && qMgr != PAL_CPPI_PP_QMGR_G2) {
+                 pr_err("%s:%d: unsupported queue manager!\n", __func__, __LINE__);
+                 return 1;
+             }
+-            regs = (CSL_Queue_Manager_Region_RegsOvly)qMgrs_regsBase[qMgr];
++            regs = (CSL_Queue_Manager_Region_RegsOvly)q_mgrs[qMgr].regs;
+             if (!regs) {
+                 pr_err("%s:%d: queue manager %d not initialized!\n",__func__, __LINE__, qMgr);
+                 return 1;
+@@ -690,6 +811,12 @@ int PAL_cppi4Control (PAL_Handle hnd, Ui
+             regs->Queue_Diversion = cpu_to_be32((Uint32)cmdArg);
+             break;
+         }
++        case PAL_CPPI41_IOCTL_GET_QUEUE_ENTRY_COUNT:
++        {
++            queue = (Cppi4Queue*) cmdArg;
++            return PAL_cppi4QueueGetEntryCount(hnd, *queue, (u32 *)param);
++            break;
++        }
+         default:
+         {
+             pr_err("%s:%d:: Unsupported ioctl code %d",__func__, __LINE__, cmd);
+@@ -700,15 +827,435 @@ int PAL_cppi4Control (PAL_Handle hnd, Ui
+ }
+ EXPORT_SYMBOL(PAL_cppi4Control);
+ 
++static ssize_t cppi_pp_dump_queues_stats(struct seq_file *m, void *v)
++{
++    Cppi4Queue  q;
++    PAL_Handle  p_hnd;
++    u32         max_qnum[PAL_CPPI41_NUM_QUEUE_MGR];
++    u32         desc_count = 0;
++    u32         expected   = 0;
++    u32         i;
++    FDqueue_t   *pp_fqueues;
++    u32         fqueue_cnt = 0;
++
++
++    p_hnd = PAL_cppi4Init(NULL, CPPI41_DOMAIN_PP);
++    /* init max queue number for all queue managers */
++    max_qnum[PAL_CPPI_PP_QMGR_G0]    = PAL_CPPI_PP_QMGR_G0_TOTAL_Q_COUNT   ;
++    max_qnum[PAL_CPPI_PP_QMGR_G1]    = PAL_CPPI_PP_QMGR_G1_TOTAL_Q_COUNT   ;
++    max_qnum[PAL_CPPI_PP_QMGR_G2]    = PAL_CPPI_PP_QMGR_G2_TOTAL_Q_COUNT   ;
++    max_qnum[PAL_CPPI_PP_QMGR_LOCAL] = PAL_CPPI_PP_QMGR_LOCAL_TOTAL_Q_COUNT;
++
++    if(PAL_cppi4GetFreeQueuesCount(&fqueue_cnt) != 0) {
++        ERRSEQ(m, "Failed to get free queues count\n");
++        return 0;
++    }
++
++    pp_fqueues = kzalloc(fqueue_cnt * sizeof(*pp_fqueues), GFP_ATOMIC);
++    if (!pp_fqueues) {
++        ERRSEQ(m, "Failed to allocate memory\n");
++        return 0;
++    }
++
++    /* get free queues info via MRPC */
++    for (i = 0; i < fqueue_cnt; i++)
++        PAL_cppi4GetPpFreeQueueInfo(i, &pp_fqueues[i]);
++
++    seq_printf(m, "\n");
++    for (q.qMgr = 0; q.qMgr < PAL_CPPI41_NUM_QUEUE_MGR; q.qMgr++) {
++        for (q.qNum = 0; q.qNum < max_qnum[q.qMgr]; q.qNum++) {
++            /* get current queue count */
++            PAL_cppi4Control(p_hnd, PAL_CPPI41_IOCTL_GET_QUEUE_ENTRY_COUNT, &q, &desc_count);
++            /* get expected queue count*/
++            for (expected = 0, i = 0; i < fqueue_cnt; i++) {
++                if (pp_fqueues[i].qMgr == q.qMgr && pp_fqueues[i].qId == q.qNum) {
++                    expected = pp_fqueues[i].descCount;
++                    break;
++                }
++            }
++
++            if (desc_count != expected)
++                seq_printf(m, "%4d %-65s : %4d [%d]\n",
++                    q.qNum, PAL_CPPI_PP_QMGR_GET_Q_NAME(q.qMgr, q.qNum), desc_count, expected);
++        }
++    }
++
++    seq_printf(m, "\n");
++    if (pp_fqueues)
++        kfree(pp_fqueues);
++
++    return 0;
++}
++
++static ssize_t cppi_bsm_dump(struct seq_file *m, void *v)
++{
++    qsmonRal_t          bsmon[PAL_CPPI41_BMGR_MAX_POOLS];
++    CSL_QSMon_RegsOvly  bsmon_reg;
++    u32                 reg, i;
++
++    if (!qsmon_base[PAL_CPPI_PP_BSMON_MGR]) {
++        ERRSEQ(m, "bsmon_base isn't initialized\n");
++        return 0;
++    }
++
++    for (i = 0; i < ARRAY_SIZE(bsmon); i++) {
++        if(PAL_cppi4GetBpoolBsmonInfo(i, &bsmon[i]) != 0) {
++            ERRSEQ(m, "Failed to get buffers pool %u bsmon info\n", i);
++            return 0;
++        }
++    }
++
++    seq_printf(m, "\n| Thread | Pool | Watermark | Current | Min/Max |  Pname                                     |\n");
++    seq_printf(m,   "|--------|------|-----------|---------|---------|--------------------------------------------|\n");
++
++    bsmon_reg = (Ptr) qsmon_base[PAL_CPPI_PP_BSMON_MGR];
++    for (i = 0; i < ARRAY_SIZE(bsmon); i++) {
++        if (!bsmon[i].qsmonChEn)
++            continue;
++
++        reg = be32_to_cpu(bsmon_reg->Cmds[bsmon[i].qsmonThread].Register_B);
++        seq_printf(m, "|   %2d   |  %2d  |   %5d   |  %5d  |   %s   | %-42s |\n",
++            bsmon[i].qsmonThread, (reg & QSMON_CONFIG_MONITORED_QUEUE_NUM_MASK),
++            be32_to_cpu(bsmon_reg->Depth[bsmon[i].qsmonThread].Stats_Qdepth_Watermark),
++            be32_to_cpu(bsmon_reg->Depth[bsmon[i].qsmonThread].Stats_Qdepth_Cnt),
++            (reg & (1 << QSMON_CONFIG_MONITORED_QUEUE_DIR_SHIFT)) ? "Min" : "Max",
++            PalCppiPpbmgrNames[(reg & QSMON_CONFIG_MONITORED_QUEUE_NUM_MASK)]);
++    }
++    seq_printf(m, "\n");
++
++    return 0;
++}
++
++#define __get_input_num(num, params, sep, err_lbl)                              \
++{                                                                               \
++    char * __str = NULL;                                                        \
++    unsigned long __val = 0;                                                    \
++    if (params && (NULL != (__str = strsep(&params, sep)))) {                   \
++        if (kstrtoul(__str, 0, &__val)) {                                       \
++            EPRINTK("Parameter '%s' is an invalid numeric input\n", __str);     \
++            goto err_lbl;                                                       \
++        }                                                                       \
++        num = (typeof(num))__val;                                               \
++    }                                                                           \
++}
++
++
++static ssize_t cppi_dbg_proc_help(struct seq_file *m, void *v)
++{
++    seq_printf(m, "\n");
++    seq_printf(m, "pop  descriptor : echo pop   <queue mgr> <queue idx>              > /proc/cppi/sr/dbg\n");
++    seq_printf(m, "push descriptor : echo push  <queue mgr> <queue idx> <descriptor> > /proc/cppi/sr/dbg\n");
++    seq_printf(m, "pop  buffer     : echo bpop  <pool idx>                           > /proc/cppi/sr/dbg\n");
++    seq_printf(m, "push buffer     : echo bpush <pool idx>  <buffer pointer>         > /proc/cppi/sr/dbg\n\n");
++
++    return 0;
++}
++
++static ssize_t cppi_dbg_proc(struct file *fp, const char __user * ubuf, size_t count, loff_t *ppos)
++{
++    char lbuf[128] = { 0 };
++    char *token  = NULL;
++    char *params = NULL;
++    char *sep    = " ";
++    u32  bp      = 0;
++    PAL_Handle        p_hnd = NULL;
++    Cppi4Queue        q  = { 0 };
++    Cppi4BufPool      p  = { 0 };
++    PAL_Cppi4BD       bd = 0;
++    PAL_Cppi4QueueHnd qh = NULL;
++
++    if (count > 128) {
++        EPRINTK("\nBuffer Overflow\n");
++        return EINVAL;
++    }
++
++    if (copy_from_user(lbuf, ubuf, count)) {
++        EPRINTK("\nFailed copy from user\n");
++        return EFAULT;
++    }
++
++    p_hnd = PAL_cppi4Init(NULL, CPPI41_DOMAIN_PP);
++    if (!p_hnd)
++        return count;
++
++    lbuf[count - 1] = '\0';
++    params          = &lbuf[0];
++    token           = strsep(&params, " ");
++
++    if (!token) {
++        EPRINTK("Please provide arguments\n");
++        goto einval;
++    }
++
++    if (!strnicmp("pop", token, strlen("pop"))) {
++        __get_input_num(q.qMgr , params, sep, einval);
++        __get_input_num(q.qNum , params, sep, einval);
++
++        if (False == Pal_cppi4IsQueueValid(&q)) {
++            EPRINTK("Invalid queue G%u.%u\n", q.qMgr, q.qNum);
++            goto einval;
++        }
++
++        qh = PAL_cppi4QueueOpen(p_hnd, q);
++        if (qh) {
++            bd = (PAL_Cppi4BD) PAL_cppi4QueuePop(qh);
++            printk("Q[G%u.%-5u] ==> BD:[0x%x]\n",q.qMgr, q.qNum, bd);
++            PAL_cppi4QueueClose(p_hnd, qh);
++        }
++    } else if (!strnicmp("push", token, strlen("push")))
++    {
++        __get_input_num(q.qMgr, params, sep, einval);
++        __get_input_num(q.qNum, params, sep, einval);
++        __get_input_num(bd    , params, sep, einval);
++
++        if (False == Pal_cppi4IsQueueValid(&q)) {
++            EPRINTK("Invalid queue G%u.%u\n", q.qMgr, q.qNum);
++            goto einval;
++        }
++
++        qh = PAL_cppi4QueueOpen(p_hnd, q);
++        if (qh) {
++            PAL_cppi4QueuePush(qh, (PAL_Cppi4BD *)bd, 0, 0);
++            printk("Q[G%u.%-5u] <== BD:[0x%x]\n",q.qMgr, q.qNum, bd);
++            PAL_cppi4QueueClose(p_hnd, qh);
++        }
++    }
++    else if (!strnicmp("bpop", token, strlen("bpop")))
++    {
++        p.bMgr = 0;
++        __get_input_num(p.bPool, params, sep, einval);
++
++        if (p.bMgr != PAL_CPPI_PP_BUF_MGR ||
++            p.bPool >= PAL_CPPI41_BMGR_MAX_POOLS) {
++            EPRINTK("Invalid buffer pool %u", p.bPool);
++            goto einval;
++        }
++
++        bp = (u32) PAL_cppi4BufPopBuf(p_hnd, p);
++        printk("Pool[%u] ==> BP:[0x%x]\n", p.bPool, bp);
++    }
++    else if (!strnicmp("bpush", token, strlen("bpush")))
++    {
++        p.bMgr = 0;
++        __get_input_num(p.bPool, params, sep, einval);
++        __get_input_num(bp     , params, sep, einval);
++
++        if (p.bMgr != PAL_CPPI_PP_BUF_MGR ||
++            p.bPool >= PAL_CPPI41_BMGR_MAX_POOLS) {
++            EPRINTK("Invalid buffer pool %u", p.bPool);
++            goto einval;
++        }
++
++        PAL_cppi4BufDecRefCnt(p_hnd, p, (Ptr) bp);
++        printk("Pool[%u] <== BP:[0x%x]\n", p.bPool, bp);
++    }
++
++    return count;
++einval:
++    return EINVAL;
++}
++
++static ssize_t cppi_mem_dump_proc_help(struct seq_file *m, void *v)
++{
++    seq_printf(m, "\n");
++    seq_printf(m, "write reg   : echo 1 <address> <value>         [endian swap] > /proc/cppi/sr/dbg\n");
++    seq_printf(m, "read reg    : echo 2 <address>                 [endian swap] > /proc/cppi/sr/dbg\n");
++    seq_printf(m, "dump memory : echo 3 <address> <size in bytes> [endian swap] > /proc/cppi/sr/dbg\n");
++    seq_printf(m, "\n");
++
++    return 0;
++}
++
++static ssize_t cppi_mem_dump_proc(struct file *fp, const char __user * ubuf, size_t count, loff_t *ppos)
++{
++    char  lbuf[128] = { 0 };
++    char *params    = NULL;
++    char *sep       = " ";
++    u32   cmd       = 0;
++    u32   paddr     = 0;
++    u32  *vaddr     = NULL;
++    u32   val       = 0;
++    u32   i, endian = 1;
++
++    if (count > 128) {
++        EPRINTK("\nBuffer Overflow\n");
++        return EINVAL;
++    }
++
++    if (copy_from_user(lbuf, ubuf, count)) {
++        EPRINTK("\nFailed copy from user\n");
++        return EFAULT;
++    }
++
++    lbuf[count - 1] = '\0';
++    params          = &lbuf[0];
++    __get_input_num(cmd, params, sep, einval);
++    switch (cmd) {
++    case 1:
++        /* write register */
++        __get_input_num(paddr , params, sep, einval);
++        __get_input_num(val   , params, sep, einval);
++        __get_input_num(endian, params, sep, einval);
++        vaddr = (u32 *)netip_mmio_to_virtual((unsigned long) paddr);
++        *vaddr = endian ? cpu_to_be32(val) : val;
++        printk("WRITE: address = 0x%08x, value = 0x%x\n", paddr, val);
++        break;
++    case 2:
++        /* read register  */
++        __get_input_num(paddr, params, sep, einval);
++        __get_input_num(endian, params, sep, einval);
++        vaddr = (u32 *)netip_mmio_to_virtual((unsigned long) paddr);
++        printk("READ: 0x%08x = 0x%x\n", paddr, (endian ? be32_to_cpu(*vaddr) : *vaddr));
++        break;
++    case 3:
++        /* dump memory    */
++        __get_input_num(paddr, params, sep, einval);
++        __get_input_num(val  , params, sep, einval);
++        __get_input_num(endian, params, sep, einval);
++        vaddr = (u32 *)netip_mmio_to_virtual((unsigned long) paddr);
++        val = min(val, 2048U);
++        if (val > 0) {
++            printk("\nRegister Dump, 32-byte words: length = %u, Data at 0x%08x:", val, paddr);
++            for (i = 0; i < (val / 4); i++) {
++                if ((i % 4) == 0)
++                    printk("\n 0x%08x:    ", paddr + i*4);
++                printk("%08x ", (endian ? be32_to_cpu(vaddr[i]) : vaddr[i]));
++            }
++            printk("\n");
++        }
++        break;
++    default:
++        EPRINTK("Wrong command %u\n", cmd);
++        goto einval;
++    }
++
++    return count;
++einval:
++    return EINVAL;
++}
++
++static int cppi_pp_proc_open(struct inode *inode, struct file *file)
++{
++    return single_open(file, cppi_pp_dump_queues_stats, NULL);
++}
++
++static const struct file_operations cppi_pp_proc_fops =
++{
++    .open     = cppi_pp_proc_open,
++    .read     = seq_read,
++    .llseek   = seq_lseek,
++    .release  = single_release,
++};
++
++static int cppi_bsm_proc_open(struct inode *inode, struct file *file)
++{
++    return single_open(file, cppi_bsm_dump, NULL);
++}
++
++static const struct file_operations cppi_bsm_proc_fops =
++{
++    .open     = cppi_bsm_proc_open,
++    .read     = seq_read,
++    .llseek   = seq_lseek,
++    .release  = single_release,
++};
++
++static int cppi_dbg_proc_open(struct inode *inode, struct file *file)
++{
++    return single_open(file, cppi_dbg_proc_help, NULL);
++}
++
++static const struct file_operations cppi_dbg_proc_fops =
++{
++    .open     = cppi_dbg_proc_open,
++    .read     = seq_read,
++    .llseek   = seq_lseek,
++    .release  = single_release,
++    .write    = cppi_dbg_proc,
++};
++
++static int cppi_mem_dump_proc_open(struct inode *inode, struct file *file)
++{
++    return single_open(file, cppi_mem_dump_proc_help, NULL);
++}
++
++static const struct file_operations cppi_mem_dump_proc_fops =
++{
++    .open     = cppi_mem_dump_proc_open,
++    .read     = seq_read,
++    .llseek   = seq_lseek,
++    .release  = single_release,
++    .write    = cppi_mem_dump_proc,
++};
++
++static struct proc_dir_entry *cppi41_proc_dir = NULL;
++static struct proc_dir_entry *pp_proc_dir = NULL;
++
++static int __init pal_cppi41_procs_init(void)
++{
++    /* create proc files */
++    cppi41_proc_dir = proc_mkdir("cppi", NULL);
++    if (!cppi41_proc_dir) {
++        EPRINTK("Failed to create 'cppi' proc folder\n");
++        return 1;
++    }
++
++    /* cppi/sr */
++    pp_proc_dir = proc_mkdir("sr", cppi41_proc_dir);
++    if (!cppi41_proc_dir) {
++        EPRINTK("Failed to create 'sr' proc folder\n");
++        return 1;
++    }
++
++    /* cppi/sr/bsm */
++    if (!proc_create("bsm", 0, pp_proc_dir, &cppi_bsm_proc_fops)) {
++        EPRINTK("Failed to create sr/bsm proc....\n");
++        return 1;
++    }
++
++    /* cppi/sr/dbg */
++    if (!proc_create("dbg", 0, pp_proc_dir, &cppi_dbg_proc_fops)) {
++        EPRINTK("Failed to create sr/dbg proc....\n");
++        return 1;
++    }
++
++    /* cppi/sr/mem_dump */
++    if (!proc_create("mem_dump", 0, pp_proc_dir, &cppi_mem_dump_proc_fops)) {
++        EPRINTK("Failed to create sr/mem_dump proc....\n");
++        return 1;
++    }
++
++    /* cppi/sr/stats */
++    pp_proc_dir = proc_mkdir("stats", pp_proc_dir);
++    if (!cppi41_proc_dir) {
++        EPRINTK("Failed to create sr/stats proc folder\n");
++        return 1;
++    }
++
++    /* cppi/sr/stats/all */
++    if (!proc_create("all", 0, pp_proc_dir, &cppi_pp_proc_fops)) {
++        EPRINTK("Failed to create sr/stats/all proc....\n");
++        return 1;
++    }
++
++    return 0;
++}
++
+ static int __init pal_cppi41_init(void)
+ {
+     spin_lock_init(&init_lock);
+     DPRINTK("pal_cppi41_init\n");
++
++    if(pal_cppi41_procs_init())
++        return 1;
++
+     return 0;
+ }
+ 
+ static void __exit pal_cppi41_exit(void)
+ {
++    proc_remove(cppi41_proc_dir);
++
+     DPRINTK("pal_cppi41_exit\n");
+ }
+ 
+diff --git a/drivers/mrpc/cppi_client.c b/drivers/mrpc/cppi_client.c
+--- a/drivers/mrpc/cppi_client.c
++++ b/drivers/mrpc/cppi_client.c
+@@ -81,9 +81,13 @@ typedef struct  {
+     PAL_Result result;
+     Cppi4BufPoolInfo bp_info;
+ } cppi_get_bpool_info_rep_t;
++
+ enum {
+     CPPI_INIT_PP_WIFI_BUFFER_POOL = 0,
+     CPPI_GET_BPOOL_INFO,
++    CPPI_GET_BPOOL_BSMON_INFO,
++    CPPI_GET_PP_FREE_QUEUES_COUNT,
++    CPPI_GET_PP_FREE_QUEUE_INFO,
+ };
+ 
+ 
+@@ -183,6 +187,118 @@ PAL_Result PAL_cppi4GetBufferPoolInfo(PA
+ }
+ EXPORT_SYMBOL(PAL_cppi4GetBufferPoolInfo);
+ 
++/*!
++ * Get cppi buffer pool status monitor info from ARM cppi
++ * driver
++ *
++ * \param idx buffer pool index, 0 - PAL_CPPI41_BMGR_MAX_POOLS
++ * \param info buffer pool buffer status monitor info on a
++ * successful run
++ *
++ * \return PAL_Result 0 on success, error code otherwise
++ */
++PAL_Result PAL_cppi4GetBpoolBsmonInfo(u32 idx, qsmonRal_t *info)
++{
++    struct cppi_private *priv = this;
++    int ret, errcode;
++
++    if (!priv) {
++        pr_err("ERROR: mrpc cppi not initialized");
++        return EFAULT;
++    }
++    if (!info)
++        return EFAULT;
++
++    idx = cpu_to_be32(idx);
++    ret = mrpc_call(priv->mrpc, CPPI_GET_BPOOL_BSMON_INFO, &idx, sizeof(idx),
++        info, sizeof(*info), 0, &errcode);
++
++    if (ret || errcode) {
++        pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
++        return EFAULT;
++    }
++
++    info->fdQueue.qMgr   = be32_to_cpu(info->fdQueue.qMgr  );
++    info->fdQueue.qNum   = be32_to_cpu(info->fdQueue.qNum  );
++    info->qsmonThread    = be32_to_cpu(info->qsmonThread   );
++    info->qsmonThreshold = be32_to_cpu(info->qsmonThreshold);
++    info->qsmonChEn      = be32_to_cpu(info->qsmonChEn     );
++    info->ralQEnable     = be32_to_cpu(info->ralQEnable    );
++    info->direction      = be32_to_cpu(info->direction     );
++
++    return 0;
++}
++EXPORT_SYMBOL(PAL_cppi4GetBpoolBsmonInfo);
++
++/*!
++ * Get number of free queues configured in CPPI driver on ARM side
++ *
++ * \param fqueues_count number of free queueson a successful run
++ *
++ * \return PAL_Result 0 on success, error code otherwise
++ */
++PAL_Result PAL_cppi4GetFreeQueuesCount(u32 *fqueues_count)
++{
++    struct cppi_private *priv = this;
++    int ret, errcode;
++
++    if (!priv) {
++        pr_err("ERROR: mrpc cppi not initialized");
++        return EFAULT;
++    }
++    if (!fqueues_count)
++        return EINVAL;
++
++    ret = mrpc_call(priv->mrpc, CPPI_GET_PP_FREE_QUEUES_COUNT, &ret, sizeof(ret),
++        fqueues_count, sizeof(*fqueues_count), 0, &errcode);
++
++    if (ret || errcode) {
++        pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
++        return EFAULT;
++    }
++    *fqueues_count = be32_to_cpu(*fqueues_count);
++    return 0;
++}
++EXPORT_SYMBOL(PAL_cppi4GetFreeQueuesCount);
++
++/*!
++ * Get cppi queue's status monitor info from ARM cppi driver
++ *
++ * \param idx buffer pool index, 0 - PAL_CPPI41_BMGR_MAX_POOLS
++ * \param info buffer pool buffer status monitor info on a successful run
++ *
++ * \return PAL_Result 0 on success, error code otherwise
++ */
++PAL_Result PAL_cppi4GetPpFreeQueueInfo(u32 idx, FDqueue_t *fqueue_info)
++{
++    struct cppi_private *priv = this;
++    int ret, errcode;
++
++    if (!priv) {
++        pr_err("ERROR: mrpc cppi not initialized");
++        return EFAULT;
++    }
++    if (!fqueue_info)
++        return EINVAL;
++
++    idx = cpu_to_be32(idx);
++    ret = mrpc_call(priv->mrpc, CPPI_GET_PP_FREE_QUEUE_INFO, &idx, sizeof(idx),
++        fqueue_info, sizeof(*fqueue_info), 0, &errcode);
++
++    if (ret || errcode) {
++        pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
++        return EFAULT;
++    }
++
++    fqueue_info->descCount = be16_to_cpu(fqueue_info->descCount);
++    fqueue_info->descSize  = be16_to_cpu(fqueue_info->descSize );
++    fqueue_info->qId       = be16_to_cpu(fqueue_info->qId      );
++    fqueue_info->allocType = be32_to_cpu(fqueue_info->allocType);
++
++    return 0;
++}
++EXPORT_SYMBOL(PAL_cppi4GetPpFreeQueueInfo);
++
+ /* sysfs for future use */
+ static ssize_t status_show(struct device *dev,
+                            struct device_attribute *attr, char *buf)
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1678,31 +1678,31 @@ typedef struct
+     Uint32      MCAST_rx_pkts;
+     Uint32      MCAST_tx_pkts;
+ 
+-    Uint32      DPI_res1;
+-    Uint32      DPI_res2;
+-    Uint32      DPI_res3;
+-    Uint32      DPI_res4;
+-    Uint32      DPI_res5;
+-    Uint32      DPI_res6;
+-    Uint32      DPI_res7;
+-    Uint32      DPI_res8;
++    Uint32      DPI_rx_pkts                      ;
++    Uint32      DPI_pkts_frwrd_to_qos            ;
++    Uint32      DPI_pkts_frwrd_to_host           ;
++    Uint32      DPI_pkts_frwrd_to_next_hop       ;
++    Uint32      DPI_fragmenation_desc_starvations;
++    Uint32      DPI_fragmenation_on_tunnel_header;
++    Uint32      DPI_fragmenation_on_encap_pkt    ;
++    Uint32      DPI_res8                         ;
+ 
+-    Uint32      MC_rx_pkts;
+-    Uint32      MC_pkts_frwrd_to_qos;
+-    Uint32      MC_pkts_frwrd_to_host;
+-    Uint32      MC_pkts_frwrd_to_next_hop;
+-    Uint32      MC_pkts_pushed_to_db;
+-    Uint32      MC_pkts_popped_from_db;
+-    Uint32      MC_pkts_timed_out_from_db;
+-    Uint32      MC_db_overflow_pkts;
+-    Uint32      MC_reassembly_concat_pkts;
++    Uint32      MC_rx_pkts                  ;
++    Uint32      MC_pkts_frwrd_to_qos        ;
++    Uint32      MC_pkts_frwrd_to_host       ;
++    Uint32      MC_pkts_frwrd_to_next_hop   ;
++    Uint32      MC_pkts_pushed_to_db        ;
++    Uint32      MC_pkts_popped_from_db      ;
++    Uint32      MC_pkts_timed_out_from_db   ;
++    Uint32      MC_db_overflow_pkts         ;
++    Uint32      MC_reassembly_concat_pkts   ;
+     Uint32      MC_reassembly_no_concat_pkts;
+-    Uint32      MC_fragmenation_desc_starvations;
+-    Uint32      MC_fragmenation_on_tunnel_header;
+-    Uint32      MC_fragmenation_on_encap_pkt;
+-    Uint32      MC_res14;
+-    Uint32      MC_res15;
+-    Uint32      MC_res16;
++    Uint32      MC_res11                    ;
++    Uint32      MC_res12                    ;
++    Uint32      MC_res13                    ;
++    Uint32      MC_res14                    ;
++    Uint32      MC_res15                    ;
++    Uint32      MC_res16                    ;
+ 
+     avalanche_pp_wifi_stats_t wifi_stats;
+ 
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -458,6 +458,37 @@ typedef struct {
+     Uint32 EPI[2];       /**< Extended Packet Information (from SR) */
+ } Cppi4EmbdDescPp;
+ 
++typedef struct
++{
++    Cppi4Queue          fdQueue;
++    Uint32              qsmonThread;
++    Uint32              qsmonThreshold;
++    Bool                qsmonChEn;
++    Bool                ralQEnable;
++    Bool                direction;
++} qsmonRal_t;
++
++typedef enum
++{
++    PAL_CPPI_ALLOC_NONE,
++    PAL_CPPI_ALLOC_CALLOC,
++    PAL_CPPI_ALLOC_MALLOC,
++    PAL_CPPI_ALLOC_SKB
++}
++FDqueueBuffAllocType_e;
++
++typedef struct FDqueue
++{
++    Uint8                       descRegion;     /* Type: PAL_CPPI_PP_DESC_REGIONs_e */
++    Uint8                       descType;       /* Type: CPPI41_DESC_TYPE */
++    Uint16                      descCount;
++    Uint16                      descSize;
++    Uint16                      qId;
++    Uint8                       qMgr;           /* Types: PAL_CPPI_PP_QMGRs_e, PAL_CPPI_DSG_QUEUE_MNGRS_e, ... */
++    FDqueueBuffAllocType_e      allocType;
++}
++FDqueue_t;
++
+ #ifdef __KERNEL__
+ 
+ /* convert DDR physical address to DDR virtual address */
+@@ -625,7 +656,6 @@ int PAL_cppi4QueueGetEntryCount(PAL_Hand
+  *  @return PAL_SOK on success
+  */
+ PAL_Result PAL_cppi4GetBufferPoolInfo(PAL_Handle hnd, Cppi4BufPool pool, Cppi4BufPoolInfo* bp_info);
+-/**
+ 
+ /**
+  *  \brief Get buffer pool info for WiFi TX Zero Copy feature
+diff --git a/include/linux/avalanche/puma7/puma7_pp.h b/include/linux/avalanche/puma7/puma7_pp.h
+--- a/include/linux/avalanche/puma7/puma7_pp.h
++++ b/include/linux/avalanche/puma7/puma7_pp.h
+@@ -565,11 +565,19 @@ typedef enum {
+     *mtu_per_vpid = cpu_to_be16(mtuSize);                              \
+ }
+ 
+-#define AVALANCHE_PP_DPI_CMD_RGN_BASE                   (IO_ADDRESS(0xF3F40000))
+-#define AVALANCHE_PP_DPI_PARAM_RGN_BASE                 (IO_ADDRESS(0xF3F40004))
+ #define AVALANCHE_PP_DPI_IRAM_RGN_BASE                  (IO_ADDRESS(0xF3F50000))
+ #define AVALANCHE_PP_DPI_DBG_RGN_BASE                   (IO_ADDRESS(0xF3F52000))
+ #define AVALANCHE_PP_DPI_CTRL_RGN_BASE                  (IO_ADDRESS(0xF3F53000))
++#define AVALANCHE_PP_DPI_CMD_RGN_BASE                   (IO_ADDRESS(0xF3F40000))
++#define AVALANCHE_PP_DPI_PARAM_RGN_BASE                 (IO_ADDRESS(0xF3F40004))
++#define AVALNACHE_PP_DPI_MTU_TABLE_BASE                 (IO_ADDRESS(0xF3F40100))    // DPI PDSP MTU table
++
++#define AVALANCHE_PP_DPI_MTU_TABLE_UPDATE(vpidId, mtuSize)              \
++{                                                                       \
++    volatile Uint16 *mtu_per_vpid = 0;                                  \
++    mtu_per_vpid = (Uint16 *)AVALNACHE_PP_DPI_MTU_TABLE_BASE + (vpidId);\
++    *mtu_per_vpid = cpu_to_be16(mtuSize);                               \
++}
+ 
+ #define AVALANCHE_PP_CRYPTO_CMD_RGN_BASE                (IO_ADDRESS(0xF3806000))
+ #define AVALANCHE_PP_CRYPTO_PARAM_RGN_BASE              (IO_ADDRESS(0xF3806004))
+@@ -620,7 +628,8 @@ typedef enum {
+ /* PP MTU size */
+ #define UPDATE_MTU_TABLE_IN_PDSP_DMEM(vpidId, mtuSize)        \
+     AVALANCHE_PP_MODIFIER_MTU_TABLE_UPDATE(vpidId, mtuSize);  \
+-    AVALANCHE_PP_MC_MTU_TABLE_UPDATE(vpidId, mtuSize);
++    AVALANCHE_PP_MC_MTU_TABLE_UPDATE(vpidId, mtuSize);        \
++    AVALANCHE_PP_DPI_MTU_TABLE_UPDATE(vpidId, mtuSize);
+ 
+ /* PP PDSPs Offsets in mailbox to get the PDSP and PP versions */
+ #define AVALANCHE_PP_PDSPs_PP_VERSION_OFFSET                0xF8

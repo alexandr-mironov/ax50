@@ -1,0 +1,162 @@
+From 5da6b066ea242be3ff3f5e1e4d1f6dbd6cafce1b Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Thu, 12 Jan 2017 14:13:06 +0200
+Subject: [PATCH 574/639] DOCSISSW-1235-PP on Atom: docsQosPktClassPkts MIB
+ counter is not incremented
+
+Symptom:  Wrong value of docsQosPktClassPkts MIB is returned when the traffic is accelerated in PP on Atom.
+RootCause: Packets session buffer contains PP_PACKET_INFO_t structure that contains "flags" field that defined as "unsigned int".
+This field contains some characteristics of the packet and is written in the Atom CPU which store it in little endian format.
+Arm CPU also reads this field value but because it was stored in little endian format it gets wrong value since Arm CPU use big endian format.
+Resolution: Store "flags" field in network format (htonl) and convert it to host format (ntohl) before using it.
+
+Signed-off-by: avnerlam <avner.lamy@intel.com>
+---
+ include/linux/ti_hil.h               |  8 ++++----
+ net/bridge/ti_br_sf.c                |  2 +-
+ net/ipv4/ipmr.c                      |  2 +-
+ net/netfilter/nf_conntrack_core.c    |  2 +-
+ net/netfilter/nfnetlink_queue_core.c |  2 +-
+ net/netfilter/xt_GWMETA.c            |  8 ++------
+ net/ti/pp/ti_hil_core.c              | 21 ++-------------------
+ 7 files changed, 12 insertions(+), 33 deletions(-)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 7ff97bb..5752117 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -43,18 +43,18 @@ struct hil_core_notifier_param
+ 
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_INGRESS_RECORDED          0x00000001
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS                    0x00000002
+-#define TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET               24
+ 
+ 
+ /**************************************************************************
+- **************** General Macros to get and set PP events *****************
++ ************** General Macros to get and set PP info flags ***************
+  **************************************************************************/
+ 
+ #define TI_HIL_NETDEV_READ32_REG(x)                    ntohl(x)                /* convert network byte order to native host byte order */
+ #define TI_HIL_NETDEV_WRITE32_REG(x)                   htonl(x)                /* convert native host byte order to network byte order */
+ 
+-#define TI_HIL_NETDEV_GET_EVENT(skb)                   TI_HIL_NETDEV_READ32_REG( (SKB_GET_PP_INFO_P(skb)->flags) >> TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET)
+-#define TI_HIL_NETDEV_SET_EVENT(skb, f)                (SKB_GET_PP_INFO_P(skb)->flags |= TI_HIL_NETDEV_WRITE32_REG((f) << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET))
++#define TI_HIL_GET_PP_INFO_FLAGS(skb)                  (TI_HIL_NETDEV_READ32_REG(SKB_GET_PP_INFO_P(skb)->flags))
++#define TI_HIL_SET_PP_INFO_FLAGS(skb, f)               (SKB_GET_PP_INFO_P(skb)->flags = TI_HIL_NETDEV_WRITE32_REG(f))
++#define TI_HIL_ADD_PP_INFO_FLAGS(skb, f)               (TI_HIL_SET_PP_INFO_FLAGS(skb, TI_HIL_GET_PP_INFO_FLAGS(skb) | f))
+ 
+ /**************************************************************************
+  ****************************** Module Identifers *************************
+diff --git a/net/bridge/ti_br_sf.c b/net/bridge/ti_br_sf.c
+index 9feacef..c3da55f 100644
+--- a/net/bridge/ti_br_sf.c
++++ b/net/bridge/ti_br_sf.c
+@@ -90,7 +90,7 @@ int ti_selective_forward(struct sk_buff *skb)
+        For all the cases of cloning make sure the BYPASS flag is set. */
+         if (1 != count)
+         {
+-            SKB_GET_PP_INFO_P(skb)->flags |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
++            TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+         }
+ #endif
+ 
+diff --git a/net/ipv4/ipmr.c b/net/ipv4/ipmr.c
+index 7dffcef..0bf2b45 100644
+--- a/net/ipv4/ipmr.c
++++ b/net/ipv4/ipmr.c
+@@ -1869,7 +1869,7 @@ forward:
+ 	 */
+     if ((cache->mfc_un.res.maxvif - cache->mfc_un.res.minvif) > 1)
+     {
+-        SKB_GET_PP_INFO_P(skb)->flags |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
++        TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+     }
+ 	if (cache->mfc_origin == htonl(INADDR_ANY) &&
+ 	    cache->mfc_mcastgrp == htonl(INADDR_ANY)) {
+diff --git a/net/netfilter/nfnetlink_queue_core.c b/net/netfilter/nfnetlink_queue_core.c
+index a89e00c..6588600 100644
+--- a/net/netfilter/nfnetlink_queue_core.c
++++ b/net/netfilter/nfnetlink_queue_core.c
+@@ -1030,7 +1030,7 @@ nfqnl_recv_verdict(struct sock *ctnl, struct sk_buff *skb,
+ 
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+     if (verdict & NF_VERDICT_FLAG_PP_BYPASS) {
+-        SKB_GET_PP_INFO_P(entry->skb)->flags |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
++        TI_HIL_ADD_PP_INFO_FLAGS(entry->skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+         verdict &= ~(NF_VERDICT_FLAG_PP_BYPASS);
+     }
+ #endif  /* CONFIG_TI_PACKET_PROCESSOR */
+diff --git a/net/netfilter/xt_GWMETA.c b/net/netfilter/xt_GWMETA.c
+index 6eabce5..f015a28 100644
+--- a/net/netfilter/xt_GWMETA.c
++++ b/net/netfilter/xt_GWMETA.c
+@@ -95,16 +95,12 @@ do_target_job(struct sk_buff *skb, const struct xt_action_param *par)
+     else if (info->type == XT_GW_DIS_PP)
+     {
+         /*DISABLE PP */
+-        host_val = hil_to_cpu32(SKB_GET_PP_INFO_P(skb)->flags);
+-        host_val |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
+-        SKB_GET_PP_INFO_P(skb)->flags = cpu_to_hil32(host_val);
++        TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+     }
+     else if (info->type == XT_GW_EN_PP)
+     {
+         /*ENABLE PP */
+-        host_val = hil_to_cpu32(SKB_GET_PP_INFO_P(skb)->flags);
+-        host_val &= ~(TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+-        SKB_GET_PP_INFO_P(skb)->flags = cpu_to_hil32(host_val);
++        TI_HIL_SET_PP_INFO_FLAGS(skb, TI_HIL_GET_PP_INFO_FLAGS(skb) & ~(TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS));
+     }
+ 
+     return XT_CONTINUE;
+diff --git a/net/ti/pp/ti_hil_core.c b/net/ti/pp/ti_hil_core.c
+index 3576a52..45350f9 100755
+--- a/net/ti/pp/ti_hil_core.c
++++ b/net/ti/pp/ti_hil_core.c
+@@ -105,16 +105,8 @@ EXPORT_SYMBOL(hil_core_unregister_notifier_block);
+ int create_drop_session(struct sk_buff* skb, unsigned long event)
+ {
+     struct hil_core_notifier_param param;
+-    unsigned int flags;
+ 
+-    /* Read current flags */
+-    flags = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
+-
+-    /* Store event in flags */
+-    flags |= (event << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET );
+-
+-    /* Convert new flags back to network byte order */
+-    SKB_GET_PP_INFO_P(skb)->flags = htonl(flags);
++    TI_HIL_ADD_PP_INFO_FLAGS(skb, event);
+ 
+     param.skb = skb;
+     atomic_notifier_call_chain(&notifier_list, 0, &param);
+@@ -388,7 +380,6 @@ int ti_hil_pp_event(unsigned long val, void *v)
+ int ti_hil_pp_event(unsigned long event, void *v)
+ {
+     struct sk_buff*              skb;
+-    unsigned int                 flags;
+     struct xt_table              *xt;
+     /* Handle only the events currently supported in Atom SDK */
+     switch (event)
+@@ -401,15 +392,7 @@ int ti_hil_pp_event(unsigned long event, void *v)
+              *  c) Multicast packet but no layer2 extensions eg IGMP snooping exists */
+             skb = (struct sk_buff*) v;
+ 
+-            /* Convert existing flags to host byte order */
+-            flags = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
+-
+-            /* In the intrusive mode profile these packets are not considered as candidates for acceleration so mark the packet BYPASS mode so that the egress hook is bypassed */
+-            flags |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
+-
+-            /* Convert new flags back to network byte order */
+-            SKB_GET_PP_INFO_P(skb)->flags = htonl(flags);
+-
++            TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+             break;
+         }
+ #ifdef CONFIG_APPCPU_GW_PP_HANDLE
+-- 
+2.10.1
+

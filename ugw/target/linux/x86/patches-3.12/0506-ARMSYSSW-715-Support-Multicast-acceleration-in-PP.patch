@@ -1,0 +1,303 @@
+From 5970ff5b3773e03728dd80b6a3f2d51fac51921c Mon Sep 17 00:00:00 2001
+From: Fernandes Elad <elad.fernandes@intel.com>
+Date: Wed, 26 Oct 2016 19:55:01 +0300
+Subject: [PATCH 506/639] ARMSYSSW-715 - Support Multicast acceleration in PP
+
+Signed-off-by: Fernandes Elad <elad.fernandes@intel.com>
+---
+ .../linux/avalanche/generic/avalanche_pdsp_api.h   |  4 ++
+ include/linux/avalanche/generic/avalanche_pp_api.h | 58 +++++++++++++++++++---
+ include/linux/ti_hil.h                             | 19 +++++++
+ net/ipv4/igmp.c                                    | 16 +++++-
+ net/ipv4/ipmr.c                                    | 17 -------
+ net/ipv6/mcast.c                                   | 17 ++++++-
+ 6 files changed, 105 insertions(+), 26 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index b047b67..fe17e89 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -159,6 +159,10 @@ typedef enum
+     // Moca Commands
+     PDSP_MOCA_SET_PADDING                = 0x83,
+ 
++    // AQMC Commands
++    PDSP_AQMC_ADD_MC_MEMBER              = 0x83,
++    PDSP_AQMC_DEL_MC_MEMBER              = 0x84,
++
+ #ifdef CONFIG_WIFI_PROXY
+     //Wifi TX commands
+     PDSP_CMD_WIFI_TX_INIT                = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index c080108..639248a 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -880,7 +880,9 @@ typedef struct // former TI_PP_SESSION_PROPERTY
+ #else
+     Uint8                               pid_type;       /* Needed for WAN/LAN direction selection */
+ #endif
+-    Uint16                              reserved1;
++    Uint8                               flags;
++                                        #define AVALANCHE_PP_INGRESS_MULTICAST   0x1
++    Uint8                               reserved1;
+ 
+ #if defined(PUMA6_SOC_TYPE) && PUMA6_SOC_TYPE
+     Bool                                isTunnel;
+@@ -972,6 +974,40 @@ struct wifi_proxy_psi_t {
+ #define AVALANCHE_PP_EGRESS_DROP_SESS    0x01
+ 
+ 
++#if PUMA7_OR_NEWER_SOC_TYPE
++
++#define PP_MAX_MC_MEMBERS     (8)
++#define PP_MAX_MC_GROUPS      (64)
++#define PP_INVALID_MC_GROUPS  (PP_MAX_MC_GROUPS)
++
++typedef struct
++{
++    Uint8   Flags;
++#define PP_MCAST_FLAG_MEMBER_VALID (0x01)
++#define PP_MCAST_FLAG_VLAN         (0x02)
++#define PP_MCAST_FLAG_PSI          (0x04)
++    Uint8   Vpid;
++    Uint16  EgressQ;
++    Uint32  PsiVlan;
++}
++PP_Multiast_Member_Info_t;
++
++typedef struct
++{
++    PP_Multiast_Member_Info_t GroupMember[PP_MAX_MC_MEMBERS];
++}
++PP_Multiast_Group_Info_t;
++
++typedef struct
++{
++    Uint8                    GroupIndex;
++    Uint8                    MembersCount;
++    Uint8                    WaitingMembers;
++    Uint8                    Res;
++    PP_Multiast_Group_Info_t groupInfo;
++}
++PP_Multicast_Session_Rec_t;
++#endif
+ 
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_EGRESS_SESSION_PROPERTY_t
+@@ -987,7 +1023,7 @@ struct wifi_proxy_psi_t {
+ typedef struct
+ {
+     Uint8                       vpid_handle;
+-    Uint8                       enable;
++    Uint16                      enable;
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_VLAN                   0x01
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_SYN                0x02
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_CTRL               0x04
+@@ -996,7 +1032,8 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv6                             0x20
+                                 #define AVALANCHE_PP_EGRESS_WIFI_PID                            0x40
+                                 #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x80
+-    Uint16                      reserved;
++                                #define AVALANCHE_PP_EGRESS_MULTICAST                           0x100
++    Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+ 
+@@ -1016,6 +1053,8 @@ typedef struct
+ 
+     Uint8                       wrapHeader[ AVALNCHE_PP_WRAP_HEADER_MAX_LEN ];
+ 
++    PP_Multicast_Session_Rec_t  multicastInfo;
++
+ } AVALANCHE_PP_EGRESS_SESSION_PROPERTY_t;
+ #else
+ typedef struct // former TI_PP_SESSION_PROPERTY
+@@ -1476,8 +1515,8 @@ typedef struct
+     Uint32      AQM_move_to_normal_mode_intrpt;
+     Uint32      AQM_sent_wakeup_upon_timer_expiry;
+     Uint32      AQM_sent_wakeup_upon_bytes_thrshold_crossed;
+-    Uint32      AQM_res7;
+-    Uint32      AQM_res8;
++    Uint32      MCAST_rx_pkts;
++    Uint32      MCAST_tx_pkts;
+ 
+     Uint32      DPI_res1;
+     Uint32      DPI_res2;
+@@ -1663,6 +1702,12 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_wifi_mesh_get_vpid_packet_header_size
+ /* Session Management API */
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_create        ( AVALANCHE_PP_SESSION_INFO_t *  ptr_session, void * pkt_ptr );
+ #if PUMA7_OR_NEWER_SOC_TYPE
++/* Multicast support */
++extern AVALANCHE_PP_RET_e    avalanche_pp_check_multiple_egress ( AVALANCHE_PP_SESSION_INFO_t *ptr_session );
++extern AVALANCHE_PP_RET_e    avalanche_pp_del_mcast_member      ( void *ptr, Uint8 vpid_handle );
++extern AVALANCHE_PP_RET_e    avalanche_pp_mcast_dbg_add_member  ( Uint8 group_index, Uint8 vpid, Uint16 cluster, Uint32 psi);
++extern AVALANCHE_PP_RET_e    avalanche_pp_delete_mc_session     ( void *ptr);
++
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats, Bool deleteFromFW );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_override_egress_queue  ( Uint32 session_handle,     Uint8 override_qMgr,                               Uint16 override_qNum);
+ #else
+@@ -1670,7 +1715,7 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    sess
+ #endif
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_get_list      ( Uint8     vpid_handle,        PP_LIST_ID_e   list_id, Uint32 * num_entries, Uint32 * session_handle_list );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_get_info      ( Uint32    session_handle,     AVALANCHE_PP_SESSION_INFO_t**  ptr_session_info );
+-extern AVALANCHE_PP_RET_e    avalanche_pp_session_set_timeout   (Uint8 timeoutSeconds);
++extern AVALANCHE_PP_RET_e    avalanche_pp_session_set_timeout   ( Uint8     timeoutSeconds);
+ extern AVALANCHE_PP_RET_e    avalanche_pp_flush_sessions        ( Uint8     vpid_handle, PP_LIST_ID_e   list_id );
+ 
+ extern AVALANCHE_PP_RET_e   avalanche_pp_session_list_execute      ( Uint8     vpid_handle, PP_LIST_ID_e   list_id,    AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
+@@ -2260,6 +2305,7 @@ sanity_session_info_t;
+ 
+ #define SANITY_PROC_NAME "sanity"
+ 
++
+ /************** Power management info ****************/
+ 
+ #define MAX_MONITORED_OBJECTS_NUM 16
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 1df1412..249dd2a 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -30,6 +30,8 @@
+ #ifdef CONFIG_TI_PACKET_PROCESSOR_STATS
+ #include <linux/skbuff.h>
+ #endif /* CONFIG_TI_PACKET_PROCESSOR_STATS */
++#include <linux/in.h>
++#include <linux/in6.h>
+ #endif /* KERNEL*/
+ 
+ #ifdef CONFIG_APPCPU_GW_PP_HANDLE
+@@ -169,6 +171,9 @@ struct hil_core_notifier_param
+ 
+ #define TI_MC_SESSION_DELETED         (TI_MFC_EVENT + 0x3)
+ 
++#define MC_SESSION_ADD_MEMBER         (TI_MFC_EVENT + 0x4)
++#define MC_SESSION_DEL_MEMBER         (TI_MFC_EVENT + 0x5)
++
+ /**************************************************************************
+  **************************** PP PPP Event Identifiers *****************
+  **************************************************************************/
+@@ -306,6 +311,20 @@ struct pp_mr_param {
+     struct mfc_cache *cache;
+ };
+ 
++typedef enum {
++        HIL_MR_IPV4 = 0,
++        HIL_MR_IPV6,
++} hil_mr_ptype_t;
++
++struct hil_mr_ipaddr {
++        hil_mr_ptype_t type;
++        union {
++                struct in_addr  ip4;
++                struct in6_addr ip6;
++        } addr;
++        int ifindex;
++};
++
+ /**************************************************************************
+  **************************** HIL Core Exported API ***********************
+  **************************************************************************/
+diff --git a/net/ipv4/igmp.c b/net/ipv4/igmp.c
+index 931bc8d..16fd75a 100644
+--- a/net/ipv4/igmp.c
++++ b/net/ipv4/igmp.c
+@@ -105,7 +105,7 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ #endif
+-
++#include <linux/ti_hil.h>
+ #define IP_MAX_MEMBERSHIPS	20
+ #define IP_MAX_MSF		10
+ 
+@@ -1909,6 +1909,13 @@ int ip_mc_join_group(struct sock *sk , struct ip_mreqn *imr)
+ 	err = 0;
+ done:
+ 	rtnl_unlock();
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	struct hil_mr_ipaddr hil_ip;
++	hil_ip.type = HIL_MR_IPV4;
++	hil_ip.addr.ip4.s_addr = addr;
++	hil_ip.ifindex = ifindex;
++	ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
++#endif// CONFIG_TI_PACKET_PROCESSOR
+ 	return err;
+ }
+ EXPORT_SYMBOL(ip_mc_join_group);
+@@ -1976,6 +1983,13 @@ int ip_mc_leave_group(struct sock *sk, struct ip_mreqn *imr)
+ 		/* decrease mem now to avoid the memleak warning */
+ 		atomic_sub(sizeof(*iml), &sk->sk_omem_alloc);
+ 		kfree_rcu(iml, rcu);
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++		struct hil_mr_ipaddr hil_ip;
++		hil_ip.type = HIL_MR_IPV4;
++		hil_ip.addr.ip4.s_addr = group;
++		hil_ip.ifindex = ifindex;
++		ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
++#endif// CONFIG_TI_PACKET_PROCESSOR
+ 		return 0;
+ 	}
+ out:
+diff --git a/net/ipv4/ipmr.c b/net/ipv4/ipmr.c
+index bb11c3d..7dffcef 100644
+--- a/net/ipv4/ipmr.c
++++ b/net/ipv4/ipmr.c
+@@ -1178,13 +1168,6 @@ static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
+ 		c->mfc_flags |= MFC_STATIC;
+ 
+ 	list_add_rcu(&c->list, &mrt->mfc_cache_array[line]);
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-    {
+-        struct pp_mr_param pp_mr;
+-        pp_mr.cache = c;
+-        pp_mr.vif_table = &mrt->vif_table;
+-    }
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+ 	/*
+ 	 *	Check to see if we resolved a queued list. If so we
+ 	 *	need to send on the frames and tidy up.
+diff --git a/net/ipv6/mcast.c b/net/ipv6/mcast.c
+index df00345..5ffbcb2 100644
+--- a/net/ipv6/mcast.c
++++ b/net/ipv6/mcast.c
+@@ -46,7 +46,7 @@
+ #include <linux/slab.h>
+ #include <linux/pkt_sched.h>
+ #include <net/mld.h>
+-
++#include <linux/ti_hil.h>
+ #include <linux/netfilter.h>
+ #include <linux/netfilter_ipv6.h>
+ 
+@@ -212,7 +212,13 @@ int ipv6_sock_mc_join(struct sock *sk, int ifindex, const struct in6_addr *addr)
+ 	spin_unlock(&ipv6_sk_mc_lock);
+ 
+ 	rcu_read_unlock();
+-
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	struct hil_mr_ipaddr hil_ip;
++	hil_ip.type = HIL_MR_IPV6;
++	memcpy(&(hil_ip.addr.ip6), addr, sizeof(struct in6_addr));
++	hil_ip.ifindex = ifindex;
++	ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
++#endif// CONFIG_TI_PACKET_PROCESSOR
+ 	return 0;
+ }
+ 
+@@ -246,6 +252,13 @@ int ipv6_sock_mc_drop(struct sock *sk, int ifindex, const struct in6_addr *addr)
+ 			if (dev != NULL) {
+ 				struct inet6_dev *idev = __in6_dev_get(dev);
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++				struct hil_mr_ipaddr hil_ip;
++				hil_ip.type = HIL_MR_IPV6;
++				memcpy(&(hil_ip.addr.ip6), addr, sizeof(struct in6_addr));
++				hil_ip.ifindex = ifindex;
++				ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
++#endif// CONFIG_TI_PACKET_PROCESSOR
+ 				(void) ip6_mc_leave_src(sk, mc_lst, idev);
+ 				if (idev)
+ 					__ipv6_dev_mc_dec(idev, &mc_lst->addr);
+-- 
+2.10.1
+

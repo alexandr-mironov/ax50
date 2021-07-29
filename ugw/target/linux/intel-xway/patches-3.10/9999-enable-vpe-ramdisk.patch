@@ -1,0 +1,633 @@
+# HG changeset patch
+# Parent ca0f07eb92948d5e7cfdf83c056cb95447ff82bf
+
+diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -238,7 +238,7 @@ config LANTIQ
+ 	select IRQ_CPU
+         select IRQ_GIC if SOC_GRX500
+ 	select CEVT_R4K if !CSRC_GPTC
+-	select CSRC_R4K if !LTQ_VMB
++	select CSRC_R4K if !LTQ_VMB && !CSRC_GIC
+ 	select CSRC_GIC if SOC_GRX500 && !CSRC_GPTC
+ 	select CEVT_GIC if SOC_GRX500 && !CSRC_GPTC
+ 	select SYS_HAS_CPU_MIPS32_R1
+@@ -260,7 +260,6 @@ config LANTIQ
+ 	select CLKDEV_LOOKUP
+ 	select USE_OF
+ 	select PINCTRL
+-	select PINCTRL_LANTIQ
+ 	select CPU_SUPPORTS_CPUFREQ
+         select SYS_SUPPORTS_ZBOOT
+         select MIPS_CPU_SCACHE if SOC_GRX500
+@@ -2847,6 +2846,14 @@ source "drivers/cpufreq/Kconfig"
+ endmenu
+ endif
+ 
++config HW_VIRT_SEC_OS
++	prompt "Ramdisk for iap"
++	bool
++
++config HW_VIRT_PRI_OS
++	prompt "Hw virtualization host os"
++	bool
++
+ source "net/Kconfig"
+ 
+ source "drivers/Kconfig"
+diff --git a/arch/mips/include/asm/gic.h b/arch/mips/include/asm/gic.h
+--- a/arch/mips/include/asm/gic.h
++++ b/arch/mips/include/asm/gic.h
+@@ -323,10 +323,15 @@
+ /*
+  * Set the Mapping of Interrupt X to a VPE.
+  */
++#ifdef CONFIG_HW_VIRT_SEC_OS
++#define GIC_SH_MAP_TO_VPE_SMASK(intr, vpe) \
++ GICWRITE(GIC_REG_ADDR(SHARED, GIC_SH_MAP_TO_VPE_REG_OFF(intr, 1)), \
++    GIC_SH_MAP_TO_VPE_REG_BIT(1))
++#else
+ #define GIC_SH_MAP_TO_VPE_SMASK(intr, vpe) \
+ 	GICWRITE(GIC_REG_ADDR(SHARED, GIC_SH_MAP_TO_VPE_REG_OFF(intr, vpe)), \
+ 		 GIC_SH_MAP_TO_VPE_REG_BIT(vpe))
+-
++#endif
+ 
+ /*
+  * Interrupt Meta-data specification. The ipiflag helps
+diff --git a/arch/mips/include/asm/mach-lantiq/spaces.h b/arch/mips/include/asm/mach-lantiq/spaces.h
+--- a/arch/mips/include/asm/mach-lantiq/spaces.h
++++ b/arch/mips/include/asm/mach-lantiq/spaces.h
+@@ -74,15 +74,22 @@
+ 
+ #elif defined(CONFIG_EVA_1GB)
+ 
++#ifdef CONFIG_HW_VIRT_SEC_OS
++#define PAGE_OFFSET		_AC(0x6C000000, UL)
++#define PHYS_OFFSET		_AC(0x2C000000, UL)
++#define UNCAC_BASE		(_AC(0xac000000, UL))
++#define CAC_BASE		(_AC(0x6C000000, UL))
++#define IO_BASE			(_AC(0xa0000000, UL)) 
++#else
+ #define PAGE_OFFSET		_AC(0x60000000, UL)
+ #define PHYS_OFFSET		_AC(0x20000000, UL)
+-
++#define UNCAC_BASE		(_AC(0xa0000000, UL))
++#define CAC_BASE		(_AC(0x60000000, UL))
++#define IO_BASE			UNCAC_BASE /* Must be the same */
++#endif
+ /* No Highmem Support */
+ #define HIGHMEM_START		_AC(0xffff0000, UL)
+ 
+-#define UNCAC_BASE		(_AC(0xa0000000, UL))
+-#define CAC_BASE		(_AC(0x60000000, UL))
+-#define IO_BASE			UNCAC_BASE /* Must be the same */
+ 
+ #define KSEG
+ #define KUSEG			0x00000000
+diff --git a/arch/mips/kernel/irq-gic.c b/arch/mips/kernel/irq-gic.c
+--- a/arch/mips/kernel/irq-gic.c
++++ b/arch/mips/kernel/irq-gic.c
+@@ -325,8 +325,13 @@ static void gic_mask_local_irq(int irq)
+ 		spin_lock_irqsave(&gic_lock, flags);
+ 		for (i = 0; i < gic_vpes; i++) {
+ 			if (ltq_vpe_run_linux_os(i)) {
++#ifdef CONFIG_HW_VIRT_SEC_OS
++				GICWRITE(GIC_REG(VPE_LOCAL,
++					GIC_VPE_OTHER_ADDR), 1);
++#else
+ 				GICWRITE(GIC_REG(VPE_LOCAL,
+ 					GIC_VPE_OTHER_ADDR), i);
++#endif
+ 				GICWRITE(GIC_REG(VPE_OTHER,
+ 					GIC_VPE_RMASK), 1 << local_irq);
+ 			}
+@@ -347,8 +352,13 @@ static void gic_unmask_local_irq(int irq
+ 		spin_lock_irqsave(&gic_lock, flags);
+ 		for (i = 0; i < gic_vpes; i++) {
+ 			if (ltq_vpe_run_linux_os(i)) {
++#ifdef CONFIG_HW_VIRT_SEC_OS
++				GICWRITE(GIC_REG(VPE_LOCAL,
++					GIC_VPE_OTHER_ADDR), 1);
++#else
+ 				GICWRITE(GIC_REG(VPE_LOCAL,
+ 					GIC_VPE_OTHER_ADDR), i);
++#endif
+ 				GICWRITE(GIC_REG(VPE_OTHER,
+ 					GIC_VPE_SMASK), 1 << local_irq);
+ 			}
+@@ -633,7 +643,11 @@ static void __init gic_setup_local_intr(
+ 	/* Setup Intr to Pin mapping */
+ 	for (i = 0; i < nr_cpu_ids; i++) {
+ 		if (ltq_vpe_run_linux_os(i)) {
++#ifdef CONFIG_HW_VIRT_SEC_OS
++			GICWRITE(GIC_REG(VPE_LOCAL, GIC_VPE_OTHER_ADDR), 1);
++#else
+ 			GICWRITE(GIC_REG(VPE_LOCAL, GIC_VPE_OTHER_ADDR), i);
++#endif
+ 			if (pin & GIC_MAP_TO_NMI_MSK) {
+ 				GICWRITE(GIC_REG_ADDR(VPE_OTHER,
+ 					local_irq_to_map_off(local_irq)), pin);
+@@ -675,6 +689,14 @@ static void __init gic_basic_init(int nu
+ 			if (intrmap[i].flags == GIC_FLAG_VMB_IPI)
+ 				continue;
+ 		}
++#ifdef CONFIG_HW_VIRT_SEC_OS
++   if(!(i==76 || i==78 || i== 79 || i==54 || i==83 || i==57 || i==61))
++     continue;
++#elif defined(CONFIG_HW_VIRT_PRI_OS)
++   if((i==76 || i==78 || i== 79 || i==54 || i==83 || i==57 || i==61))
++     continue;
++#endif
++
+ 		GIC_SET_POLARITY(i, GIC_POL_POS);
+ 		GIC_SET_TRIGGER(i, GIC_TRIG_LEVEL);
+ 		GIC_CLR_INTR_MASK(i);
+@@ -700,12 +722,21 @@ static void __init gic_basic_init(int nu
+ 				intrmap[i].pin + pin_offset,
+ 				intrmap[i].flags);
+ 		else
++		{
++#ifdef CONFIG_HW_VIRT_SEC_OS
++   if(!(i==76 || i==78 || i== 79 || i==54 || i==83 || i==57 || i==61))
++     continue;
++#elif defined(CONFIG_HW_VIRT_PRI_OS)
++   if((i==76 || i==78 || i== 79 || i==54 || i==83 || i==57 || i==61))
++     continue;
++#endif
+ 			gic_setup_intr(i,
+ 				intrmap[i].cpunum,
+ 				intrmap[i].pin + pin_offset,
+ 				intrmap[i].polarity,
+ 				intrmap[i].trigtype,
+ 				intrmap[i].flags);
++		}
+ 	}
+ }
+ 
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -639,6 +639,10 @@ static void __init arch_mem_init(char **
+ #else
+ 	strlcpy(boot_command_line, arcs_cmdline, COMMAND_LINE_SIZE);
+ #endif
++#ifdef CONFIG_HW_VIRT_SEC_OS
++	strlcpy(boot_command_line, "root=/dev/ram rw console=ttyLTQ0,115200 panic=1 init=/etc/preinit nr_cpus=1 maxcpus=1 mem=64M@704M", COMMAND_LINE_SIZE);
++#endif
++
+ 	strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
+ 
+ 	*cmdline_p = command_line;
+diff --git a/arch/mips/kernel/smp-cmp.c b/arch/mips/kernel/smp-cmp.c
+--- a/arch/mips/kernel/smp-cmp.c
++++ b/arch/mips/kernel/smp-cmp.c
+@@ -334,7 +334,7 @@ void __init cmp_smp_setup(void)
+ 		cpu_set(0, mt_fpu_cpumask);
+ #endif /* CONFIG_MIPS_MT_FPAFF */
+ 
+-	for (i = 1; i < NR_CPUS; i++) {
++	for (i = 1; i < nr_cpu_ids; i++) {
+ 		if (amon_cpu_avail(i)) {
+ 			set_cpu_possible(i, true);
+ 			__cpu_number_map[i]	= ++ncpu;
+diff --git a/arch/mips/lantiq/Platform b/arch/mips/lantiq/Platform
+--- a/arch/mips/lantiq/Platform
++++ b/arch/mips/lantiq/Platform
+@@ -20,7 +20,11 @@ else
+ 	load-$(CONFIG_LANTIQ)		= 0xffffffff20020000
+ 	endif
+ 	ifdef CONFIG_EVA_1GB
+-	load-$(CONFIG_LANTIQ)		= 0xffffffff60020000
++		ifdef CONFIG_HW_VIRT_SEC_OS
++			load-$(CONFIG_LANTIQ)		= 0xffffffff6c020000
++		else
++			load-$(CONFIG_LANTIQ)		= 0xffffffff60020000
++		endif
+ 	endif
+ endif
+ cflags-$(CONFIG_SOC_TYPE_XWAY)	+= -I$(srctree)/arch/mips/include/asm/mach-lantiq/xway
+diff --git a/arch/mips/lantiq/grx500/Makefile b/arch/mips/lantiq/grx500/Makefile
+--- a/arch/mips/lantiq/grx500/Makefile
++++ b/arch/mips/lantiq/grx500/Makefile
+@@ -1,2 +1,6 @@
+-obj-y := prom.o reset.o sysctrl.o clk.o irq.o clk.o dma.o ltq_dma.o gptu.o mtlk_init.o
++ifdef CONFIG_HW_VIRT_SEC_OS
++obj-y := prom.o sysctrl.o irq.o clk.o 
++else
++obj-y := prom.o reset.o sysctrl.o irq.o clk.o dma.o ltq_dma.o gptu.o mtlk_init.o
++endif
+ obj-$(CONFIG_XRX500_PHY_FW) += xrx500_phy_fw.o
+diff --git a/arch/mips/lantiq/grx500/clk.c b/arch/mips/lantiq/grx500/clk.c
+--- a/arch/mips/lantiq/grx500/clk.c
++++ b/arch/mips/lantiq/grx500/clk.c
+@@ -426,7 +426,7 @@ static u32 ltq_grx500_clk_div_to_div(u32
+ 	}
+ 	return div;
+ }
+-
++#ifdef CONFIG_LTQ_SPDMON
+ void ltq_grx500_set_speed_grade(int spg)
+ {
+ 	if (spg != UNDEF)
+@@ -440,6 +440,7 @@ int ltq_grx500_get_speed_grade(void)
+ 	return ltq_speed_grade;
+ }
+ EXPORT_SYMBOL(ltq_grx500_get_speed_grade);
++#endif
+ 
+ int ltq_grx500_set_cpu_hz(unsigned long cpu_freq)
+ {
+diff --git a/arch/mips/lantiq/grx500/irq.c b/arch/mips/lantiq/grx500/irq.c
+--- a/arch/mips/lantiq/grx500/irq.c
++++ b/arch/mips/lantiq/grx500/irq.c
+@@ -57,8 +57,13 @@ unsigned long _gcmp_base;
+ #ifdef CONFIG_MIPS_MT_SMP
+ static int gic_resched_int_base = 56;
+ static int gic_call_int_base = 60;
++#ifdef CONFIG_HW_VIRT_SEC_OS
++#define GIC_RESCHED_INT(cpu)	(gic_resched_int_base + (1))
++#define GIC_CALL_INT(cpu)	(gic_call_int_base + (1))
++#else
+ #define GIC_RESCHED_INT(cpu)	(gic_resched_int_base + (cpu))
+ #define GIC_CALL_INT(cpu)	(gic_call_int_base + (cpu))
++#endif
+ #endif /* CONFIG_MIPS_MT_SMP */
+ 
+ /*
+diff --git a/arch/mips/lantiq/grx500/prom.c b/arch/mips/lantiq/grx500/prom.c
+--- a/arch/mips/lantiq/grx500/prom.c
++++ b/arch/mips/lantiq/grx500/prom.c
+@@ -331,8 +331,11 @@ int __init plat_of_setup(void)
+ 		sizeof(of_ids[1].compatible));
+ 	if (of_platform_populate(NULL, of_ids, NULL, NULL))
+ 		panic("failed to poplate DT");
++#ifndef CONFIG_HW_VIRT_SEC_OS
+ 	 /* make sure ithat the reset controller is setup early */
+ 	ltq_rst_init();
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/mips/lantiq/grx500/reset.c b/arch/mips/lantiq/grx500/reset.c
+--- a/arch/mips/lantiq/grx500/reset.c
++++ b/arch/mips/lantiq/grx500/reset.c
+@@ -374,7 +374,6 @@ static int __init mips_reboot_setup(void
+ 
+ 	gphy_rst_assert();
+ 	switch_reset_and_disable();
+-
+ 	printk("Resetting the switch and phy.\n");
+ 
+ 	return 0;
+diff --git a/arch/mips/lantiq/grx500/sysctrl.c b/arch/mips/lantiq/grx500/sysctrl.c
+--- a/arch/mips/lantiq/grx500/sysctrl.c
++++ b/arch/mips/lantiq/grx500/sysctrl.c
+@@ -232,7 +232,11 @@ static void clkdev_add_clkout0(int used)
+ /* bring up all register ranges that we need for basic system control */
+ void __init ltq_soc_init(void)
+ {
++#ifndef CONFIG_HW_VIRT_SEC_OS
+ 	struct resource res_cgu, res_ebu, res_hsnand;
++#else
++	struct resource res_cgu, res_ebu;
++#endif
+ 	struct device_node *np_cgu =
+ 		of_find_compatible_node(NULL, NULL, "lantiq,cgu-grx500");
+ 	struct device_node *np_ebu =
+@@ -261,7 +265,7 @@ void __init ltq_soc_init(void)
+ 
+ 	if (!ltq_cgu_membase || !ltq_ebu_membase)
+ 		panic("Failed to remap core resources");
+-
++#ifndef CONFIG_HW_VIRT_SEC_OS
+ 	if (of_address_to_resource(np_ebu, 1, &res_hsnand))
+ 			panic("Failed to get hsnand resource");
+ 
+@@ -282,8 +286,10 @@ void __init ltq_soc_init(void)
+ 	clkdev_add_pmu(NULL, "vcodec", CGU_ON, CGU_REG_MODULE_0, CGU_VCODEC);
+ 	clkdev_add_pmu("16e00000.dma", NULL, CGU_ON, CGU_REG_MODULE_0,
+ 		CGU_DMA);
++#ifndef CONFIG_HW_VIRT_PRI_OS
+ 	clkdev_add_pmu("1a300000.usb", NULL, CGU_ON, CGU_REG_MODULE_0,
+ 		CGU_USB0);
++#endif
+ 	clkdev_add_pmu("16900000.spi", NULL, CGU_ON, CGU_REG_MODULE_0,
+ 		CGU_SPI1);
+ 	clkdev_add_pmu("16800000.spi", NULL, CGU_ON, CGU_REG_MODULE_0,
+@@ -314,8 +320,11 @@ void __init ltq_soc_init(void)
+ 	clkdev_add_pmu("16500000.tdm", NULL, CGU_ON, CGU_REG_MODULE_0, CGU_TDM);
+ 	clkdev_add_pmu("1a000000.gswitch", NULL, 0, CGU_REG_MODULE_0,
+ 		CGU_SWITCH_R);
++#ifndef CONFIG_HW_VIRT_PRI_OS
+ 	clkdev_add_pmu("1a500000.usb", NULL, CGU_ON, CGU_REG_MODULE_0,
+ 		CGU_USB1);
++#endif
++
+ 	clkdev_add_pmu("1c000000.gswitch", NULL, 0, CGU_REG_MODULE_0,
+ 		CGU_SWITCH_L);
+ 
+@@ -325,7 +334,12 @@ void __init ltq_soc_init(void)
+ 		CGU_PCIE_CTRL1);
+ 	clkdev_add_pmu("18e00000.pcie", "ctl", 0, CGU_REG_MODULE_1,
+ 		CGU_PCIE_CTRL2);
+-
++#else
++	clkdev_add_pmu("1a300000.usb", NULL, CGU_ON, CGU_REG_MODULE_0,
++		CGU_USB0);
++	clkdev_add_pmu("1a500000.usb", NULL, CGU_ON, CGU_REG_MODULE_0,
++		CGU_USB1);
++#endif
+ 	clkdev_add_clkout0(CGU_ON);
+ 
+ 	clk = kzalloc(sizeof(struct clk), GFP_KERNEL);
+@@ -360,7 +374,7 @@ void __init ltq_soc_init(void)
+ 		clk->get_rate = ltq_grx500_fpi_hz;
+ 		clkdev_add(&clk->cl);
+ 	}
+-
++#ifndef CONFIG_HW_VIRT_SEC_OS
+ 	clk = kzalloc(sizeof(struct clk), GFP_KERNEL);
+ 	if (clk) {
+ 		clk->cl.dev_id = "ppe";
+@@ -371,6 +385,7 @@ void __init ltq_soc_init(void)
+ 		clk->get_rate = ltq_grx500_cbm_hz;
+ 		clkdev_add(&clk->cl);
+ 	}
++#endif
+ 
+ 	clk = kzalloc(sizeof(struct clk), GFP_KERNEL);
+ 	if (clk) {
+diff --git a/arch/mips/lantiq/lantiq-vmb.c b/arch/mips/lantiq/lantiq-vmb.c
+--- a/arch/mips/lantiq/lantiq-vmb.c
++++ b/arch/mips/lantiq/lantiq-vmb.c
+@@ -756,6 +756,13 @@ int8_t vmb_cpu_stop(int8_t cpu) {
+ 
+ 	/* TODO ???? */
+ 
++#ifdef CONFIG_HW_VIRT_PRI_OS
++	if (cpu == 1)
++	{
++		msleep(3000);
++		linux_cpu_ipi_update(1,0);
++	}
++#endif
+ 	printk ("[%s]:[%d] WAITING FOR RESPONSE vpet->v_wq.wakeup_vpe = %d !!!! \n ", __FUNCTION__, __LINE__, vpet->v_wq.wakeup_vpe);
+ 
+ 	/* Wait for timeout */
+@@ -860,22 +867,26 @@ int8_t vmb_cpu_start(int8_t cpu, CPU_lau
+ 	vmb_fw_msg_t->cpu_launch.mt_group = vpet->vpemt_grp;
+ 
+ 	spin_unlock(&vpet->vpe_lock);
+-
+-	/* Generate an IPI */
+-
+ #if 1
+-	gic_trigger(cpu);
++		gic_trigger(cpu);
+ 	//gic_send_ipi(VMB_BLW_IPI0 + cpu);
+ #else
+-	gic_send_ipi(VMB_BLW_IPI3);
++		gic_send_ipi(VMB_BLW_IPI3);
+ #endif
+-	mips_ihb();
++		mips_ihb();
+ 	
+ 	/* TODO ???? */
+ 
+ #ifdef CONFIG_MIPS_MALTA
+-	/* Linux bootup in MALTA*/
+-	amon_cpu_start(cpu, cpu_launch.start_addr, cpu_launch.sp, cpu_launch.gp, cpu_launch.a0);
++		/* Linux bootup in MALTA*/
++		amon_cpu_start(cpu, cpu_launch.start_addr, cpu_launch.sp, cpu_launch.gp, cpu_launch.a0);
++#endif
++#ifdef CONFIG_HW_VIRT_PRI_OS
++	if (cpu == 1)
++	{
++		msleep(3000);
++		linux_cpu_ipi_update(1,0);
++	}
+ #endif
+ 
+ 	printk ("[%s]:[%d] WAITING FOR RESPONSE vpet->v_wq.wakeup_vpe = %d !!!! \n ", __FUNCTION__, __LINE__, vpet->v_wq.wakeup_vpe);
+@@ -894,7 +905,6 @@ int8_t vmb_cpu_start(int8_t cpu, CPU_lau
+ 		ret = -VMB_ETIMEOUT;	
+ 		goto fin;	
+ 	}
+-
+ 	printk ("[%s]:[%d] OUTSIDE WAIT wakeup_vpe = %d vpet->fw_vmb.status = %d ACK = %d cpu = %d ret1 = %d vpet = %p, smp_processor_id() = %d , vpet->fw_vmb =%p !!!! \n ", __FUNCTION__, __LINE__, vpet->v_wq.wakeup_vpe, vpet->fw_vmb.status, FW_VMB_ACK , cpu, ret1 , vpet, smp_processor_id(), &vpet->fw_vmb);
+ 	
+ 	memset (vmb_fw_msg_t, 0 , sizeof(VMB_fw_msg_t));
+diff --git a/drivers/net/usb/usbnet.c b/drivers/net/usb/usbnet.c
+--- a/drivers/net/usb/usbnet.c
++++ b/drivers/net/usb/usbnet.c
+@@ -36,7 +36,10 @@
+ #define USBNET_PPA_DP
+ #endif
+ #define USBNET_NOOFFSET
++
++#ifndef CONFIG_HW_VIRT_SEC_OS 
+ #define USBNET_EXTRAOFFSET 32
++#endif
+ 
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -686,11 +689,15 @@ static int rx_submit (struct usbnet *dev
+ 		usb_free_urb(urb);
+ 		return -ENOLINK;
+ 	}
++#if !defined(USBNET_NOOFFSET)||defined(USBNET_EXTRAOFFSET)
+ 	if(size > 2048) {
+ 		skb = __netdev_alloc_skb(dev->net, size, flags);
+ 	} else {
+ 		skb = __netdev_alloc_skb(dev->net, 2048, flags);
+ 	}
++#else
++	skb = __netdev_alloc_skb_ip_align(dev->net,size,flags);
++#endif
+ 	if (!skb) {
+ 		netif_dbg(dev, rx_err, dev->net, "no rx skb\n");
+ 		usbnet_defer_kevent (dev, EVENT_RX_MEMORY);
+diff --git a/drivers/pinctrl/Kconfig b/drivers/pinctrl/Kconfig
+--- a/drivers/pinctrl/Kconfig
++++ b/drivers/pinctrl/Kconfig
+@@ -111,10 +111,13 @@ config PINCTRL_IMX6SL
+ 	  Say Y here to enable the imx6sl pinctrl driver
+ 
+ config PINCTRL_LANTIQ
+-	bool
++	bool "Lantiq pin ctrl support" 
++	default y
+ 	depends on LANTIQ
+ 	select PINMUX
+ 	select PINCONF
++	help
++		say Y here to enable pinctrl driver
+ 
+ config PINCTRL_FALCON
+ 	bool
+diff --git a/drivers/usb/dwc3/dwc3-ltq.c b/drivers/usb/dwc3/dwc3-ltq.c
+--- a/drivers/usb/dwc3/dwc3-ltq.c
++++ b/drivers/usb/dwc3/dwc3-ltq.c
+@@ -44,6 +44,68 @@ static u64 dwc3_otg_dmamask = 0xffffffff
+ #define LTQ_GRX500_CHIP_TOP_AXI_HOST_END BIT(10)
+ 
+ 
++#ifdef CONFIG_HW_VIRT_SEC_OS
++rcu_membase = 0xb6000000;
++void ltq_r_w32(uint32_t val, uint32_t reg_off)
++{
++	ltq_w32(val, rcu_membase + reg_off);
++}
++
++uint32_t ltq_r_r32(uint32_t reg_off)
++{
++	return ltq_r32(rcu_membase + reg_off);
++}
++
++void ltq_r_w32_mask(uint32_t clr, uint32_t set, uint32_t reg_off)
++{
++	unsigned long flags;
++	ltq_r_w32((ltq_r_r32(reg_off) & ~(clr)) | (set), reg_off);
++}
++
++int ltq_vbus_gpio_init(struct dwc3 *dwc)
++{
++	int err;
++	int vbus_pin = dwc->vbus_pin;
++
++	if (vbus_pin < 0)
++		return -EINVAL;
++	ltq_w32(1<<vbus_pin,0xb6c00040);	
++	ltq_w32(1<<vbus_pin,0xb6c00048);
++	return 0;	
++}
++
++void ltq_vbus_gpio_free(struct dwc3 *dwc)
++{
++	int vbus_pin = dwc->vbus_pin;
++	ltq_w32(1<<vbus_pin,0xb6c00044);	
++	ltq_w32(1<<vbus_pin,0xb6c0004c);	
++}
++int ltq_usb_release_phy_reset(int usb_id)
++{
++
++	if (usb_id > 1)
++		return -EINVAL;
++	if(usb_id == 0)
++		ltq_r_w32_mask(LTQ_GRX500_RCU_USB_PHY0, 0, 0x48);
++	else
++		ltq_r_w32_mask(LTQ_GRX500_RCU_USB_PHY1, 0, 0x48);
++	return 0;
++}
++int ltq_usb_set_axi_host_to_be(int usb_id)
++{
++
++	if (usb_id > 1)
++		return -EINVAL;
++	if (usb_id == 0)
++		ltq_r_w32_mask(LTQ_GRX500_CHIP_TOP_AXI_DEV_END,
++			LTQ_GRX500_CHIP_TOP_AXI_HOST_END,0x80018);
++	else
++		ltq_r_w32_mask(LTQ_GRX500_CHIP_TOP_AXI_DEV_END,
++			LTQ_GRX500_CHIP_TOP_AXI_HOST_END,0x80034);
++	return 0;
++}
++#else
++
+ /* -------------------------------------------------------------------------- */
+ 
+ int ltq_vbus_gpio_init(struct dwc3 *dwc)
+@@ -53,7 +115,6 @@ int ltq_vbus_gpio_init(struct dwc3 *dwc)
+ 
+ 	if (vbus_pin < 0)
+ 		return -EINVAL;
+-
+ 	err = gpio_is_valid(vbus_pin);
+ 	if (!err)
+ 	{
+@@ -69,14 +130,12 @@ int ltq_vbus_gpio_init(struct dwc3 *dwc)
+ 	}
+ 
+ 	gpio_direction_output(vbus_pin, 1);
+-
+ 	return 0;
+ }
+ 
+ void ltq_vbus_gpio_free(struct dwc3 *dwc)
+ {
+ 	int vbus_pin = dwc->vbus_pin;
+-
+ 	if (vbus_pin)
+ 		gpio_free(vbus_pin);
+ }
+@@ -113,7 +172,7 @@ int ltq_usb_set_axi_host_to_be(int usb_i
+ 
+ 	return 0;
+ }
+-
++#endif
+ 
+ void dwc3_ltq_set_mode(struct dwc3 *dwc, u32 mode)
+ {
+@@ -447,8 +506,11 @@ static int dwc3_ltq_probe(struct platfor
+ 	}
+ 	dwc = PTR_ALIGN(mem, DWC3_ALIGN_MASK + 1);
+ 	dwc->mem = mem;
+-
++#ifndef CONFIG_HW_VIRT_SEC_OS
+ 	vbus_pin = of_get_named_gpio(node, "vbus-gpio", 0);
++#else
++	vbus_pin = (usb_id==0)?7:2;
++#endif
+ 	if (vbus_pin < 0)
+ 	{
+ 		dev_err(dev, "Failed to get vbus-gpio, errno %d\n", vbus_pin);
+diff --git a/net/lantiq/Kconfig b/net/lantiq/Kconfig
+--- a/net/lantiq/Kconfig
++++ b/net/lantiq/Kconfig
+@@ -5,18 +5,20 @@
+ 
+ config LANTIQ_MCAST_HELPER
+ 	tristate "Multicast Helper support"
+-	default m
++	default n
+ 	help
+ 		mcast_helper support
+ 
+ config LANTIQ_MCAST_HELPER_ACL
+ 	tristate "Multicast Helper ACL support"
++	depends on LANTIQ_MCAST_HELPER
+         default y
+         help
+                 mcast_helper ACL support
+ 	
+ config LANTIQ_MCAST_HELPER_M2U
+ 	tristate "Multicast Helper multicast to unicast support"
++	depends on LANTIQ_MCAST_HELPER
+         default y
+         help
+                 mcast_helper update multicast to unicast support
+diff --git a/net/lantiq/mcast_helper.h b/net/lantiq/mcast_helper.h
+--- a/net/lantiq/mcast_helper.h
++++ b/net/lantiq/mcast_helper.h
+@@ -114,7 +114,7 @@ typedef struct _mcast_member_t{
+ 	struct list_head macaddr_list; /* Lan/wlan  Mac Address */
+ 	unsigned int macaddr_count; /** < Interface list count */
+ 
+-#ifdef CONFIG_LANTIQ_MCAST_HELPER_ACL
++#if defined(CONFIG_LANTIQ_MCAST_HELPER_ACL)||defined(CONFIG_LANTIQ_MCAST_HELPER_ACL_MODULE)
+ 	uint32_t aclBlocked; /* Flag indicates acl status blocked(1)/unblocked(0) */
+ #endif
+ 	struct list_head list;	/* mcast_member interface map  List  */
+@@ -135,7 +135,7 @@ typedef struct _mcast_rec_t{
+ typedef struct  _mcast_gimc_t{
+ 	unsigned int grpIdx;	/* Group Index */
+ 	MCAST_STREAM_t mc_stream; /* Five tuple info */
+-#ifdef CONFIG_LANTIQ_MCAST_HELPER_ACL
++#if defined(CONFIG_LANTIQ_MCAST_HELPER_ACL)||defined(CONFIG_LANTIQ_MCAST_HELPER_ACL_MODULE)
+ 	unsigned long long int oifbitmap; /* Output interface bitmap, 64 bit size for supporting 64 Interfaces */
+ 	unsigned int probeFlag; /* Probe Packet generate flag enable(1)/disable(0) */
+ #endif

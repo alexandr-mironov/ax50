@@ -1,0 +1,464 @@
+From 5c0ff782d2b6bfd56457a96d41a36d885d22f314 Mon Sep 17 00:00:00 2001
+From: Dmitry Sysoletin <d.sysoletin@inango-systems.com>
+Date: Tue, 22 Nov 2016 17:31:04 -0800
+Subject: [PATCH 526/639] net: Intermittent ATOM Crash observed during boot-up
+
+Sleeping function called from invalid context when the rpc mechanism,
+used by ncpu_exec, is trying to allocate buffer. The problem is caused
+by the fact the kmalloc is executed with controversial parameters: from
+one hand the caller has high priority and should be treated as a RT
+process, but on the other hand the caller can be blocked until
+completion of the kmalloc.
+
+GFP allocation parameter GFP_ATOMIC is passed to nfnetlink_send ()
+function.  nlmsg_notify () function has two function calls
+nlmsg_multicast() and  nlmsg_unicast ().The first function (nlmsg_multicast )
+have that allocation parameter pass in the function parameters, but in second (
+nlmsg_unicast ) don't have it. nlmsg_unicast () don't pass GFP allocation
+parameters in nlmsg_unicast. Second parameter in netlink_trim(skb, gfp_any())
+has GFP allocation parameters which is GFP_KERNEL passed here. But in the
+begin of chain, hardcoded to GFP_ATOMIC.
+
+Solution is to add another parameter GFP flags in the nlmsg_unicast()
+function call, like in  nlmsg_multicastcall ().
+
+ATOMOSSW-384
+
+Change-Id: Iabc2bde296dd51fae9c1629b0263769623fa337b
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ crypto/crypto_user.c                 |  2 +-
+ include/linux/netlink.h              |  3 ++-
+ include/net/genetlink.h              |  2 +-
+ include/net/netlink.h                |  5 +++--
+ kernel/audit.c                       |  6 +++---
+ net/core/rtnetlink.c                 |  4 ++--
+ net/ipv4/fib_frontend.c              |  2 +-
+ net/ipv4/inet_diag.c                 |  2 +-
+ net/ipv4/udp_diag.c                  |  2 +-
+ net/netfilter/ipset/ip_set_core.c    | 12 ++++++++----
+ net/netfilter/nf_conntrack_netlink.c |  9 ++++++---
+ net/netfilter/nfnetlink.c            |  2 +-
+ net/netfilter/nfnetlink_acct.c       |  2 +-
+ net/netfilter/nfnetlink_cthelper.c   |  2 +-
+ net/netfilter/nfnetlink_cttimeout.c  |  2 +-
+ net/netlink/af_netlink.c             | 14 ++++++++------
+ net/unix/diag.c                      |  2 +-
+ net/xfrm/xfrm_user.c                 | 14 ++++++++------
+ 18 files changed, 50 insertions(+), 37 deletions(-)
+
+diff --git a/crypto/crypto_user.c b/crypto/crypto_user.c
+index a3dfc0d..917c966 100644
+--- a/crypto/crypto_user.c
++++ b/crypto/crypto_user.c
+@@ -221,7 +221,7 @@ static int crypto_report(struct sk_buff *in_skb, struct nlmsghdr *in_nlh,
+ 	if (err)
+ 		return err;
+ 
+-	return nlmsg_unicast(crypto_nlsk, skb, NETLINK_CB(in_skb).portid);
++	return nlmsg_unicast(crypto_nlsk, skb, NETLINK_CB(in_skb).portid, 0);
+ }
+ 
+ static int crypto_dump_report(struct sk_buff *skb, struct netlink_callback *cb)
+diff --git a/include/linux/netlink.h b/include/linux/netlink.h
+index 8b50a62..ef2488d 100644
+--- a/include/linux/netlink.h
++++ b/include/linux/netlink.h
+@@ -68,7 +68,8 @@ extern void netlink_ack(struct sk_buff *in_skb, struct nlmsghdr *nlh, int err);
+ extern int netlink_has_listeners(struct sock *sk, unsigned int group);
+ extern struct sk_buff *netlink_alloc_skb(struct sock *ssk, unsigned int size,
+ 					 u32 dst_portid, gfp_t gfp_mask);
+-extern int netlink_unicast(struct sock *ssk, struct sk_buff *skb, __u32 portid, int nonblock);
++extern int netlink_unicast(struct sock *ssk, struct sk_buff *skb, __u32 portid,
++					int nonblock, gfp_t allocation);
+ extern int netlink_broadcast(struct sock *ssk, struct sk_buff *skb, __u32 portid,
+ 			     __u32 group, gfp_t allocation);
+ extern int netlink_broadcast_filtered(struct sock *ssk, struct sk_buff *skb,
+diff --git a/include/net/genetlink.h b/include/net/genetlink.h
+index 8e0b6c8..cffc7c9 100644
+--- a/include/net/genetlink.h
++++ b/include/net/genetlink.h
+@@ -271,7 +271,7 @@ int genlmsg_multicast_allns(struct sk_buff *skb, u32 portid,
+  */
+ static inline int genlmsg_unicast(struct net *net, struct sk_buff *skb, u32 portid)
+ {
+-	return nlmsg_unicast(net->genl_sock, skb, portid);
++	return nlmsg_unicast(net->genl_sock, skb, portid, 0);
+ }
+ 
+ /**
+diff --git a/include/net/netlink.h b/include/net/netlink.h
+index 9690b0f..607cb20 100644
+--- a/include/net/netlink.h
++++ b/include/net/netlink.h
+@@ -587,11 +587,12 @@ static inline int nlmsg_multicast(struct sock *sk, struct sk_buff *skb,
+  * @skb: netlink message as socket buffer
+  * @portid: netlink portid of the destination socket
+  */
+-static inline int nlmsg_unicast(struct sock *sk, struct sk_buff *skb, u32 portid)
++static inline int nlmsg_unicast(struct sock *sk, struct sk_buff *skb,
++					u32 portid, gfp_t allocation)
+ {
+ 	int err;
+ 
+-	err = netlink_unicast(sk, skb, portid, MSG_DONTWAIT);
++	err = netlink_unicast(sk, skb, portid, MSG_DONTWAIT, allocation);
+ 	if (err > 0)
+ 		err = 0;
+ 
+diff --git a/kernel/audit.c b/kernel/audit.c
+index 4059e94..95e582e 100644
+--- a/kernel/audit.c
++++ b/kernel/audit.c
+@@ -386,7 +386,7 @@ static void kauditd_send_skb(struct sk_buff *skb)
+ 	int err;
+ 	/* take a reference in case we can't send it and we want to hold it */
+ 	skb_get(skb);
+-	err = netlink_unicast(audit_sock, skb, audit_nlk_portid, 0);
++	err = netlink_unicast(audit_sock, skb, audit_nlk_portid, 0, 0);
+ 	if (err < 0) {
+ 		BUG_ON(err != -ECONNREFUSED); /* Shouldn't happen */
+ 		printk(KERN_ERR "audit: *NO* daemon at audit_pid=%d\n", audit_pid);
+@@ -481,7 +481,7 @@ int audit_send_list(void *_dest)
+ 	mutex_unlock(&audit_cmd_mutex);
+ 
+ 	while ((skb = __skb_dequeue(&dest->q)) != NULL)
+-		netlink_unicast(audit_sock, skb, pid, 0);
++		netlink_unicast(audit_sock, skb, pid, 0, 0);
+ 
+ 	kfree(dest);
+ 
+@@ -522,7 +522,7 @@ static int audit_send_reply_thread(void *arg)
+ 
+ 	/* Ignore failure. It'll only happen if the sender goes away,
+ 	   because our timeout is set to infinite. */
+-	netlink_unicast(audit_sock, reply->skb, reply->pid, 0);
++	netlink_unicast(audit_sock, reply->skb, reply->pid, 0, 0);
+ 	kfree(reply);
+ 	return 0;
+ }
+diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
+index fd3a16e..424a586 100644
+--- a/net/core/rtnetlink.c
++++ b/net/core/rtnetlink.c
+@@ -558,7 +558,7 @@ int rtnetlink_send(struct sk_buff *skb, struct net *net, u32 pid, unsigned int g
+ 		atomic_inc(&skb->users);
+ 	netlink_broadcast(rtnl, skb, pid, group, GFP_KERNEL);
+ 	if (echo)
+-		err = netlink_unicast(rtnl, skb, pid, MSG_DONTWAIT);
++		err = netlink_unicast(rtnl, skb, pid, MSG_DONTWAIT, 0);
+ 	return err;
+ }
+ 
+@@ -566,7 +566,7 @@ int rtnl_unicast(struct sk_buff *skb, struct net *net, u32 pid)
+ {
+ 	struct sock *rtnl = net->rtnl;
+ 
+-	return nlmsg_unicast(rtnl, skb, pid);
++	return nlmsg_unicast(rtnl, skb, pid, 0);
+ }
+ EXPORT_SYMBOL(rtnl_unicast);
+ 
+diff --git a/net/ipv4/fib_frontend.c b/net/ipv4/fib_frontend.c
+index 25a0946..64135aa 100644
+--- a/net/ipv4/fib_frontend.c
++++ b/net/ipv4/fib_frontend.c
+@@ -978,7 +978,7 @@ static void nl_fib_input(struct sk_buff *skb)
+ 	portid = NETLINK_CB(skb).portid;      /* netlink portid */
+ 	NETLINK_CB(skb).portid = 0;        /* from kernel */
+ 	NETLINK_CB(skb).dst_group = 0;  /* unicast */
+-	netlink_unicast(net->ipv4.fibnl, skb, portid, MSG_DONTWAIT);
++	netlink_unicast(net->ipv4.fibnl, skb, portid, MSG_DONTWAIT, 0);
+ }
+ 
+ static int __net_init nl_fib_lookup_init(struct net *net)
+diff --git a/net/ipv4/inet_diag.c b/net/ipv4/inet_diag.c
+index 14a1ed6..a4539a1 100644
+--- a/net/ipv4/inet_diag.c
++++ b/net/ipv4/inet_diag.c
+@@ -356,7 +356,7 @@ int inet_diag_dump_one_icsk(struct inet_hashinfo *hashinfo, struct sk_buff *in_s
+ 		goto out;
+ 	}
+ 	err = netlink_unicast(net->diag_nlsk, rep, NETLINK_CB(in_skb).portid,
+-			      MSG_DONTWAIT);
++			      MSG_DONTWAIT, 0);
+ 	if (err > 0)
+ 		err = 0;
+ 
+diff --git a/net/ipv4/udp_diag.c b/net/ipv4/udp_diag.c
+index 4a000f1..c74f8ed 100644
+--- a/net/ipv4/udp_diag.c
++++ b/net/ipv4/udp_diag.c
+@@ -80,7 +80,7 @@ static int udp_dump_one(struct udp_table *tbl, struct sk_buff *in_skb,
+ 		goto out;
+ 	}
+ 	err = netlink_unicast(net->diag_nlsk, rep, NETLINK_CB(in_skb).portid,
+-			      MSG_DONTWAIT);
++			      MSG_DONTWAIT, 0);
+ 	if (err > 0)
+ 		err = 0;
+ out:
+diff --git a/net/netfilter/ipset/ip_set_core.c b/net/netfilter/ipset/ip_set_core.c
+index 4fb68dc..6928e33 100644
+--- a/net/netfilter/ipset/ip_set_core.c
++++ b/net/netfilter/ipset/ip_set_core.c
+@@ -1343,7 +1343,8 @@ call_ad(struct sock *ctnl, struct sk_buff *skb, struct ip_set *set,
+ 
+ 		*errline = lineno;
+ 
+-		netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++		netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 		/* Signal netlink not to send its ACK/errmsg.  */
+ 		return -EINTR;
+ 	}
+@@ -1528,7 +1529,8 @@ ip_set_header(struct sock *ctnl, struct sk_buff *skb,
+ 		goto nla_put_failure;
+ 	nlmsg_end(skb2, nlh2);
+ 
+-	ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++	ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -1589,7 +1591,8 @@ ip_set_type(struct sock *ctnl, struct sk_buff *skb,
+ 	nlmsg_end(skb2, nlh2);
+ 
+ 	pr_debug("Send TYPE, nlmsg_len: %u\n", nlh2->nlmsg_len);
+-	ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++	ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -1633,7 +1636,8 @@ ip_set_protocol(struct sock *ctnl, struct sk_buff *skb,
+ 		goto nla_put_failure;
+ 	nlmsg_end(skb2, nlh2);
+ 
+-	ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++	ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 	if (ret < 0)
+ 		return ret;
+ 
+diff --git a/net/netfilter/nf_conntrack_netlink.c b/net/netfilter/nf_conntrack_netlink.c
+index db744dd..635c429 100644
+--- a/net/netfilter/nf_conntrack_netlink.c
++++ b/net/netfilter/nf_conntrack_netlink.c
+@@ -1116,7 +1116,8 @@ ctnetlink_get_conntrack(struct sock *ctnl, struct sk_buff *skb,
+ 	if (err <= 0)
+ 		goto free;
+ 
+-	err = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++	err = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 	if (err < 0)
+ 		goto out;
+ 
+@@ -1966,7 +1967,8 @@ ctnetlink_stat_ct(struct sock *ctnl, struct sk_buff *skb,
+ 	if (err <= 0)
+ 		goto free;
+ 
+-	err = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++	err = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 	if (err < 0)
+ 		goto out;
+ 
+@@ -2638,7 +2640,8 @@ ctnetlink_get_expect(struct sock *ctnl, struct sk_buff *skb,
+ 	if (err <= 0)
+ 		goto free;
+ 
+-	err = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid, MSG_DONTWAIT);
++	err = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
++					MSG_DONTWAIT, 0);
+ 	if (err < 0)
+ 		goto out;
+ 
+diff --git a/net/netfilter/nfnetlink.c b/net/netfilter/nfnetlink.c
+index 0a03662..44bca3c 100644
+--- a/net/netfilter/nfnetlink.c
++++ b/net/netfilter/nfnetlink.c
+@@ -135,7 +135,7 @@ EXPORT_SYMBOL_GPL(nfnetlink_set_err);
+ int nfnetlink_unicast(struct sk_buff *skb, struct net *net, u32 portid,
+ 		      int flags)
+ {
+-	return netlink_unicast(net->nfnl, skb, portid, flags);
++	return netlink_unicast(net->nfnl, skb, portid, flags, 0);
+ }
+ EXPORT_SYMBOL_GPL(nfnetlink_unicast);
+ 
+diff --git a/net/netfilter/nfnetlink_acct.c b/net/netfilter/nfnetlink_acct.c
+index c7b6d46..9570b52 100644
+--- a/net/netfilter/nfnetlink_acct.c
++++ b/net/netfilter/nfnetlink_acct.c
+@@ -209,7 +209,7 @@ nfnl_acct_get(struct sock *nfnl, struct sk_buff *skb,
+ 			break;
+ 		}
+ 		ret = netlink_unicast(nfnl, skb2, NETLINK_CB(skb).portid,
+-					MSG_DONTWAIT);
++					MSG_DONTWAIT, 0);
+ 		if (ret > 0)
+ 			ret = 0;
+ 
+diff --git a/net/netfilter/nfnetlink_cthelper.c b/net/netfilter/nfnetlink_cthelper.c
+index 54330fb..3f11b5e 100644
+--- a/net/netfilter/nfnetlink_cthelper.c
++++ b/net/netfilter/nfnetlink_cthelper.c
+@@ -559,7 +559,7 @@ nfnl_cthelper_get(struct sock *nfnl, struct sk_buff *skb,
+ 			}
+ 
+ 			ret = netlink_unicast(nfnl, skb2, NETLINK_CB(skb).portid,
+-						MSG_DONTWAIT);
++						MSG_DONTWAIT, 0);
+ 			if (ret > 0)
+ 				ret = 0;
+ 
+diff --git a/net/netfilter/nfnetlink_cttimeout.c b/net/netfilter/nfnetlink_cttimeout.c
+index 5058049..2713cc9 100644
+--- a/net/netfilter/nfnetlink_cttimeout.c
++++ b/net/netfilter/nfnetlink_cttimeout.c
+@@ -283,7 +283,7 @@ cttimeout_get_timeout(struct sock *ctnl, struct sk_buff *skb,
+ 			break;
+ 		}
+ 		ret = netlink_unicast(ctnl, skb2, NETLINK_CB(skb).portid,
+-					MSG_DONTWAIT);
++					MSG_DONTWAIT, 0);
+ 		if (ret > 0)
+ 			ret = 0;
+ 
+diff --git a/net/netlink/af_netlink.c b/net/netlink/af_netlink.c
+index 1080585..1fd4ae3 100644
+--- a/net/netlink/af_netlink.c
++++ b/net/netlink/af_netlink.c
+@@ -776,7 +776,7 @@ static int netlink_mmap_sendmsg(struct sock *sk, struct msghdr *msg,
+ 					  GFP_KERNEL);
+ 		}
+ 		err = netlink_unicast(sk, skb, dst_portid,
+-				      msg->msg_flags & MSG_DONTWAIT);
++				msg->msg_flags & MSG_DONTWAIT, 0);
+ 		if (err < 0)
+ 			goto out;
+ 		len += err;
+@@ -1791,13 +1791,13 @@ static int netlink_unicast_kernel(struct sock *sk, struct sk_buff *skb,
+ }
+ 
+ int netlink_unicast(struct sock *ssk, struct sk_buff *skb,
+-		    u32 portid, int nonblock)
++		    u32 portid, int nonblock, gfp_t allocation)
+ {
+ 	struct sock *sk;
+ 	int err;
+ 	long timeo;
+ 
+-	skb = netlink_trim(skb, gfp_any());
++	skb = netlink_trim(skb, allocation ? allocation : gfp_any());
+ 
+ 	timeo = sock_sndtimeo(ssk, nonblock);
+ retry:
+@@ -2366,7 +2366,8 @@ static int netlink_sendmsg(struct kiocb *kiocb, struct socket *sock,
+ 		atomic_inc(&skb->users);
+ 		netlink_broadcast(sk, skb, dst_portid, dst_group, GFP_KERNEL);
+ 	}
+-	err = netlink_unicast(sk, skb, dst_portid, msg->msg_flags&MSG_DONTWAIT);
++	err = netlink_unicast(sk, skb, dst_portid,
++			msg->msg_flags&MSG_DONTWAIT, 0);
+ 
+ out:
+ 	scm_destroy(siocb->scm);
+@@ -2823,7 +2824,8 @@ void netlink_ack(struct sk_buff *in_skb, struct nlmsghdr *nlh, int err)
+ 	errmsg = nlmsg_data(rep);
+ 	errmsg->error = err;
+ 	memcpy(&errmsg->msg, nlh, err ? nlh->nlmsg_len : sizeof(*nlh));
+-	netlink_unicast(in_skb->sk, skb, NETLINK_CB(in_skb).portid, MSG_DONTWAIT);
++	netlink_unicast(in_skb->sk, skb, NETLINK_CB(in_skb).portid,
++					MSG_DONTWAIT, 0);
+ }
+ EXPORT_SYMBOL(netlink_ack);
+ 
+@@ -2899,7 +2901,7 @@ int nlmsg_notify(struct sock *sk, struct sk_buff *skb, u32 portid,
+ 	if (report) {
+ 		int err2;
+ 
+-		err2 = nlmsg_unicast(sk, skb, portid);
++		err2 = nlmsg_unicast(sk, skb, portid, flags);
+ 		if (!err || err == -ESRCH)
+ 			err = err2;
+ 	}
+diff --git a/net/unix/diag.c b/net/unix/diag.c
+index 27dd3dc..1aa9609 100644
+--- a/net/unix/diag.c
++++ b/net/unix/diag.c
+@@ -279,7 +279,7 @@ again:
+ 		goto again;
+ 	}
+ 	err = netlink_unicast(net->diag_nlsk, rep, NETLINK_CB(in_skb).portid,
+-			      MSG_DONTWAIT);
++			      MSG_DONTWAIT, 0);
+ 	if (err > 0)
+ 		err = 0;
+ out:
+diff --git a/net/xfrm/xfrm_user.c b/net/xfrm/xfrm_user.c
+index 32a2dd3..0f38ed2 100644
+--- a/net/xfrm/xfrm_user.c
++++ b/net/xfrm/xfrm_user.c
+@@ -1004,7 +1004,7 @@ static int xfrm_get_spdinfo(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 	if (build_spdinfo(r_skb, net, sportid, seq, *flags) < 0)
+ 		BUG();
+ 
+-	return nlmsg_unicast(net->xfrm.nlsk, r_skb, sportid);
++	return nlmsg_unicast(net->xfrm.nlsk, r_skb, sportid, 0);
+ }
+ 
+ static inline size_t xfrm_sadinfo_msgsize(void)
+@@ -1061,7 +1061,7 @@ static int xfrm_get_sadinfo(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 	if (build_sadinfo(r_skb, net, sportid, seq, *flags) < 0)
+ 		BUG();
+ 
+-	return nlmsg_unicast(net->xfrm.nlsk, r_skb, sportid);
++	return nlmsg_unicast(net->xfrm.nlsk, r_skb, sportid, 0);
+ }
+ 
+ static int xfrm_get_sa(struct sk_buff *skb, struct nlmsghdr *nlh,
+@@ -1081,7 +1081,8 @@ static int xfrm_get_sa(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 	if (IS_ERR(resp_skb)) {
+ 		err = PTR_ERR(resp_skb);
+ 	} else {
+-		err = nlmsg_unicast(net->xfrm.nlsk, resp_skb, NETLINK_CB(skb).portid);
++		err = nlmsg_unicast(net->xfrm.nlsk, resp_skb,
++				NETLINK_CB(skb).portid, 0);
+ 	}
+ 	xfrm_state_put(x);
+ out_noput:
+@@ -1162,7 +1163,8 @@ static int xfrm_alloc_userspi(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 		goto out;
+ 	}
+ 
+-	err = nlmsg_unicast(net->xfrm.nlsk, resp_skb, NETLINK_CB(skb).portid);
++	err = nlmsg_unicast(net->xfrm.nlsk, resp_skb,
++			NETLINK_CB(skb).portid, 0);
+ 
+ out:
+ 	xfrm_state_put(x);
+@@ -1673,7 +1675,7 @@ static int xfrm_get_policy(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 			err = PTR_ERR(resp_skb);
+ 		} else {
+ 			err = nlmsg_unicast(net->xfrm.nlsk, resp_skb,
+-					    NETLINK_CB(skb).portid);
++					    NETLINK_CB(skb).portid, 0);
+ 		}
+ 	} else {
+ 		kuid_t loginuid = audit_get_loginuid(current);
+@@ -1835,7 +1837,7 @@ static int xfrm_get_ae(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 
+ 	if (build_aevent(r_skb, x, &c) < 0)
+ 		BUG();
+-	err = nlmsg_unicast(net->xfrm.nlsk, r_skb, NETLINK_CB(skb).portid);
++	err = nlmsg_unicast(net->xfrm.nlsk, r_skb, NETLINK_CB(skb).portid, 0);
+ 	spin_unlock_bh(&x->lock);
+ 	xfrm_state_put(x);
+ 	return err;
+-- 
+2.10.1
+

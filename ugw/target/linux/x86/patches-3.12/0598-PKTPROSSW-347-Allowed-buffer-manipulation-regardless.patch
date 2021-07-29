@@ -1,0 +1,225 @@
+From 612d6275bb8184a85925204a81cab10bc82172d8 Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Mon, 13 Feb 2017 18:36:58 +0200
+Subject: [PATCH 598/639] PKTPROSSW-347: Allowed buffer manipulation regardless
+ of sanity tool
+
+---
+ arch/x86/NetIP_SubSystem/netip_mem_util.c    | 16 ----------------
+ drivers/mrpc/cppi_client.c                   | 13 ++++++-------
+ include/linux/avalanche/generic/pal_cppi41.h | 10 +++++++++-
+ include/linux/netip_mem_util.h               |  2 --
+ 4 files changed, 15 insertions(+), 26 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_mem_util.c b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+index 98158ff..838680b 100644
+--- a/arch/x86/NetIP_SubSystem/netip_mem_util.c
++++ b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+@@ -99,7 +99,6 @@ struct netip_mem_rgion_device {
+     char* name;
+ };
+ 
+-#ifdef CONFIG_PP_SANITY_TESTS
+ struct netip_mem_rgion_cppi_bPool {
+     void *virtual_base_address;
+     bool ioremapped;
+@@ -123,7 +122,6 @@ static struct netip_mem_rgion_cppi_bPool mem_util_cppi_bPool[] =
+     {NULL, false, 0, 0, "PAL_CPPI_PP_PACKET_RAM_2KB_BUFFER_POOL"},
+     {NULL, false, 0, 0, "PAL_CPPI_PP_VOICE_DSP_BUFFER_POOL"},
+ };
+-#endif
+ 
+ static struct netip_mem_rgion_device mem_util_dev[] =
+ {
+@@ -149,9 +147,7 @@ static struct netip_mem_rgion_device mem_util_dev[] =
+ };
+ 
+ /**************** Local functions Declarations*****************/
+-#ifdef CONFIG_PP_SANITY_TESTS
+ static void _netip_memmap_cleanup_bPools(void);
+-#endif
+ /*************************************************************/
+ 
+ int netip_memmap_init(void)
+@@ -269,7 +265,6 @@ int netip_memmap_init(void)
+ }
+ EXPORT_SYMBOL(netip_memmap_init);
+ 
+-#ifdef CONFIG_PP_SANITY_TESTS
+ int netip_memmap_cppi_bPool(unsigned int pool)
+ {
+     int ret = 0, hw_mbox_ret = 0;
+@@ -344,7 +339,6 @@ int netip_memmap_cppi_bPool(unsigned int pool)
+     return ret;
+ }
+ EXPORT_SYMBOL(netip_memmap_cppi_bPool);
+-#endif
+ 
+ void netip_memmap_cleanup(void)
+ {
+@@ -364,20 +358,16 @@ void netip_memmap_cleanup(void)
+             mem_util_dev[i].virtual_base_address = NULL;
+         }
+     }
+-#ifdef CONFIG_PP_SANITY_TESTS
+     _netip_memmap_cleanup_bPools();
+-#endif
+ 
+ }
+ EXPORT_SYMBOL(netip_memmap_cleanup);
+ 
+-#ifdef CONFIG_PP_SANITY_TESTS
+ void netip_memmap_cleanup_bPools(void)
+ {
+     _netip_memmap_cleanup_bPools();
+ }
+ EXPORT_SYMBOL(netip_memmap_cleanup_bPools);
+-#endif
+ 
+ void *netip_mmio_to_virtual(unsigned long netip_phys_addr)
+ {
+@@ -394,7 +384,6 @@ void *netip_mmio_to_virtual(unsigned long netip_phys_addr)
+ 			offset);
+ 		return (void *)(npcpu_descriptor_virtual_mem_base + offset);
+ 	}
+-#ifdef CONFIG_PP_SANITY_TESTS
+     for (i=0; i < ARRAY_SIZE(mem_util_cppi_bPool); i++)
+     {
+         if (!mem_util_cppi_bPool[i].ioremapped)
+@@ -414,7 +403,6 @@ void *netip_mmio_to_virtual(unsigned long netip_phys_addr)
+         return (mem_util_cppi_bPool[i].virtual_base_address + offset);
+ 
+     }
+-#endif
+ 	for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+ 
+ 		if (!mem_util_dev[i].ioremapped)
+@@ -454,7 +442,6 @@ void *netip_mmio_to_physical(void* virt_addr)
+ 				offset);
+         return (void*)(npcpu_descriptor_physical_mem_base + offset);
+     }
+-#ifdef CONFIG_PP_SANITY_TESTS
+     for (i=0; i < ARRAY_SIZE(mem_util_cppi_bPool); i++)
+     {
+         if (!mem_util_cppi_bPool[i].ioremapped)
+@@ -470,7 +457,6 @@ void *netip_mmio_to_physical(void* virt_addr)
+         pr_debug("Virtual to physical (buffer pool called virtual address=%p phy_addr=%p  offset=%x\n", virt_addr, (mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base + offset), offset);
+         return (mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base + offset);
+     }
+-#endif
+     for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+ 
+         if (!mem_util_dev[i].ioremapped)
+@@ -498,7 +484,6 @@ void cache_flush_buffer(void *bufptr, int size)
+ }
+ EXPORT_SYMBOL(cache_flush_buffer);
+ 
+-#ifdef CONFIG_PP_SANITY_TESTS
+ /* Un-map regions which were mapped for CPPI buffer pools*/
+ static void _netip_memmap_cleanup_bPools(void)
+ {
+@@ -516,4 +501,3 @@ static void _netip_memmap_cleanup_bPools(void)
+         }
+     }
+ }
+-#endif
+diff --git a/drivers/mrpc/cppi_client.c b/drivers/mrpc/cppi_client.c
+index 72cbef7..445cb2b 100644
+--- a/drivers/mrpc/cppi_client.c
++++ b/drivers/mrpc/cppi_client.c
+@@ -51,9 +51,7 @@
+ #include <linux/ethtool.h>
+ #include <linux/mrpc.h>
+ #include <linux/avalanche/generic/pal_cppi41.h>
+-#ifdef CONFIG_PP_SANITY_TESTS
+-#include <linux/netip_mem_util.h> // Memory mapping utility is needed when sanity module is enabled
+-#endif
++#include <linux/netip_mem_util.h> // Memory mapping utility is needed for CPPI buffer pools mapping
+ 
+ #ifdef DEBUG
+ #define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
+@@ -82,13 +80,13 @@ struct cppi_sanity_dma_args {
+     Uint32 freeBMgr;
+     Uint32 freeBpool;
+ };
++#endif
+ 
+ struct cppi_pp_buf_args {
+     Uint32 bMgr;
+     Uint32 bPool;
+     Uint32 bufAddr;
+ };
+-#endif
+ 
+ enum {
+     CPPI_INIT_PP_WIFI_BUFFER_POOL = 0,
+@@ -150,6 +148,7 @@ Int32 avalanche_cppi_init_pp_sanity_dma_channels(PAL_Handle palHandle, Cppi4Queu
+     return cppi_mrpc_call(CPPI_CONFIGURE_SANITY_DMA_CHANNELS, &args, sizeof(args));
+ }
+ EXPORT_SYMBOL(avalanche_cppi_init_pp_sanity_dma_channels);
++#endif
+ 
+ /*
+  * PAL_cppi4BufPopBuf
+@@ -168,12 +167,12 @@ Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool)
+ 
+     args.bMgr = htonl(pool.bMgr);
+     args.bPool = htonl(pool.bPool);
+-    args.bufAddr = NULL;
++    args.bufAddr = 0;
+ 
+-    return cppi_mrpc_call(CPPI_POP_BUFFER_PP_REGION, &args, sizeof(args));
++    return (void*)cppi_mrpc_call(CPPI_POP_BUFFER_PP_REGION, &args, sizeof(args));
+ }
+ EXPORT_SYMBOL(PAL_cppi4BufPopBuf);
+-#endif
++
+ /* sysfs for future use */
+ static ssize_t status_show(struct device *dev,
+                            struct device_attribute *attr, char *buf)
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+index dd80d7f..ae0602a 100644
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -236,6 +236,14 @@ typedef struct
+   Uint32 BufPtr;                // Pointer to the physical data buffer
+ } Cppi4EmbdBuf;
+ 
++typedef struct {
++    Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
++    Uint32 tagInfo;      /**< Source tag (31:16), Dest Tag (15:0) (valid only in Host PD)*/
++    Uint32 pktInfo;      /**< pkt err state, type, proto flags, return info, desc location */
++    Cppi4EmbdBuf Buf;
++    Uint32 EPI[2];       /**< Extended Packet Information (from SR) */
++} Cppi4EmbdDescPp;
++
+ typedef struct
+ {
+     Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
+@@ -676,7 +684,7 @@ PAL_Cppi4BD *PAL_cppi4QueuePop(PAL_Cppi4QueueHnd hnd);
+  */
+ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *entryCount);
+ 
+-#if (defined(CONFIG_PP_SANITY_TESTS) && defined(CONFIG_MRPC_CPPI_CLIENT))
++#ifdef CONFIG_MRPC_CPPI_CLIENT
+ /**
+  *  \brief PAL CPPI4.1 Pop buffer and Increment reference count
+  *
+diff --git a/include/linux/netip_mem_util.h b/include/linux/netip_mem_util.h
+index 411770b..0d42ba2 100644
+--- a/include/linux/netip_mem_util.h
++++ b/include/linux/netip_mem_util.h
+@@ -29,10 +29,8 @@
+ 
+ int netip_memmap_init(void);
+ void netip_memmap_cleanup(void);
+-#ifdef CONFIG_PP_SANITY_TESTS
+ void netip_memmap_cleanup_bPools(void);
+ int netip_memmap_cppi_bPool(unsigned int pool);
+-#endif
+ void *netip_mmio_to_virtual(unsigned long phys_addr);
+ void *netip_mmio_to_physical(void* virt_addr);
+ void cache_flush_buffer(void *bufptr, int size);
+-- 
+2.10.1
+

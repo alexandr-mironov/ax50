@@ -1,0 +1,116 @@
+From fa62e870ff79041372d9401b1c22e4af6a0143ae Mon Sep 17 00:00:00 2001
+From: Dan Williams <dan.j.williams@intel.com>
+Date: Tue, 20 May 2014 18:08:12 -0700
+Subject: [PATCH 453/639] usb: disable port power control if not supported in
+ wHubCharacteristics
+
+A hub indicates whether it supports per-port power control via the
+wHubCharacteristics field in its descriptor.  If it is not supported
+a hub will still emulate ClearPortPower(PORT_POWER) requests by
+stopping the link state machine.  However, since this does not save
+power do not bother suspending.
+
+This also consolidates support checks into a
+hub_is_port_power_switchable() helper.
+
+Acked-by: Alan Stern <stern@rowland.harvard.edu>
+Signed-off-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+(cherry picked from commit 9262c19d14c433a6a1ba25c3ff897cb89e412309)
+
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/usb/core/hub.c  |  8 ++------
+ drivers/usb/core/hub.h  | 10 ++++++++++
+ drivers/usb/core/port.c | 13 ++++++++-----
+ 3 files changed, 20 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+index 0519b6f..8b2011c 100644
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -821,8 +821,6 @@ static unsigned hub_power_on(struct usb_hub *hub, bool do_delay)
+ 	int port1;
+ 	unsigned pgood_delay = hub->descriptor->bPwrOn2PwrGood * 2;
+ 	unsigned delay;
+-	u16 wHubCharacteristics =
+-			le16_to_cpu(hub->descriptor->wHubCharacteristics);
+ 
+ 	/* Enable power on each port.  Some hubs have reserved values
+ 	 * of LPSM (> 2) in their descriptors, even though they are
+@@ -830,7 +828,7 @@ static unsigned hub_power_on(struct usb_hub *hub, bool do_delay)
+ 	 * but only emulate it.  In all cases, the ports won't work
+ 	 * unless we send these messages to the hub.
+ 	 */
+-	if ((wHubCharacteristics & HUB_CHAR_LPSM) < 2)
++	if (hub_is_port_power_switchable(hub))
+ 		dev_dbg(hub->intfdev, "enabling power on all ports\n");
+ 	else
+ 		dev_dbg(hub->intfdev, "trying to enable port power on "
+@@ -4446,8 +4444,6 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
+ 	struct usb_device *hdev = hub->hdev;
+ 	struct device *hub_dev = hub->intfdev;
+ 	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+-	unsigned wHubCharacteristics =
+-			le16_to_cpu(hub->descriptor->wHubCharacteristics);
+ 	struct usb_device *udev;
+ 	int status, i;
+ 	unsigned unit_load;
+@@ -4532,7 +4528,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
+ 			test_bit(port1, hub->removed_bits)) {
+ 
+ 		/* maybe switch power back on (e.g. root hub was reset) */
+-		if ((wHubCharacteristics & HUB_CHAR_LPSM) < 2
++		if (hub_is_port_power_switchable(hub)
+ 				&& !port_is_power_on(hub, portstatus))
+ 			set_port_feature(hdev, port1, USB_PORT_FEAT_POWER);
+ 
+diff --git a/drivers/usb/core/hub.h b/drivers/usb/core/hub.h
+index 4e4790d..05580b4 100644
+--- a/drivers/usb/core/hub.h
++++ b/drivers/usb/core/hub.h
+@@ -111,6 +111,16 @@ extern int hub_port_debounce(struct usb_hub *hub, int port1,
+ extern int usb_clear_port_feature(struct usb_device *hdev,
+ 		int port1, int feature);
+ 
++static inline bool hub_is_port_power_switchable(struct usb_hub *hub)
++{
++	__le16 hcs;
++
++	if (!hub)
++		return false;
++	hcs = hub->descriptor->wHubCharacteristics;
++	return (le16_to_cpu(hcs) & HUB_CHAR_LPSM) < HUB_CHAR_NO_LPSM;
++}
++
+ static inline int hub_port_debounce_be_connected(struct usb_hub *hub,
+ 		int port1)
+ {
+diff --git a/drivers/usb/core/port.c b/drivers/usb/core/port.c
+index 51542f8..3a7dd99 100644
+--- a/drivers/usb/core/port.c
++++ b/drivers/usb/core/port.c
+@@ -171,12 +171,15 @@ int usb_hub_create_port_device(struct usb_hub *hub, int port1)
+ 
+ 	pm_runtime_set_active(&port_dev->dev);
+ 
+-	/* It would be dangerous if user space couldn't
+-	 * prevent usb device from being powered off. So don't
+-	 * enable port runtime pm if failed to expose port's pm qos.
++	/*
++	 * Do not enable port runtime pm if the hub does not support
++	 * power switching.  Also, userspace must have final say of
++	 * whether a port is permitted to power-off.  Do not enable
++	 * runtime pm if we fail to expose pm_qos_no_power_off.
+ 	 */
+-	if (!dev_pm_qos_expose_flags(&port_dev->dev,
+-			PM_QOS_FLAG_NO_POWER_OFF))
++	if (hub_is_port_power_switchable(hub)
++			&& dev_pm_qos_expose_flags(&port_dev->dev,
++			PM_QOS_FLAG_NO_POWER_OFF) == 0)
+ 		pm_runtime_enable(&port_dev->dev);
+ 
+ 	device_enable_async_suspend(&port_dev->dev);
+-- 
+2.10.1
+

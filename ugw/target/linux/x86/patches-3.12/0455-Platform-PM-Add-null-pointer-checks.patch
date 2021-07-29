@@ -1,0 +1,330 @@
+From 704df3eba400ef1df3c94b58c56a77cd59b535a1 Mon Sep 17 00:00:00 2001
+From: "Martinez, Ricardo" <ricardo.martinez@intel.com>
+Date: Wed, 10 Aug 2016 15:49:33 -0700
+Subject: [PATCH 455/639] Platform PM: Add null pointer checks
+
+Adding null pointer checks for acpi data structures
+
+Signed-off-by: Ricardo Martinez <ricardo.martinez@intel.com>
+---
+ drivers/platform/x86/puma_acpi.c | 159 ++++++++++++++++++++++++---------------
+ 1 file changed, 98 insertions(+), 61 deletions(-)
+ mode change 100644 => 100755 drivers/platform/x86/puma_acpi.c
+
+diff --git a/drivers/platform/x86/puma_acpi.c b/drivers/platform/x86/puma_acpi.c
+old mode 100644
+new mode 100755
+index 4132b7d..d173c8e8
+--- a/drivers/platform/x86/puma_acpi.c
++++ b/drivers/platform/x86/puma_acpi.c
+@@ -338,7 +338,11 @@ static int puma_acpi_get_data(struct puma_acpi_data *data, acpi_string pathname,
+ static ssize_t show_system_state(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    return sprintf(buf, "%d\n", data->current_state);
+ }
+@@ -346,7 +350,11 @@ static ssize_t show_system_state(struct device *dev, struct device_attribute *at
+ static ssize_t show_netip_state(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    return sprintf(buf, "%d\n", data->netip_state);
+ }
+@@ -354,7 +362,11 @@ static ssize_t show_netip_state(struct device *dev, struct device_attribute *att
+ static ssize_t show_pmc_state(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    return sprintf(buf, "%d\n", data->pmc_state);
+ }
+@@ -362,7 +374,11 @@ static ssize_t show_pmc_state(struct device *dev, struct device_attribute *attr,
+ static ssize_t show_platform_resource(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    if(puma_acpi_get_data(data, "PPRS", &data->acpi_resource_state_vector)) {
+       pr_err("puma_acpi_get_data PPRS failed!\n");
+@@ -392,7 +408,12 @@ static ssize_t show_device_power_state(struct device *dev, struct device_attribu
+ static ssize_t show_function_disable_state(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
++
+    return sprintf(buf, "FUNC_DIS_0 0x%08x FUNC_DIS_1 0x%08x\n", data->pmc_dev_disabled_config0, data->pmc_dev_disabled_config1);
+ }
+ 
+@@ -431,7 +452,11 @@ static ssize_t show_usb_lpm(struct device *dev, struct device_attribute *attr, c
+ {
+    int usb_lpm_bbu;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    //Get the data from ACPI
+    if(update_lpm(data->acpi_dev->handle, PUMA_LPM_USB, PUMA_LPM_GET, &usb_lpm_bbu) != 0) {
+@@ -445,7 +470,11 @@ static ssize_t store_usb_lpm(struct device *dev, struct device_attribute *attr,
+ {
+    int usb_lpm_bbu;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    if(sscanf(buf, "%d", &usb_lpm_bbu) != 1) {
+       return -EINVAL;
+@@ -465,7 +494,11 @@ static ssize_t show_sata_lpm(struct device *dev, struct device_attribute *attr,
+ {
+    int sata_lpm_bbu;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    //Get the data from ACPI
+    if(update_lpm(data->acpi_dev->handle, PUMA_LPM_SATA, PUMA_LPM_GET, &sata_lpm_bbu) != 0) {
+@@ -479,7 +512,11 @@ static ssize_t store_sata_lpm(struct device *dev, struct device_attribute *attr,
+ {
+    int sata_lpm_bbu;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    if(sscanf(buf, "%d", &sata_lpm_bbu) != 1) {
+       return -EINVAL;
+@@ -654,56 +691,60 @@ static ssize_t store_soc_dts_te3(struct device *dev, struct device_attribute *at
+ static ssize_t show_reset_cause(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
+ 
+-   if(data != NULL) {
+-      return sprintf(buf, "%d\n", data->reset_cause);
+-   } else {
+-      return -EIO;
++   if (NULL == data) {
++      return -ENXIO;
+    }
++
++   return sprintf(buf, "%d\n", data->reset_cause);
+ }
+ 
+ static ssize_t show_reset_type(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
+-   
+-   if(data != NULL) {
+-      return sprintf(buf, "%d\n", data->reset_type);
+-   } else {
+-      return -EIO;
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
+    }
++
++   return sprintf(buf, "%d\n", data->reset_type);
+ }
+ 
+ static ssize_t show_reset_btn_dur(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
+ 
+-   if(data != NULL) {
+-      return sprintf(buf, "%d\n", data->reset_btn_dur);
+-   } else {
+-      return -EIO;
++   if (NULL == data) {
++      return -ENXIO;
+    }
++
++   return sprintf(buf, "%d\n", data->reset_btn_dur);
+ }
+ 
+ static ssize_t show_bbu_device_mask(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
+ 
+-   if(data != NULL) {
+-      return sprintf(buf, "%08x\n", data->bbu_device_mask);
+-   } else {
+-      return -EIO;
++   if (NULL == data) {
++      return -ENXIO;
+    }
++
++   return sprintf(buf, "%08x\n", data->bbu_device_mask);
+ }
+ 
+ static ssize_t store_bbu_device_mask(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+ {
+    unsigned int bbu_device_mask;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    if(sscanf(buf, "%x", &bbu_device_mask) != 1) {
+       return -EINVAL;
+@@ -711,12 +752,8 @@ static ssize_t store_bbu_device_mask(struct device *dev, struct device_attribute
+       return -EINVAL;
+    }
+ 
+-   if(data != NULL) {
+-      // disabled devices must be off
+-      data->bbu_device_mask = bbu_device_mask & data->enabled_devices_mask;
+-   } else {
+-      return -EIO;
+-   }
++   // disabled devices must be off
++   data->bbu_device_mask = bbu_device_mask & data->enabled_devices_mask;
+ 
+    return count;
+ }
+@@ -724,20 +761,24 @@ static ssize_t store_bbu_device_mask(struct device *dev, struct device_attribute
+ static ssize_t show_sb_device_mask(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
+ 
+-   if(data != NULL) {
+-      return sprintf(buf, "%08x\n", data->sb_device_mask);
+-   } else {
+-      return -EIO;
++   if (NULL == data) {
++      return -ENXIO;
+    }
++
++   return sprintf(buf, "%08x\n", data->sb_device_mask);
+ }
+ 
+ static ssize_t store_sb_device_mask(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+ {
+    unsigned int sb_device_mask;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    if(sscanf(buf, "%x", &sb_device_mask) != 1) {
+       return -EINVAL;
+@@ -745,12 +786,8 @@ static ssize_t store_sb_device_mask(struct device *dev, struct device_attribute
+       return -EINVAL;
+    }
+ 
+-   if(data != NULL) {
+-      // disabled devices must be off
+-      data->sb_device_mask = sb_device_mask & data->enabled_devices_mask;
+-   } else {
+-      return -EIO;
+-   }
++   // disabled devices must be off
++   data->sb_device_mask = sb_device_mask & data->enabled_devices_mask;
+ 
+    return count;
+ }
+@@ -758,20 +795,24 @@ static ssize_t store_sb_device_mask(struct device *dev, struct device_attribute
+ static ssize_t show_dsb_device_mask(struct device *dev, struct device_attribute *attr, char *buf)
+ {
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
+ 
+-   if(data != NULL) {
+-      return sprintf(buf, "%08x\n", data->dsb_device_mask);
+-   } else {
+-      return -EIO;
++   if (NULL == data) {
++      return -ENXIO;
+    }
++
++   return sprintf(buf, "%08x\n", data->dsb_device_mask);
+ }
+ 
+ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+ {
+    unsigned int dsb_device_mask;
+    struct acpi_device *acpi = to_acpi_device(dev);
+-   struct puma_acpi_data *data = acpi_driver_data(acpi);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
+ 
+    if(sscanf(buf, "%x", &dsb_device_mask) != 1) {
+       return -EINVAL;
+@@ -779,12 +820,8 @@ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute
+       return -EINVAL;
+    }
+ 
+-   if(data != NULL) {
+-      // disabled devices must be off
+-      data->dsb_device_mask = dsb_device_mask & data->enabled_devices_mask;
+-   } else {
+-      return -EIO;
+-   }
++   // disabled devices must be off
++   data->dsb_device_mask = dsb_device_mask & data->enabled_devices_mask;
+ 
+    return count;
+ }
+-- 
+2.10.1
+

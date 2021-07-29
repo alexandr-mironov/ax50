@@ -1,0 +1,624 @@
+# HG changeset patch
+# Parent 8b3cf291ebec7a2bb00f8b2e8f0c1a754352c73a
+
+diff --git a/drivers/net/ethernet/lantiq/ltq_toe_drv.c b/drivers/net/ethernet/lantiq/ltq_toe_drv.c
+--- a/drivers/net/ethernet/lantiq/ltq_toe_drv.c
++++ b/drivers/net/ethernet/lantiq/ltq_toe_drv.c
+@@ -35,6 +35,7 @@
+ #include <lantiq_dmax.h>
+ #include <net/lantiq_cbm.h>
+ #include <net/lantiq_cbm_api.h>
++#include <net/datapath_proc_api.h>
+ #include <net/datapath_api.h>
+ 
+ #include "ltq_toe_reg.h"
+@@ -64,14 +65,24 @@
+ #define L2_HDR_LEN 14
+ 
+ #define DEFAULT_WAIT_CYCLES 1000
+-
++#define TSO_DEBUG 1
+ /*unsigned int toe_membase = 0xE2000000;*/
+ static unsigned char __iomem *ltq_toe_membase; /* Virtual */
+ /*static const unsigned char __iomem *lro_sram_membase_res0 = (unsigned char *)0xE2013000;*/
+ static unsigned char __iomem *lro_sram_membase_res0;
+ /*static unsigned int lro_sram_membase_res1 = 0xE2013100;*/
++static u32 g_tso_polling_mode = 1;
++static u32 g_tso_irq_mode;
+ 
+ static struct device *g_toe_dev;
++#ifdef TSO_DEBUG
++unsigned int loop_var;
++unsigned int prev_frags = 0xffffffff;
++unsigned int prev_len = 0xffffffff;
++unsigned int prev_data_len = 0xffffffff;
++unsigned int prev_skb_size = 0xffffffff;
++unsigned int prev_frag_len = 0xffffffff;
++#endif
+ 
+ #undef LRO_DEBUG
+ #define ZERO_SRAM_DBG
+@@ -87,6 +98,7 @@ static struct lro_dbg_info dbg_info[LRO_
+ u32 dbg_head = 0;
+ #endif
+ static unsigned int tso_num_tx[LTQ_MAX_TSO_PORTS];
++static unsigned int g_tso_done[LTQ_MAX_TSO_PORTS];
+ 
+ static unsigned char ltq_large_buf[NR_CPUS][65536]__attribute__((aligned(32)));
+ unsigned char *toe_large_debug_ptr;
+@@ -101,11 +113,9 @@ static int ltq_toe_exit(struct platform_
+ static int tso_configure_dma(void);
+ static void configure_tso(void);
+ 
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+ static void ltq_tso_tasklet(unsigned long);
+ static irqreturn_t ltq_tso_tx_int(int irq, void *_port);
+ static struct tasklet_struct tso_tasklet[NR_CPUS];
+-#endif
+ 
+ #ifdef USE_TIMER_FOR_SESSION_STOP
+ static void lro_timer_fn(unsigned long data);
+@@ -163,10 +173,11 @@ spinlock_t tso_register_lock;
+ }while(0)
+ 
+ #define toe_fill_cmd1_frags(srcbuf, cachewb, port, lenn) do { \
+-	  	unsigned int physaddr; \
++	unsigned int physaddr; \
++	volatile unsigned int old_data, new_data; \
+     if (cachewb) {  \
+-		physaddr = dma_map_single(g_toe_dev, (void *) srcbuf, \
+-							lenn, DMA_TO_DEVICE); \
++		old_data = ltq_r32(srcbuf + lenn - 4); \
++		physaddr = dma_map_single(g_toe_dev, (void *) srcbuf, lenn, DMA_TO_DEVICE); 	\
+ 			if (dma_mapping_error(g_toe_dev, physaddr)) { \
+ 				pr_err("%s DMA map failed\n", __func__); \
+ 				return -1; \
+@@ -175,12 +186,16 @@ spinlock_t tso_register_lock;
+ 	/* CMD1 */  \
+ 	pr_debug("physical address of the src data: %d = %08x and len = %d\n", \
+ 					(unsigned int)srcbuf, (unsigned int)physaddr, lenn);\
+-   /* printk("REG1 = %X\n", physaddr); */\
++/*    printk("REG1 = %X\n", physaddr); */\
++	new_data = ltq_r32(srcbuf + lenn - 4); \
++	WARN_ON(old_data != new_data); \
+ 	ltq_toe_w32(physaddr, PORT_REQ_CMD_REG1(port)); \
+ }while(0) 
+ 
+ #define toe_fill_cmd1(srcbuf, cachewb, port, lenn) do { \
+ 	  	unsigned int physaddr; \
++	  	volatile unsigned int old_data, new_data; \
++	old_data = ltq_r32(srcbuf + lenn - 4); \
+     if (cachewb) {  \
+ 		physaddr = dma_map_single(g_toe_dev, (void *) srcbuf, \
+ 							lenn, DMA_BIDIRECTIONAL); \
+@@ -192,7 +207,8 @@ spinlock_t tso_register_lock;
+ 	/* CMD1 */  \
+ 	pr_debug("physical address of the src data: %d = %08x and len = %d\n", \
+ 					(unsigned int)srcbuf, (unsigned int)physaddr, lenn);\
+-	ltq_r32(srcbuf + lenn - 4); \
++	new_data  = ltq_r32(srcbuf + lenn - 4); \
++	WARN_ON(old_data != new_data); \
+    /* printk("REG1 = %X\n", physaddr); */\
+ 	ltq_toe_w32(physaddr, PORT_REQ_CMD_REG1(port)); \
+ }while(0) 
+@@ -229,7 +245,7 @@ spinlock_t tso_register_lock;
+     unsigned int reg; \
+ 		/* CMD5 */ \
+ 		/* Set the segment size */ \
+-		pr_debug("segment size: %d \n", skb_tso_size(skb)); \
++		pr_debug("segment size: %d \n", tso_mss); \
+     reg = tso_mss << PORT_REQ_CMD_REG5_0_SEG_LEN_POS; \
+ 		/* Enable TIRQ */ \
+     reg |= (tirq) << PORT_REQ_CMD_REG5_0_TIRQ_POS; \
+@@ -240,6 +256,19 @@ spinlock_t tso_register_lock;
+ 		ltq_toe_w32(reg, PORT_REQ_CMD_REG5(port)); \
+ }while(0)
+ 
++#ifdef TSO_DEBUG
++#define toe_get_cmd_own(port) { \
++  volatile unsigned long OwnReg;  \
++  loop_var = 0; \
++  do { \
++                        OwnReg = ltq_toe_r32(PORT_REQ_CMD_REG5(port));  \
++        loop_var ++; \
++        if (loop_var == 10000)  \
++                printk( "prev_frags = %x, prev_len = %x, prev_data_len = %x, prev_skb_size = %x, prev_frag_len = %x\n", prev_frags, prev_len, prev_data_len, prev_skb_size, prev_frag_len); \
++   /*   printk("Own = %X\n", OwnReg); */\
++  }while (!test_bit(31, &OwnReg)); \
++}
++#else
+ #define toe_get_cmd_own(port) { \
+   volatile unsigned long OwnReg;  \
+   do { \
+@@ -247,7 +276,7 @@ spinlock_t tso_register_lock;
+    /*   printk("Own = %X\n", OwnReg); */\
+   }while (!test_bit(31, &OwnReg)); \
+ }
+-
++#endif
+ 
+ enum tso_desc_base {
+ 	/* TSO Port 0 */
+@@ -1943,85 +1972,121 @@ static void configure_tso (void)
+ 	ltq_toe_w32_mask(0, (1 << TSO_INTL_INT_EN_MCPY2_DONE_POS), TSO_INTL_INT_EN);
+ 	ltq_toe_w32_mask(0, (1 << TSO_INTL_INT_EN_MCPY3_DONE_POS), TSO_INTL_INT_EN);
+ 
+-	/* Enable the interrupts */
+-	ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE0_POS), TOE_INT_EN);
+-	ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE1_POS), TOE_INT_EN);
+-	ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE2_POS), TOE_INT_EN);
+-	ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE3_POS), TOE_INT_EN);
+-
+-	/* Unmask only TSO interrupts */
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+-	ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE0_POS), 0, TOE_INT_MASK);
+-	ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE1_POS), 0, TOE_INT_MASK);
+-	ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE2_POS), 0, TOE_INT_MASK);
+-	ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE3_POS), 0, TOE_INT_MASK);
+-#endif
++	if (g_tso_irq_mode) {
++		/* Enable the interrupts */
++		ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE0_POS), TOE_INT_EN);
++		ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE1_POS), TOE_INT_EN);
++		ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE2_POS), TOE_INT_EN);
++		ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE3_POS), TOE_INT_EN);
++
++		/* Unmask only TSO interrupts */
++		ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE0_POS), 0, TOE_INT_MASK);
++		ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE1_POS), 0, TOE_INT_MASK);
++		ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE2_POS), 0, TOE_INT_MASK);
++		ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE3_POS), 0, TOE_INT_MASK);
++	}
+ }
+ 
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+-static void ltq_tso_tasklet(unsigned long cpu_id)
++static void ltq_tso_tasklet(unsigned long dev)
+ {
+ 	u32 tso_done;
+-	/*ltq_tso_port_t *port = &(ltq_tso_port[cpu_id]);*/
++	ltq_tso_port_t *pport = (ltq_tso_port_t *) dev;
+ 	struct sk_buff *skb;
+-
+-    tso_done = ltq_toe_r32(PORT_RES_REG1(cpu_id));
+-    tso_done = 1 & (tso_done >> PORT_RES_REG1_0_DONE_POS);
+-
+-    if (tso_done) {
+-			/* free the skb */
+-			skb = (struct sk_buff *) ltq_toe_r32(PORT_RES_REG0(cpu_id));
+-			pr_debug("skb = %x\n", (unsigned int)skb);
++	u32 int_stat, port;
++	uint8_t tso_tx_tasklet_budget = 20;
++	unsigned long tso_rl_flags;
++
++	port = pport->port_number;
++
++	pr_info_once("port = %d\n", port);
++
++	do {
++		/* Clear the interrupt */
++		spin_lock_irqsave(&tso_register_lock, tso_rl_flags);
++		ltq_toe_w32((1<<port), TOE_INT_STAT);
++		spin_unlock_irqrestore(&tso_register_lock, tso_rl_flags);
++
++		wmb();
++
++		/* free the skb */
++		skb = (struct sk_buff *) ltq_toe_r32(PORT_RES_REG0(port));
++		pr_debug("skb = %x\n", (unsigned int)skb);
++
++    	tso_done = ltq_toe_r32(PORT_RES_REG1(port));
++		pr_info_once("tso_done = %x\n", tso_done);
++
++    	if (tso_done) {
+ 			dev_kfree_skb_any(skb);
+-
+-			/* Unmask the interrupt */
+-			ltq_toe_w32_mask(1<<cpu_id, 0, TOE_INT_MASK);
+-	} else {
+-		pr_err("TSO not done ! but got the interrupt \n");
+-	}
++			g_tso_done[port]++;
++		} else {
++			pr_err("TSO not done ! but got the interrupt \n");
++		}
++
++		int_stat = ltq_toe_r32(TOE_INT_STAT) & (1 << (port));
++	} while (int_stat && --tso_tx_tasklet_budget);
+ 	
++	/* Unmask the interrupt */
++	spin_lock_irqsave(&tso_register_lock, tso_rl_flags);
++	ltq_toe_w32_mask(0, (1 << port), TOE_INT_EN);
++	spin_unlock_irqrestore(&tso_register_lock, tso_rl_flags);
+ 	return;
+ }
+ 
+ static irqreturn_t ltq_tso_tx_int(int irq, void *_port)
+ {
+-	int cpu = smp_processor_id();
+ 	struct sk_buff *skb;
+ 	u32 tso_done;
+-
+-	/* Mask the interrupt */
+-	ltq_toe_w32_mask(0, (1<<cpu), TOE_INT_MASK);
+-
+-	/* Clear the interrupt */
+-	ltq_toe_w32_mask(0, (1<<cpu), TOE_INT_STAT);
+-
+-	skb = (struct sk_buff *) ltq_toe_r32(PORT_RES_REG0(cpu));
+-	pr_debug("skb = %x\n", (unsigned int)skb);
+-	dev_kfree_skb_any(skb);
+-
+-    tso_done = ltq_toe_r32(PORT_RES_REG1(cpu));
+-
+-	/* Unmask the interrupt */
+-	ltq_toe_w32_mask(1<<cpu, 0, TOE_INT_MASK);
+-
++	unsigned long tso_rl_flags;
++	struct ltq_tso_port *tso_port = (struct ltq_tso_port *)_port;
++	int port;
++
++	port = tso_port->port_number;
++
++	if (ltq_toe_r32(TOE_INT_STAT) & (1 << port)) {
++			spin_lock_irqsave(&tso_register_lock, tso_rl_flags);
++			/* Mask the interrupt */
++			ltq_toe_w32_mask((1<<port), 0, TOE_INT_EN);
++			/* Clear the interrupt */
++			ltq_toe_w32((1<<port), TOE_INT_STAT);
++			wmb();
++			spin_unlock_irqrestore(&tso_register_lock, tso_rl_flags);
++
++#if 1
++			skb = (struct sk_buff *) ltq_toe_r32(PORT_RES_REG0(port));
++			pr_debug("skb = %x\n", (unsigned int)skb);
++
++			tso_done = ltq_toe_r32(PORT_RES_REG1(port));
++
++			if (tso_done & PORT_RES_REG1_0_ERR_MASK) {
++				pr_err ("tso error !!\n");
++			} else {
++				g_tso_done[port]++;
++				/*dev_kfree_skb_irq(skb);*/
++				dev_kfree_skb_any(skb);
++			}
++
++			/* Unmask the interrupt */
++			spin_lock_irqsave(&tso_register_lock, tso_rl_flags);
++			ltq_toe_w32_mask(0, (1<<port), TOE_INT_EN);
++			wmb();
++			spin_unlock_irqrestore(&tso_register_lock, tso_rl_flags);
++	} else {
++		pr_err("dummy interrupt in TSO on port: %d!!\n", port);
++	}
++#else
++	pr_info_once("irq on port = %d\n", port);
+ 	/* Schedule the tasklet for housekeeping */
+-	//tasklet_schedule(&tso_tasklet[cpu]);
++	tasklet_schedule(&tso_tasklet[port]);
++#endif
+ 	return IRQ_HANDLED;
+ }
+-#endif
+ 
+ int ltq_tso_xmit (struct sk_buff *skb, int egress_port, int flags)
+ {
+ 	int i, len;
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+-	unsigned long cmd5_reg, sys_flag;
+-#endif
+ 	unsigned long tso_done = 0;
+ 	void *frag_addr;
+ 	const skb_frag_t *frag;
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+-	ltq_tso_port_t *p_tso_port;
+-#endif
+ 	int port;
+ 	struct skb_shared_info *shinfo=NULL;
+   	unsigned long toe_g = 1;
+@@ -2029,29 +2094,13 @@ int ltq_tso_xmit (struct sk_buff *skb, i
+   	unsigned long toe_last = 0;
+   	unsigned char *cmd4_buf;
+ 
+-	/*spin_lock_irqsave(&tso_tx_lock, sys_flag);*/
+-
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+-	p_tso_port = &ltq_tso_port[port];
+-
+-	/* Wait till the Ownership belongs to CPU */
+-	do {
+-		cmd5_reg = ltq_toe_r32(PORT_REQ_CMD_REG5(port));
+-		pr_debug("cmd5_reg = %x\n", cmd5_reg);
+-	} while (!test_bit(31, &cmd5_reg));
+-
+-	local_irq_save(sys_flag);
+-#else
+ 	port = smp_processor_id();
+-#endif
+-
+-	pr_debug("%s: called.. with len:%d on port: %d\n", 
+-					__FUNCTION__, skb->len, port);
+-
+   	cmd4_buf = (unsigned char *)ltq_large_buf[port];
+-
+   	shinfo = skb_shinfo(skb);
+ 
++	pr_debug("%s: called.. with len:%d data:%x on port: %d nr_frags: %d\n", 
++					__FUNCTION__, skb->len, (unsigned int)skb->data, port, shinfo->nr_frags);
++
+   	if (skb->data) {
+ 		 if (shinfo->nr_frags == 0) {
+ 		   toe_g = 0;
+@@ -2067,18 +2116,39 @@ int ltq_tso_xmit (struct sk_buff *skb, i
+  	/* Setup 1st command of gather in cmd registers */
+  	/* Check that CMD port is available */
+  	toe_get_cmd_own(port);
++#ifdef TSO_DEBUG
++        prev_frags = shinfo->nr_frags;
++        prev_len = skb->len;
++        prev_data_len = skb->data_len;
++        prev_skb_size = 0xffffffff;
++        prev_frag_len = 0xffffffff;
++#endif
+  	len = skb->len - skb->data_len;
+  	toe_fill_cmd0(1, 1, 1, toe_g, 2, len, toe_last, port);
+  	toe_fill_cmd1(skb->data, ~toe_sioc, port, len);
++	asm("sync");
+  	toe_fill_cmd2(skb->DW0, port);
+  	toe_fill_cmd3(skb->DW1, port);
+- 	toe_fill_cmd4(cmd4_buf, port);
++
++	/*Dont translate to physical address when gather is not required*/
++	if(shinfo->nr_frags > 0)
++ 		toe_fill_cmd4(cmd4_buf, port);
++	else
++		toe_fill_cmd4_sbk(cmd4_buf, port);
+ 	/*udelay(10);*/
+ 	asm("sync");
+-	if (skb_tso_size(skb) > 1546)
++	if (skb_tso_size(skb) > 1546) {
+  		toe_fill_cmd5(1546, 1, port);
+-	else
++#ifdef TSO_DEBUG
++                prev_skb_size = 1547;
++#endif
++	}
++	else {
+  		toe_fill_cmd5(skb_tso_size(skb), 1, port);
++#ifdef TSO_DEBUG
++                prev_skb_size = skb_tso_size(skb);
++#endif
++	}
+ 
+ 	/* Write the command registers to start the gathering*/
+ 	for (i = 0; i < shinfo->nr_frags ; i++) {
+@@ -2090,6 +2160,10 @@ int ltq_tso_xmit (struct sk_buff *skb, i
+ 
+ 			/* Check that CMD port is available */
+ 			toe_get_cmd_own(port);
++#ifdef TSO_DEBUG
++                        prev_frag_len = skb_frag_size(frag);
++#endif
++
+ 			/* CMD0 - Fill frag length */
+ 			toe_fill_cmd0(1, 1, 1, toe_g, 2, skb_frag_size(frag), toe_last, port);
+ 
+@@ -2109,30 +2183,26 @@ int ltq_tso_xmit (struct sk_buff *skb, i
+ 			pr_debug ("start for packet:%d with G.. \n", i);
+ 	}
+ 
+-#ifdef CONFIG_LTQ_TOE_USE_SW_POLLING
+-	do {
+-		tso_done = ltq_toe_r32(PORT_RES_REG1(port));
+-		pr_debug ("checking tso status: %x\n", (unsigned int)tso_done);
+-		tso_done = 1 & (tso_done >> PORT_RES_REG1_0_DONE_POS);
+-		if (tso_done)
+-			break;
+-		/*udelay (1000);*/
+-	} while (1);
+-
+-	if (skb_is_nonlinear(skb))
+-		pr_debug("!");
+-	pr_debug("tso_done !!!\n");
+-
+-	/* Free the SKB */
+-	dev_kfree_skb_any(skb);
+-
+-	/*spin_unlock_irqrestore(&tso_tx_lock, sys_flag);*/
+-#endif
+-
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+-	local_irq_restore(sys_flag);
+-#endif
+ 	tso_num_tx[port]++;
++
++	if (g_tso_polling_mode) {
++			do {
++				tso_done = ltq_toe_r32(PORT_RES_REG1(port));
++				pr_debug ("checking tso status: %x\n", (unsigned int)tso_done);
++				tso_done = 1 & (tso_done >> PORT_RES_REG1_0_DONE_POS);
++				if (tso_done)
++					break;
++			} while (1);
++
++			if (skb_is_nonlinear(skb))
++				pr_debug("!");
++			pr_debug("tso_done !!!\n");
++
++			/* Free the SKB */
++			dev_kfree_skb_any(skb);
++			g_tso_done[port]++;
++	}
++
+ 	return 0;
+ }
+ EXPORT_SYMBOL(ltq_tso_xmit);
+@@ -2146,6 +2216,7 @@ static int toe_reg_read_proc(struct seq_
+ 	seq_printf(s, "HDR_BASE_SEG1: addr 0x%08x value 0x%08x\t\n", (unsigned int) (ltq_toe_membase + HDR_BASE_SEG1), ltq_toe_r32(HDR_BASE_SEG1));
+ 	seq_printf(s, "TOE_INT_MASK: addr 0x%08x value 0x%08x\t\n", (unsigned int)(ltq_toe_membase + TOE_INT_MASK), ltq_toe_r32(TOE_INT_MASK));
+ 	seq_printf(s, "TOE_INT_STAT: addr 0x%08x value 0x%08x\t\n", (unsigned int)(ltq_toe_membase + TOE_INT_STAT), ltq_toe_r32(TOE_INT_STAT));
++	seq_printf(s, "TOE_INT_EN: addr 0x%08x value 0x%08x\t\n", (unsigned int)(ltq_toe_membase + TOE_INT_EN), ltq_toe_r32(TOE_INT_EN));
+ 	seq_printf(s, "=============== Port 0 TSO CMD Regs ============\n");
+ 	seq_printf(s, "PORT_REQ_CMD_REG0_0: addr 0x%08x value 0x%08x\t\n", (unsigned int)(ltq_toe_membase + TSO_GCTRL), ltq_toe_r32(PORT_REQ_CMD_REG0_0));
+ 	seq_printf(s, "PORT_REQ_CMD_REG1_0: addr 0x%08x value 0x%08x\t\n", (unsigned int)(ltq_toe_membase + TSO_GCTRL), ltq_toe_r32(PORT_REQ_CMD_REG1_0));
+@@ -2187,7 +2258,7 @@ static int lro_stats_read_proc(struct se
+ 	seq_printf(s, "LRO_OC_OWNER_1: addr 0x%08x value 0x%08x\t\n", (unsigned int) (ltq_toe_membase + LRO_OC_OWNER_1), ltq_toe_r32(LRO_OC_OWNER_1));
+ 	seq_puts(s, "===============TSO Stats==================\n");
+ 	for (port=0; port < LTQ_MAX_TSO_PORTS; port++)
+-		seq_printf(s, "Number of tx %d\t\n", (unsigned int) tso_num_tx[port]);
++		seq_printf(s, "Number of tx %d\t num_done %d\n", (unsigned int) tso_num_tx[port],(unsigned int) g_tso_done[port]);
+ 	return 0;
+ }
+ 
+@@ -2221,6 +2292,81 @@ static const struct file_operations ltq_
+ 	.release = seq_release,
+ };
+ 
++/* TSO XMIT mode related proc ops */
++
++static int tso_xmit_mode_read_proc(struct seq_file *s, void *v)
++{
++	seq_printf(s, "TSO xmit IRQ mode: %d\n", g_tso_irq_mode);
++	seq_printf(s, "TSO xmit Polling mode: %d\n", g_tso_polling_mode);
++
++	return 0; 
++}
++
++static int tso_xmit_mode_seq_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, tso_xmit_mode_read_proc, NULL);
++}
++
++ssize_t tso_xmit_mode_proc_write(struct file *file, const char *user_buf, size_t count,
++			     loff_t *ppos)
++{
++	char buf[256];
++	int num;
++	char *param_list[2];
++	unsigned char *str; 
++
++	
++	if (copy_from_user(buf, user_buf, min(count, (sizeof(buf) - 1))))
++		return -EFAULT;
++
++	num = dp_split_buffer(buf, param_list, ARRAY_SIZE(param_list));
++
++	if (num <= 0 || num >= 2 || dp_strcmpi(param_list[0], "help") == 0) {
++		pr_info("echo irq/polling > /proc/driver/ltq_toe/tso_xmit_mode \n");
++		return count;
++	}
++
++	str = param_list[0];
++
++	if(strcmp(str, "irq") == 0) {
++		g_tso_irq_mode = 1;
++		g_tso_polling_mode = 0;
++		enable_irq(80);
++		enable_irq(82);
++
++		/* Enable the irqs at HW level */
++		ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE0_POS), TOE_INT_EN);
++		ltq_toe_w32_mask(0, (1 << TOE_INT_EN_TOE2_POS), TOE_INT_EN);
++		ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE0_POS), 0, TOE_INT_MASK);
++		ltq_toe_w32_mask((1 << TOE_INT_MASK_TOE2_POS), 0, TOE_INT_MASK);
++
++	} else if(strcmp(str, "polling") == 0) {
++		g_tso_polling_mode = 1;
++		g_tso_irq_mode = 0;
++		disable_irq(80);
++		disable_irq(82);
++
++		/* Disable the irqs at HW level */
++		ltq_toe_w32_mask((1 << TOE_INT_EN_TOE0_POS), 0, TOE_INT_EN);
++		ltq_toe_w32_mask((1 << TOE_INT_EN_TOE2_POS), 0, TOE_INT_EN);
++		ltq_toe_w32_mask(0, (1 << TOE_INT_MASK_TOE0_POS), TOE_INT_MASK);
++		ltq_toe_w32_mask(0, (1 << TOE_INT_MASK_TOE2_POS), TOE_INT_MASK);
++	} else {
++		pr_info("Unknown TSO xmit mode !\n");
++		pr_info("echo irq/polling > /proc/driver/ltq_toe/tso_xmit_mode \n");
++	}
++
++	return count;
++}
++
++static const struct file_operations tso_xmit_mode_proc_fops = {
++	.open = tso_xmit_mode_seq_open,
++	.read = seq_read,
++	.write = tso_xmit_mode_proc_write,
++	.llseek = seq_lseek,
++	.release = seq_release,
++};
++
+ /* Debug info related proc */
+ #ifdef LRO_DEBUG
+ static void *lro_dbg_info_seq_start(struct seq_file *s, loff_t *pos)
+@@ -2300,6 +2446,11 @@ static int ltq_toe_proc_init (void)
+ 		goto err1;
+ #endif
+ 
++	entry = proc_create("tso_xmit_mode", 0,
++			g_toe_dir, &tso_xmit_mode_proc_fops);
++	if (!entry)
++		goto err1;
++
+ 	return 0;
+ err1:
+ 	remove_proc_entry("driver/ltq_toe", NULL);
+@@ -2310,10 +2461,8 @@ static int ltq_toe_init(struct platform_
+ {
+ 	struct resource *r;
+ 	struct resource irqres[15];
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
+ 	int tso_irq;
+ 	struct cpumask cpumask;
+-#endif
+ 	struct device_node *node = pdev->dev.of_node;
+ 	int ret_val, i;
+ 
+@@ -2382,12 +2531,12 @@ static int ltq_toe_init(struct platform_
+ 	/* Initialise the 4 ports */
+ 	for_each_online_cpu(i) {
+ 		ltq_tso_port[i].membase = ltq_toe_membase + (i*0x20);
+-
+-#ifndef CONFIG_LTQ_TOE_USE_SW_POLLING
++		ltq_tso_port[i].port_number = i;
++
+ 		/* Register the interrupt handler for TSO */
+ 		tso_irq = irqres[i+1].start;
+ 		ret_val = request_irq(tso_irq, ltq_tso_tx_int,
+-									0, "tso_irq", NULL);
++										0, "tso_irq", &ltq_tso_port[i]);
+ 		if (ret_val) {
+ 			pr_err("failed to request tso_tx_irq \n");
+ 			return ret_val;
+@@ -2397,10 +2546,10 @@ static int ltq_toe_init(struct platform_
+ 		cpumask.bits[0] = (1 << i);
+ 		if (irq_set_affinity(tso_irq, &cpumask))
+ 			pr_err("can not set affinity for IRQ - %d", tso_irq);
+-
+-		tasklet_init(&tso_tasklet[i],
+-			ltq_tso_tasklet, (unsigned long) i);
+-#endif
++	
++		tasklet_init(&tso_tasklet[i], ltq_tso_tasklet, (unsigned long)&ltq_tso_port[i]);
++		if (g_tso_polling_mode)
++			disable_irq(tso_irq);
+ 	}
+ 
+ 	/* Register the interrupt handlers for the LRO */
+diff --git a/drivers/net/ethernet/lantiq/ltq_toe_drv.h b/drivers/net/ethernet/lantiq/ltq_toe_drv.h
+--- a/drivers/net/ethernet/lantiq/ltq_toe_drv.h
++++ b/drivers/net/ethernet/lantiq/ltq_toe_drv.h
+@@ -4,10 +4,10 @@
+ 
+ #define USE_TIMER_FOR_SESSION_STOP
+ #undef CONFIG_USE_SKB_FRAGS_ARRAY
+-#define CONFIG_LTQ_TOE_USE_SW_POLLING
+ 
+ typedef struct ltq_tso_port {
+ 	unsigned char __iomem *membase; /* Virtual */
++	u32 port_number;
+ } ltq_tso_port_t;
+ 
+ typedef struct ltq_lro_port {
+

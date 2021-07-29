@@ -1,0 +1,274 @@
+From c55a6ba6db7d5a16501456a4cdc3f3886561756d Mon Sep 17 00:00:00 2001
+From: "Martinez, Ricardo" <ricardo.martinez@intel.com>
+Date: Mon, 3 Oct 2016 13:45:14 -0700
+Subject: [PATCH 491/639] gpio-intelce2700: gpio as platform driver
+
+Make gpio a platform driver in order probe it earlier.
+This will be required when the netss driver depends on gpio
+to get the gpio resources from ACPI.
+
+Signed-off-by: Ricardo Martinez <ricardo.martinez@intel.com>
+---
+ drivers/acpi/acpi_platform.c    |  1 +
+ drivers/gpio/gpio-intelce2700.c | 95 +++++++++++++++++++++++++----------------
+ 2 files changed, 60 insertions(+), 36 deletions(-)
+
+diff --git a/drivers/acpi/acpi_platform.c b/drivers/acpi/acpi_platform.c
+index 1bde127..d607ef5 100644
+--- a/drivers/acpi/acpi_platform.c
++++ b/drivers/acpi/acpi_platform.c
+@@ -29,6 +29,7 @@ ACPI_MODULE_NAME("platform");
+ static const struct acpi_device_id acpi_platform_device_ids[] = {
+ 
+ 	{ "PNP0D40" },
++	{ "INT33FF" },
+ 
+ 	{ }
+ };
+diff --git a/drivers/gpio/gpio-intelce2700.c b/drivers/gpio/gpio-intelce2700.c
+index 26a08a1..a8a6805 100644
+--- a/drivers/gpio/gpio-intelce2700.c
++++ b/drivers/gpio/gpio-intelce2700.c
+@@ -3,7 +3,7 @@
+  *
+  *  GPL LICENSE SUMMARY
+  *
+- *  Copyright(c) 2015 Intel Corporation. All rights reserved.
++ *  Copyright(c) 2015-2016 Intel Corporation. All rights reserved.
+  *
+  *  This program is free software; you can redistribute it and/or modify
+  *  it under the terms of version 2 of the GNU General Public License as
+@@ -39,7 +39,8 @@
+ #include <linux/acpi.h>
+ #include <linux/seq_file.h>
+ #include <linux/io.h>
+-#include <linux/pnp.h>
++#include <linux/acpi.h>
++#include <linux/platform_device.h>
+ 
+ #define FAMILY0_PAD_REGS_OFF	0x4400
+ #define FAMILY_PAD_REGS_SIZE	0x400
+@@ -370,7 +371,7 @@ struct gpio_pad_info {
+ 
+ };
+ 
+-struct gpio_bank_pnp {
++struct gpio_bank {
+ 	char			*name;
+ 	int                     base;
+ 	int                     irq_base;
+@@ -668,9 +669,9 @@ static struct gpio_pad_info west_pads_info[] = {
+ #define CE2700_GPIO_WEST_IRQBASE      (CE2700_GPIO_VIRTUAL_IRQBASE   + (ARRAY_SIZE(virtual_pads_info)))
+ 
+ 
+-static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
++static struct gpio_bank intelce2700_banks_platform[] = {
+ 	{
+-		.name = "GPO0",
++		.name = "INT33FF:00",
+ 		.base = CE2700_GPIO_SOUTHWEST_BASE,
+ 		.irq_base = CE2700_GPIO_SOUTHWEST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(southwest_pads_info),
+@@ -678,7 +679,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 		.community_name = "southwest",
+ 	},
+ 	{
+-		.name = "GPO1",
++		.name = "INT33FF:01",
+ 		.base = CE2700_GPIO_NORTHEAST_BASE,
+ 		.irq_base = CE2700_GPIO_NORTHEAST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(northeast_pads_info),
+@@ -686,7 +687,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 		.community_name = "northeast",
+ 	},
+ 	{
+-		.name = "GPO2",
++		.name = "INT33FF:02",
+ 		.base = CE2700_GPIO_NORTHWEST_BASE,
+ 		.irq_base = CE2700_GPIO_NORTHWEST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(northwest_pads_info),
+@@ -694,7 +695,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 		.community_name = "northwest",
+ 	},
+ 	{
+-		.name = "GPO3",
++		.name = "INT33FF:03",
+ 		.base = CE2700_GPIO_SOUTHEAST_BASE,
+ 		.irq_base = CE2700_GPIO_SOUTHEAST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(southeast_pads_info),
+@@ -702,7 +703,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 		.community_name = "southeast",
+ 	},
+ 	{
+-		.name = "GPO4",
++		.name = "INT33FF:04",
+ 		.base = CE2700_GPIO_VIRTUAL_BASE,
+ 		.irq_base = CE2700_GPIO_VIRTUAL_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(virtual_pads_info),
+@@ -710,7 +711,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 		.community_name = "virtual",
+ 	},
+ 	{
+-		.name = "GPO5",
++		.name = "INT33FF:05",
+ 		.base = CE2700_GPIO_WEST_BASE,
+ 		.irq_base = CE2700_GPIO_WEST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(west_pads_info),
+@@ -722,13 +723,13 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 
+ struct intelce2700_gpio {
+ 	struct gpio_chip	chip;
+-	struct pnp_dev		*pdev;
++	struct platform_device	*pdev;
+ 	spinlock_t		lock;
+ 	void __iomem		*reg_base;
+ 	struct gpio_pad_info	*pad_info;
+ 	struct irq_domain	*domain;
+ 	int			intr_lines[MAX_INTR_LINE_NUM];
+-	int                     irq_base;
++	int			irq_base;
+ 	char			*community_name;
+ };
+ 
+@@ -746,7 +747,7 @@ static void __iomem *intelce2700_gpio_reg(struct gpio_chip *chip, unsigned offse
+ 	if (reg == CE2700_GPIO_INT_STAT_REG || reg == CE2700_GPIO_INT_MASK_REG)
+ 		reg_offset = 0;
+ 	else
+-                reg_offset = cg->pad_info[offset].offset;
++		reg_offset = cg->pad_info[offset].offset;
+ 		//reg_offset = FAMILY0_PAD_REGS_OFF +
+ 		//      FAMILY_PAD_REGS_SIZE * (offset / MAX_FAMILY_PAD_GPIO_NO) +
+ 		//      GPIO_REGS_SIZE * (offset % MAX_FAMILY_PAD_GPIO_NO);
+@@ -1142,7 +1143,7 @@ static void intelce2700_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip
+ 		label = gpiochip_is_requested(chip, i);
+ 		if (!label)
+ 			label = "Unrequested";
+-                offs = cg->pad_info[i].offset;
++		offs = cg->pad_info[i].offset;
+ 
+ 		ctrl0 = intelce2700_readl(intelce2700_gpio_reg(chip, i, CE2700_GPIO_PADCTRL0_REG));
+ 		ctrl1 = intelce2700_readl(intelce2700_gpio_reg(chip, i, CE2700_GPIO_PADCTRL1_REG));
+@@ -1290,16 +1291,18 @@ static const struct irq_domain_ops intelce2700_gpio_irq_ops = {
+ };
+ 
+ static int
+-intelce2700_gpio_pnp_probe(struct pnp_dev *pdev, const struct pnp_device_id *id)
++intelce2700_gpio_probe(struct platform_device *pdev)
+ {
+ 	int i;
++	int irq;
+ 	struct intelce2700_gpio *cg;
+ 	struct gpio_chip *gc;
+-	struct resource *mem_rc, *irq_rc;
++	struct resource *mem_rc;
+ 	struct device *dev = &pdev->dev;
+-	struct gpio_bank_pnp *bank;
++	struct gpio_bank *bank;
+ 	int ret = 0;
+-	int nbanks = sizeof(intelce2700_banks_pnp) / sizeof(struct gpio_bank_pnp);
++	int nbanks = sizeof(intelce2700_banks_platform) /
++		     sizeof(struct gpio_bank);
+ 
+ 	cg = devm_kzalloc(dev, sizeof(struct intelce2700_gpio), GFP_KERNEL);
+ 	if (!cg) {
+@@ -1309,7 +1312,7 @@ intelce2700_gpio_pnp_probe(struct pnp_dev *pdev, const struct pnp_device_id *id)
+ 	cg->pdev = pdev;
+ 
+ 	for (i = 0; i < nbanks; i++) {
+-		bank = intelce2700_banks_pnp + i;
++		bank = intelce2700_banks_platform + i;
+ 		if (!strcmp(pdev->name, bank->name)) {
+ 			cg->chip.ngpio = bank->ngpio;
+ 			cg->pad_info = bank->pads_info;
+@@ -1325,15 +1328,15 @@ intelce2700_gpio_pnp_probe(struct pnp_dev *pdev, const struct pnp_device_id *id)
+ 		goto err;
+ 	}
+ 
+-	mem_rc = pnp_get_resource(pdev, IORESOURCE_MEM, 0);
++	mem_rc = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 	if (!mem_rc) {
+ 		dev_err(dev, "missing MEM resource\n");
+ 		ret = -EINVAL;
+ 		goto err;
+ 	}
+ 
+-	irq_rc = pnp_get_resource(pdev, IORESOURCE_IRQ, 0);
+-	if (!irq_rc) {
++	irq = platform_get_irq(pdev, 0);
++	if (!irq) {
+ 		dev_err(dev, "missing IRQ resource\n");
+ 		ret = -EINVAL;
+ 		goto err;
+@@ -1382,12 +1385,12 @@ intelce2700_gpio_pnp_probe(struct pnp_dev *pdev, const struct pnp_device_id *id)
+ 
+ 	intelce2700_irq_init_hw(cg);
+ 
+-	if (irq_rc && irq_rc->start) {
+-		irq_set_handler_data(irq_rc->start, cg);
+-		irq_set_chained_handler(irq_rc->start, intelce2700_gpio_irq_handler);
+-	}
++	irq_set_handler_data(irq, cg);
++	irq_set_chained_handler(irq, intelce2700_gpio_irq_handler);
+ 
+-	dev_info(dev, "Intel CE2700 GPIO %s probed\n", pdev->name);
++	platform_set_drvdata(pdev, cg);
++	dev_info(dev, "Intel CE2700 GPIO %s probed as Platform driver\n",
++		 pdev->name);
+ 
+ 	return 0;
+ err:
+@@ -1395,22 +1398,42 @@ err:
+ 	return ret;
+ }
+ 
++static int intelce2700_gpio_remove(struct platform_device *pdev)
++{
++	struct intelce2700_gpio *cg;
++
++	if (!pdev || !platform_get_drvdata(pdev))
++		return -EINVAL;
++
++	cg = platform_get_drvdata(pdev);
++	return gpiochip_remove(&cg->chip);
++}
+ 
+-static const struct pnp_device_id intelce2700_gpio_pnp_match[] = {
++static const struct acpi_device_id intelce2700_gpio_acpi_match[] = {
+ 	{ "INT33FF", 0 },
+ 	{ }
+ };
+-MODULE_DEVICE_TABLE(pnp, intelce2700_gpio_pnp_match);
+-
+-static struct pnp_driver intelce2700_gpio_pnp_driver = {
+-	.name		= "intelce2700_gpio",
+-	.id_table	= intelce2700_gpio_pnp_match,
+-	.probe          = intelce2700_gpio_pnp_probe,
++MODULE_DEVICE_TABLE(acpi, intelce2700_gpio_acpi_match);
++
++static struct platform_driver intelce2700_gpio_driver = {
++	.probe = intelce2700_gpio_probe,
++	.remove = intelce2700_gpio_remove,
++	.driver = {
++		.name = "intelce2700_gpio",
++		.owner = THIS_MODULE,
++		.acpi_match_table = ACPI_PTR(intelce2700_gpio_acpi_match),
++	},
+ };
+ 
+ static int __init intelce2700_gpio_init(void)
+ {
+-	return pnp_register_driver(&intelce2700_gpio_pnp_driver);
++	return platform_driver_register(&intelce2700_gpio_driver);
++}
++
++static void __exit intelce2700_gpio_exit(void)
++{
++	platform_driver_unregister(&intelce2700_gpio_driver);
+ }
+ 
+-fs_initcall(intelce2700_gpio_init);
++subsys_initcall(intelce2700_gpio_init);
++module_exit(intelce2700_gpio_exit);
+-- 
+2.10.1
+

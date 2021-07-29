@@ -1,0 +1,519 @@
+--- a/Makefile
++++ b/Makefile
+@@ -32,6 +32,13 @@ ifneq ($(filter nl80211,$(IWINFO_BACKEND
+ 	IWINFO_LIB_OBJ     += iwinfo_nl80211.o
+ endif
+ 
++ifneq ($(filter intelwifi,$(IWINFO_BACKENDS)),)
++	IWINFO_CFLAGS      += -DUSE_INTEL
++	IWINFO_LIB_OBJ     += iwinfo_intel.o
++	IWINFO_CLI_LDFLAGS += -lnl-tiny
++	IWINFO_LIB_LDFLAGS += -lnl-tiny
++	IWINFO_LIB_OBJ     += iwinfo_nl80211.o
++endif
+ 
+ %.o: %.c
+ 	$(CC) $(IWINFO_CFLAGS) $(FPIC) -c -o $@ $<
+--- /dev/null
++++ b/api/intel.h
+@@ -0,0 +1,33 @@
++/*
++ * Header bits derived from MadWifi source:
++ *   Copyright (c) 2001 Atsushi Onoe
++ *   Copyright (c) 2002-2005 Sam Leffler, Errno Consulting
++ *   All rights reserved.
++ *
++ * Distributed under the terms of the GPLv2 license.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
++ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
++ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
++ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
++ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
++ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#ifndef _INTEL_H
++#define _INTEL_H
++
++#define SUCCESS 0
++#define FAIL -1
++#define TRUE 1
++#define FALSE 0
++#define MAX_LEN_PARAM_VALUE 128
++#define MAX_LEN_RES_VALUE 4000
++#define CLI_RET_STR "cli_return="
++#define MIN(x, y) ((x) < (y)) ? (x) : (y)
++
++#endif
+--- a/include/iwinfo.h
++++ b/include/iwinfo.h
+@@ -204,6 +204,7 @@ void iwinfo_finish(void);
+ 
+ extern const struct iwinfo_ops wext_ops;
+ extern const struct iwinfo_ops madwifi_ops;
++extern const struct iwinfo_ops intel_ops;
+ extern const struct iwinfo_ops nl80211_ops;
+ extern const struct iwinfo_ops wl_ops;
+ 
+--- a/include/iwinfo/lua.h
++++ b/include/iwinfo/lua.h
+@@ -37,6 +37,10 @@
+ #define IWINFO_MADWIFI_META	"iwinfo.madwifi"
+ #endif
+ 
++#ifdef USE_INTEL
++#define IWINFO_INTEL_META	"iwinfo.intel"
++#endif
++
+ #ifdef USE_NL80211
+ #define IWINFO_NL80211_META	"iwinfo.nl80211"
+ #endif
+--- /dev/null
++++ b/iwinfo_intel.c
+@@ -0,0 +1,336 @@
++/*
++ * iwinfo - Wireless Information Library - Madwifi Backend
++ *
++ *   Copyright (C) 2009-2010 Jo-Philipp Wich <xm@subsignal.org>
++ *
++ * The iwinfo library is free software: you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License version 2
++ * as published by the Free Software Foundation.
++ *
++ * The iwinfo library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License along
++ * with the iwinfo library. If not, see http://www.gnu.org/licenses/.
++ */
++
++#include "iwinfo.h"
++#include "iwinfo_wext.h"
++#include "iwinfo_nl80211.h"
++#include "api/intel.h"
++#include "iwinfo_nl80211.h"
++
++static char * hostapd_info(const char *ifname)
++{
++	char device[6];
++	char path[1024] = { 0 };
++	static char buf[16384] = { 0 };
++	FILE *conf;
++
++	// setting up the device
++	strncpy(device, ifname, 5);
++	device[5]='\0';
++
++	snprintf(path, sizeof(path), "/tmp/wlan_wave/hostapd_%s.conf", device);
++
++	if ((conf = fopen(path, "r")) != NULL)
++	{
++		fread(buf, sizeof(buf) - 1, 1, conf);
++		fclose(conf);
++
++		return buf;
++	}
++
++	return NULL;
++}
++
++static char * getval_from_hostapd_conf(const char *ifname, const char *buf, const char *key)
++{
++	int i, len;
++	char lkey[64] = { 0 };
++	const char *ln = buf;
++	static char lval[256] = { 0 };
++	char command[MAX_LEN_RES_VALUE];
++	int matched_if = ifname ? 0 : 1;
++
++	for( i = 0, len = strlen(buf); i < len; i++ )
++	{
++		if (!lkey[0] && (buf[i] == ' ' || buf[i] == '\t'))
++		{
++				ln++;
++		}
++		else if (!lkey[0] && (buf[i] == '='))
++		{
++				if ((&buf[i] - ln) > 0)
++					memcpy(lkey, ln, MIN(sizeof(lkey) - 1, &buf[i] - ln));
++		}
++		else if (buf[i] == '\n')
++		{
++			if (lkey[0])
++			{
++				memcpy(lval, ln + strlen(lkey) + 1,
++					MIN(sizeof(lval) - 1, &buf[i] - ln - strlen(lkey) - 1));
++
++				if ((ifname != NULL) &&
++					(!strcmp(lkey, "interface") || !strcmp(lkey, "bss")) )
++				{
++					matched_if = !strcmp(lval, ifname);
++				}
++				else if (matched_if && !strcmp(lkey, key))
++				{
++					return lval;
++				}
++			}
++
++			ln = &buf[i+1];
++			memset(lkey, 0, sizeof(lkey));
++			memset(lval, 0, sizeof(lval));
++		}
++	}
++
++	return NULL;
++}
++
++int get_encryption(const char *ifname, struct iwinfo_crypto_entry *c)
++{
++	char *host_conf;
++	char *param;
++	char command[MAX_LEN_RES_VALUE];
++
++	host_conf = hostapd_info(ifname);
++	if (!host_conf){
++		sprintf(command, "echo 'failed to read hostapd conf file:' > /dev/console");
++		system(command);
++		return FAIL;
++	}
++
++	// for wep we use the hostapd conf file
++	param = getval_from_hostapd_conf(ifname, host_conf, "wep_key0");
++	if(param)
++	{ /* check if this is wep */
++		c->enabled = 1;
++		c->auth_suites = IWINFO_KMGMT_NONE;
++		c->auth_algs = IWINFO_AUTH_OPEN;
++		c->wpa_version = 0;
++		c->pair_ciphers = 0;
++		c->group_ciphers = 0;
++
++		return SUCCESS;
++	}
++
++	param = getval_from_hostapd_conf(ifname, host_conf, "wpa");
++	if(param) {
++		c->wpa_version = param[0] - '0';
++	}
++
++	param = getval_from_hostapd_conf(ifname, host_conf, "wpa_key_mgmt");
++	if(param) {
++		if (strncmp(param, "WPA-EAP", 3) == 0){
++			c->auth_suites |= IWINFO_KMGMT_8021x;
++		} else {
++			c->auth_suites |= IWINFO_KMGMT_PSK;
++		}
++		c->enabled = 1;
++	}
++
++	param = getval_from_hostapd_conf(ifname, host_conf, "auth_algs");
++	if(param) {
++		c->auth_algs=param[0] - '0';
++	}
++
++	param = getval_from_hostapd_conf(ifname, host_conf, "wpa_pairwise");
++	if(param) {
++		if (strncmp(param, "TKIP", 5) == 0) {
++			c->pair_ciphers |= IWINFO_CIPHER_TKIP;
++			c->group_ciphers |= IWINFO_CIPHER_TKIP;
++		} else if (strncmp(param, "CCMP", 5) == 0) {
++			c->pair_ciphers |= IWINFO_CIPHER_CCMP;
++			c->group_ciphers |= IWINFO_CIPHER_CCMP;
++		} else {
++			c->pair_ciphers |= IWINFO_CIPHER_CCMP | IWINFO_CIPHER_TKIP;
++			c->group_ciphers |= IWINFO_CIPHER_CCMP | IWINFO_CIPHER_TKIP;
++		}
++	}
++
++	return SUCCESS;
++}
++static int intel_probe(const char *ifname)
++{
++	if (strstr(ifname, "wlan") != NULL)
++		return TRUE;
++
++	return FALSE;
++}
++
++static int intel_get_txpower(const char *ifname, int *buf)
++{
++	return nl80211_ops.txpower(ifname, buf);
++}
++
++static int intel_get_bitrate(const char *ifname, int *buf)
++{
++	return nl80211_ops.bitrate(ifname, buf);
++}
++
++static int intel_get_signal(const char *ifname, int *buf)
++{
++	return nl80211_ops.signal(ifname, buf);
++}
++
++static int intel_get_country(const char *ifname, char *buf)
++{
++	return nl80211_ops.country(ifname, buf);
++}
++
++static int intel_get_encryption(const char *ifname, char *buf)
++{
++	return get_encryption(ifname, (struct iwinfo_crypto_entry *)buf);
++}
++
++static int intel_get_assoclist(const char *ifname, char *buf, int *len)
++{
++	return nl80211_ops.assoclist(ifname, buf, len);
++}
++
++static int intel_get_freqlist(const char *ifname, char *buf, int *len)
++{
++	return nl80211_ops.freqlist(ifname, buf, len);
++}
++
++static int intel_get_mode(const char *ifname, int *buf)
++{
++	return nl80211_ops.mode(ifname, buf);
++}
++
++/* Using WEXT implementation */
++
++static int intel_get_hwmodelist(const char *ifname, int *buf)
++{
++	return wext_ops.hwmodelist(ifname, buf);
++}
++
++static int intel_get_htmodelist(const char *ifname, int *buf)
++{
++	return wext_ops.htmodelist(ifname, buf);
++}
++
++static int intel_get_channel(const char *ifname, int *buf)
++{
++	return wext_ops.channel(ifname, buf);
++}
++
++static int intel_get_frequency(const char *ifname, int *buf)
++{
++	return wext_ops.frequency(ifname, buf);
++}
++
++static int intel_get_frequency_offset(const char *ifname, int *buf)
++{
++	return wext_ops.frequency_offset(ifname, buf);
++}
++
++static int intel_get_txpower_offset(const char *ifname, int *buf)
++{
++	return wext_ops.txpower_offset(ifname, buf);
++}
++
++static int intel_get_noise(const char *ifname, int *buf)
++{
++	return wext_ops.noise(ifname, buf);
++}
++
++static int intel_get_quality(const char *ifname, int *buf)
++{
++	return wext_ops.quality(ifname, buf);
++}
++
++static int intel_get_quality_max(const char *ifname, int *buf)
++{
++	return wext_ops.quality_max(ifname, buf);
++}
++
++static int intel_get_mbssid_support(const char *ifname, int *buf)
++{
++	return wext_ops.mbssid_support(ifname, buf);
++}
++
++static int intel_get_ssid(const char *ifname, char *buf)
++{
++	return wext_ops.ssid(ifname, buf);
++}
++
++static int intel_get_bssid(const char *ifname, char *buf)
++{
++	return wext_ops.bssid(ifname, buf);
++}
++
++static int intel_get_hardware_id(const char *ifname, char *buf)
++{
++	return wext_ops.hardware_id(ifname, buf);
++}
++
++static int intel_get_hardware_name(const char *ifname, char *buf)
++{
++	return wext_ops.hardware_name(ifname, buf);
++}
++
++static int intel_get_phyname(const char *ifname, char *buf)
++{
++	return wext_ops.phyname(ifname, buf);
++}
++
++static int intel_get_txpwrlist(const char *ifname, char *buf, int *len)
++{
++	return wext_ops.txpwrlist(ifname, buf, len);
++}
++
++static int intel_get_countrylist(const char *ifname, char *buf, int *len)
++{
++	return wext_ops.countrylist(ifname, buf, len);
++}
++
++int intel_get_scanlist(const char *ifname, char *buf, int *len)
++{
++	return wext_ops.scanlist(ifname, buf, len);
++}
++
++static void intel_close(void)
++{
++	/* Nop */
++}
++
++const struct iwinfo_ops intel_ops = {
++	.name             = "intel",
++	.probe            = intel_probe,
++	.txpower          = intel_get_txpower,
++	.bitrate          = intel_get_bitrate,
++	.signal           = intel_get_signal,
++	.country          = intel_get_country, //c
++	.encryption       = intel_get_encryption,
++	.assoclist        = intel_get_assoclist, //a
++	.freqlist         = intel_get_freqlist, //f
++	.mbssid_support   = intel_get_mbssid_support,
++
++	.channel          = intel_get_channel,
++	.frequency        = intel_get_frequency,
++	.frequency_offset = intel_get_frequency_offset,
++	.txpower_offset   = intel_get_txpower_offset,
++	.noise            = intel_get_noise,
++	.quality          = intel_get_quality,
++	.quality_max      = intel_get_quality_max,
++	.hwmodelist       = intel_get_hwmodelist,
++	.htmodelist       = intel_get_htmodelist,
++	.mode             = intel_get_mode,
++	.ssid             = intel_get_ssid,
++	.bssid            = intel_get_bssid,
++	.hardware_id      = intel_get_hardware_id,
++	.hardware_name    = intel_get_hardware_name,
++	.phyname          = intel_get_phyname,
++	.txpwrlist        = intel_get_txpwrlist,
++	.scanlist         = intel_get_scanlist,
++	.countrylist      = intel_get_countrylist,
++
++	.close            = intel_close,
++};
+--- a/iwinfo_lib.c
++++ b/iwinfo_lib.c
+@@ -333,6 +333,9 @@ static const struct iwinfo_ops *backends
+ #ifdef USE_WL
+ 	&wl_ops,
+ #endif
++#ifdef USE_INTEL
++	&intel_ops,
++#endif
+ 	&wext_ops,
+ };
+ 
+--- a/iwinfo_lua.c
++++ b/iwinfo_lua.c
+@@ -695,6 +695,35 @@ LUA_WRAP_STRUCT_OP(madwifi,mbssid_suppor
+ LUA_WRAP_STRUCT_OP(madwifi,hardware_id)
+ #endif
+ 
++#ifdef USE_INTEL
++LUA_WRAP_INT_OP(intel,channel)
++LUA_WRAP_INT_OP(intel,frequency)
++LUA_WRAP_INT_OP(intel,frequency_offset)
++LUA_WRAP_INT_OP(intel,txpower)
++LUA_WRAP_INT_OP(intel,txpower_offset)
++LUA_WRAP_INT_OP(intel,bitrate)
++LUA_WRAP_INT_OP(intel,signal)
++LUA_WRAP_INT_OP(intel,noise)
++LUA_WRAP_INT_OP(intel,quality)
++LUA_WRAP_INT_OP(intel,quality_max)
++LUA_WRAP_STRING_OP(intel,ssid)
++LUA_WRAP_STRING_OP(intel,bssid)
++LUA_WRAP_STRING_OP(intel,country)
++LUA_WRAP_STRING_OP(intel,hardware_name)
++LUA_WRAP_STRING_OP(intel,phyname)
++LUA_WRAP_STRUCT_OP(intel,mode)
++LUA_WRAP_STRUCT_OP(intel,assoclist)
++LUA_WRAP_STRUCT_OP(intel,txpwrlist)
++LUA_WRAP_STRUCT_OP(intel,scanlist)
++LUA_WRAP_STRUCT_OP(intel,freqlist)
++LUA_WRAP_STRUCT_OP(intel,countrylist)
++LUA_WRAP_STRUCT_OP(intel,hwmodelist)
++LUA_WRAP_STRUCT_OP(intel,htmodelist)
++LUA_WRAP_STRUCT_OP(intel,encryption)
++LUA_WRAP_STRUCT_OP(intel,mbssid_support)
++LUA_WRAP_STRUCT_OP(intel,hardware_id)
++#endif
++
+ #ifdef USE_NL80211
+ /* NL80211 */
+ LUA_WRAP_INT_OP(nl80211,channel)
+@@ -819,6 +848,38 @@ static const luaL_reg R_madwifi[] = {
+ };
+ #endif
+ 
++#ifdef USE_INTEL
++static const luaL_reg R_intel[] = {
++	LUA_REG(intel,channel),
++	LUA_REG(intel,frequency),
++	LUA_REG(intel,frequency_offset),
++	LUA_REG(intel,txpower),
++	LUA_REG(intel,txpower_offset),
++	LUA_REG(intel,bitrate),
++	LUA_REG(intel,signal),
++	LUA_REG(intel,noise),
++	LUA_REG(intel,quality),
++	LUA_REG(intel,quality_max),
++	LUA_REG(intel,mode),
++	LUA_REG(intel,ssid),
++	LUA_REG(intel,bssid),
++	LUA_REG(intel,country),
++	LUA_REG(intel,assoclist),
++	LUA_REG(intel,txpwrlist),
++	LUA_REG(intel,scanlist),
++	LUA_REG(intel,freqlist),
++	LUA_REG(intel,countrylist),
++	LUA_REG(intel,hwmodelist),
++	LUA_REG(intel,htmodelist),
++	LUA_REG(intel,encryption),
++	LUA_REG(intel,mbssid_support),
++	LUA_REG(intel,hardware_id),
++	LUA_REG(intel,hardware_name),
++	LUA_REG(intel,phyname),
++	{ NULL, NULL }
++};
++#endif
++
+ #ifdef USE_NL80211
+ /* NL80211 table */
+ static const luaL_reg R_nl80211[] = {
+@@ -912,6 +973,15 @@ LUALIB_API int luaopen_iwinfo(lua_State
+ 	lua_setfield(L, -2, "madwifi");
+ #endif
+ 
++#ifdef USE_INTEL
++	luaL_newmetatable(L, IWINFO_INTEL_META);
++	luaL_register(L, NULL, R_common);
++	luaL_register(L, NULL, R_intel);
++	lua_pushvalue(L, -1);
++	lua_setfield(L, -2, "__index");
++	lua_setfield(L, -2, "intel");
++#endif
++
+ #ifdef USE_NL80211
+ 	luaL_newmetatable(L, IWINFO_NL80211_META);
+ 	luaL_register(L, NULL, R_common);

@@ -1,0 +1,247 @@
+# HG changeset patch
+# Parent 91b06a80ff9242a44bed5ee735c1b7743f151277
+
+diff --git a/include/net/netfilter/nf_conntrack.h b/include/net/netfilter/nf_conntrack.h
+--- a/include/net/netfilter/nf_conntrack.h
++++ b/include/net/netfilter/nf_conntrack.h
+@@ -174,8 +174,11 @@ struct nf_conn {
+ #endif
+ 	/* Storage reserved for other modules, must be the last member */
+ 	union nf_conntrack_proto proto;
++	uint64_t sga_data;
+ };
+ 
++extern int sga_update_byte_count(const struct nf_conn *ct, uint32_t pkt_count, uint32_t byte_count, uint8_t dir);
++
+ static inline struct nf_conn *
+ nf_ct_tuplehash_to_ctrack(const struct nf_conntrack_tuple_hash *hash)
+ {
+diff --git a/include/uapi/linux/netfilter/Kbuild b/include/uapi/linux/netfilter/Kbuild
+--- a/include/uapi/linux/netfilter/Kbuild
++++ b/include/uapi/linux/netfilter/Kbuild
+@@ -50,6 +50,7 @@ header-y += xt_devgroup.h
+ header-y += xt_dscp.h
+ header-y += xt_ecn.h
+ header-y += xt_esp.h
++header-y += xt_group.h
+ header-y += xt_hashlimit.h
+ header-y += xt_helper.h
+ header-y += xt_iprange.h
+diff --git a/include/uapi/linux/netfilter/xt_group.h b/include/uapi/linux/netfilter/xt_group.h
+new file mode 100644
+--- /dev/null
++++ b/include/uapi/linux/netfilter/xt_group.h
+@@ -0,0 +1,35 @@
++#ifndef __XT_GROUP_H__
++#define __XT_GROUP_H__
++
++#include <linux/types.h>
++
++#define GROUP_NAMESZ	16
++
++/*! \brief	Group information */
++typedef struct xt_group_info {
++	uint8_t groupId;		/*! Group ID */
++	char name[GROUP_NAMESZ];
++} xt_group_info_t;
++
++/*! \brief	Group Listener’s callback function
++\param[in] skb Pointer to skb
++\param[in] ct Pointer to conntrack
++\param[in] info Group information  
++*/
++typedef void (*nf_group_callback)(struct sk_buff *skb, 
++			struct nf_conn *ct, 
++			const struct xt_group_info *info);
++
++/*! \brief  API to register a listeners 
++\param[in] nf_group_callback Callback function to be called on hitting the target
++\return On Error -1 is returned. On success the registration Id is returned. This ID should be used to unregister the listener.  
++*/
++uint32_t nf_register_groupListener(nf_group_callback nfGroupListener);
++
++/*! \brief  API to unregister a listeners 
++\param[in] regId  Listener’s registration ID. This ID is provided by xt_group during registration.
++\return Returns true on success and false on failure.   
++*/
++bool nf_unregister_groupListener(uint32_t regId);
++
++#endif	/*__XT_GROUP_H__*/
+diff --git a/net/netfilter/Kconfig b/net/netfilter/Kconfig
+--- a/net/netfilter/Kconfig
++++ b/net/netfilter/Kconfig
+@@ -1362,6 +1362,12 @@ config NETFILTER_XT_MATCH_U32
+ 
+ 	  Details and examples are in the kernel module source.
+ 
++config NETFILTER_XT_GROUP
++	tristate 'netfilter group target and match support'
++	default N
++	---help---
++	This option adds the "GROUP" target and "group" match.
++
+ endif # NETFILTER_XTABLES
+ 
+ endmenu
+diff --git a/net/netfilter/Makefile b/net/netfilter/Makefile
+--- a/net/netfilter/Makefile
++++ b/net/netfilter/Makefile
+@@ -151,3 +151,5 @@ obj-$(CONFIG_IP_SET) += ipset/
+ 
+ # IPVS
+ obj-$(CONFIG_IP_VS) += ipvs/
++
++obj-$(CONFIG_NETFILTER_XT_GROUP) += xt_group.o
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -902,6 +902,7 @@ static struct nf_conn *
+ 	memset(&ct->tuplehash[IP_CT_DIR_MAX], 0,
+ 	       offsetof(struct nf_conn, proto) -
+ 	       offsetof(struct nf_conn, tuplehash[IP_CT_DIR_MAX]));
++	ct->sga_data = 0; /* Reset SGA data index to 0 */
+ 	spin_lock_init(&ct->lock);
+ #if defined(CONFIG_APPCPU_GW_PP_HANDLE) && defined(CONFIG_MRPC_CONNTRACK_CLIENT)
+ 	ct->ct_tuple_arm_sync_wait = 0;
+@@ -1933,6 +1934,17 @@ err_stat:
+ 	return ret;
+ }
+ 
++int (*sga_update_callback_fn) (const struct nf_conn *ct, uint32_t pkt_count, uint32_t byte_count, uint8_t dir) = NULL;
++EXPORT_SYMBOL(sga_update_callback_fn);
++
++int sga_update_byte_count(const struct nf_conn *ct, uint32_t pkt_count, uint32_t byte_count, uint8_t dir)
++{
++	if (sga_update_callback_fn) {
++		sga_update_callback_fn(ct, pkt_count, byte_count, dir);
++	}
++}
++EXPORT_SYMBOL(sga_update_byte_count);
++
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+ uint32_t get_hash_from_ct(const struct nf_conn *ct, uint8_t dir, struct nf_conntrack_tuple* tuple)
+ {
+diff --git a/net/netfilter/xt_group.c b/net/netfilter/xt_group.c
+new file mode 100644
+--- /dev/null
++++ b/net/netfilter/xt_group.c
+@@ -0,0 +1,119 @@
++/*
++ * xt_group.c: driver for xt_group
++ *
++ * (C) Copyright 2017 Intel Corporation
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; version 2
++ * of the License.
++ */
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/netfilter.h>
++#include <uapi/linux/netfilter_ipv4.h>
++#include <linux/skbuff.h>
++#include <net/netfilter/nf_conntrack.h>
++#include <net/netfilter/nf_conntrack_ecache.h>
++#include <linux/netfilter/x_tables.h>
++#include <linux/netfilter/xt_connmark.h>
++#include <linux/netfilter/xt_group.h>
++#include <linux/netfilter/x_tables.h>
++#include <linux/debugfs.h>
++
++MODULE_AUTHOR("Super Ni <super.ni@intel.com>");
++MODULE_LICENSE("GPL v2");
++MODULE_DESCRIPTION("XT_GROUP: packet group operations");
++MODULE_ALIAS("ipt_group");
++MODULE_ALIAS("ip6t_group");
++MODULE_ALIAS("ipt_GROUP");
++MODULE_ALIAS("ip6t_GROUP");
++
++
++static nf_group_callback nf_group_cb = NULL;
++
++uint32_t nf_register_groupListener(nf_group_callback nfGroupListener)
++{
++	uint32_t regId;
++
++	nf_group_cb = nfGroupListener;
++	regId = 1;		/* currently for PPA only */
++	return regId;
++}
++EXPORT_SYMBOL(nf_register_groupListener);
++
++bool nf_unregister_groupListener(uint32_t regId)
++{
++	if (1 == regId) {
++		nf_group_cb = NULL;
++		return true;
++	}
++	return false;
++}
++EXPORT_SYMBOL(nf_unregister_groupListener);
++
++static unsigned int
++group_tg(struct sk_buff *skb, const struct xt_action_param *par)
++{
++	const struct xt_group_info *info = par->targinfo;
++	struct nf_conn *ct;
++	enum ip_conntrack_info ctinfo;
++
++	if (nf_group_cb) {
++		ct = nf_ct_get(skb, &ctinfo);
++		nf_group_cb(skb, ct, info);
++	}
++	return XT_CONTINUE;
++}
++
++static bool
++group_mt(const struct sk_buff *skb, struct xt_action_param *par)
++{
++	const struct xt_group_info *info = par->matchinfo;
++
++	return true;
++}
++
++static struct xt_target group_tg_reg __read_mostly = {
++	.name           = "GROUP",
++	.revision       = 2,
++	.family         = NFPROTO_UNSPEC,
++	.target         = group_tg,
++	.targetsize     = sizeof(struct xt_group_info),
++	.me             = THIS_MODULE,
++};
++
++static struct xt_match group_mt_reg __read_mostly = {
++	.name           = "group",
++	.revision       = 1,
++	.family         = NFPROTO_UNSPEC,
++	.match          = group_mt,
++	.matchsize      = sizeof(struct xt_group_info),
++	.me             = THIS_MODULE,
++};
++
++static int __init group_mt_init(void)
++{
++	int ret;
++
++	ret = xt_register_target(&group_tg_reg);
++	if (ret < 0) {
++		return ret;
++	}
++	ret = xt_register_match(&group_mt_reg);
++	if (ret < 0) {
++		xt_unregister_target(&group_tg_reg);
++		return ret;
++	}
++	return 0;
++}
++
++static void __exit group_mt_exit(void)
++{
++	xt_unregister_match(&group_mt_reg);
++	xt_unregister_target(&group_tg_reg);
++}
++
++module_init(group_mt_init);
++module_exit(group_mt_exit);

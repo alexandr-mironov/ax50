@@ -1,0 +1,793 @@
+# HG changeset patch
+# Parent bae20b02aadf211e2d64c5a34064e978a7bc2983
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -4,7 +4,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2015-2017 Intel Corporation.
++  Copyright(c) 2015-2018 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -29,7 +29,7 @@
+ 
+   BSD LICENSE
+ 
+-  Copyright(c) 2014-2017 Intel Corporation. All rights reserved.
++  Copyright(c) 2014-2018 Intel Corporation. All rights reserved.
+ 
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+@@ -130,11 +130,13 @@ typedef enum
+     PDSP_CLASSIFIER1_VPID_COMMAND   = 0x83,
+ 
+     // Classifier2  commands
+-    PDSP_CLASSIFIER2_PID_COMMAND    = 0x83,
++    PDSP_CLASSIFIER2_PID_COMMAND                 = 0x83,
+     PDSP_CLASSIFIER2_CLASSIFICATION_MODE_COMMAND = 0x84,
+-    PDSP_CLASSIFIER2_MOCA_IRREG_SESS_OPEN = 0x85,
+-    PDSP_CLASSIFIER2_SUPPORT_BP_FRAG      = 0x86,
+-    PDSP_CLASSIFIER2_SUPPORT_MULTI_DROP   = 0x87,
++    PDSP_CLASSIFIER2_MOCA_IRREG_SESS_OPEN        = 0x85,
++    PDSP_CLASSIFIER2_SUPPORT_BP_FRAG             = 0x86,
++    PDSP_CLASSIFIER2_SUPPORT_MULTI_DROP          = 0x87,
++    PDSP_CLASSIFIER2_CHANGE_LUT_CLASSIFICATION   = 0x88,
++    PDSP_CLASSIFIER2_SUPPORT_SMART_PRIORITIZATION= 0x89,
+ 
+     // PDSP ReSequencer commands
+     PDSP_RESEQUENCER_SET_SYNC_Q_THRSHOLD = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -4,7 +4,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014-2017 Intel Corporation.
++  Copyright(c) 2014-2018 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -29,7 +29,7 @@
+ 
+   BSD LICENSE
+ 
+-  Copyright(c) 2014-2017 Intel Corporation. All rights reserved.
++  Copyright(c) 2014-2018 Intel Corporation. All rights reserved.
+ 
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+@@ -118,9 +118,12 @@
+ #define AVALANCHE_PP_MAX_STATIC_ENTRIES                 (32 * 1024)
+ #define AVALANCHE_PP_MAX_LUT_ENTRIES                    (3 * 1024)
+ #define AVALANCHE_PP_MAX_ACCELERATED_SESSIONS           (AVALANCHE_PP_MAX_STATIC_ENTRIES + AVALANCHE_PP_MAX_LUT_ENTRIES)
++
++#define AVALANCHE_PP_AVARAGE_UNIQUE_STATIC_ENTRIES       (12 * 1024)
++#define AVALANCHE_PP_AVARAGE_UNIQUE_ACCELERATED_SESSIONS (AVALANCHE_PP_AVARAGE_UNIQUE_STATIC_ENTRIES + AVALANCHE_PP_MAX_LUT_ENTRIES)
++
+ #define AVALANCHE_PP_MAX_ACCELERATED_TDOX_SESSIONS      500
+ #define VPID_IF_NAME_SIZE                               16
+-
+ #endif
+ 
+ #ifdef CONFIG_WIFI_MESH_TUNNEL
+@@ -129,6 +132,21 @@
+ #define AVALANCHE_PP_MAX_ACCELERATED_VOICE_SESSIONS     16
+ #endif
+ 
++#define DDH_MAX_DROP_SESSIONS                                   (128)    
++#define DDH_HOST_PPS_THRESHOLD                                  (50000)
++#define DDH_LOW_SESSION_UTILIZATION_THRESHOLD                   (80)
++#define DDH_HIGH_SESSION_UTILIZATION_THRESHOLD                  (90)
++#define DDH_US_SESSION_UTILIZATION_THRESHOLD                    (80)
++#define DDH_EVENT_SHORT_TIMEOUT_SECONDS                         (5)
++#define DDH_EVENT_LONG_TIMEOUT_SECONDS                          (10)   
++#define DDH_EVENT_BACK_TO_NORMAL_TIMEOUT_SECONDS                (60)
++#define DDH_MAX_SESSIONS_PER_SECOND_QUOTIENT                    (AVALANCHE_PP_AVARAGE_UNIQUE_ACCELERATED_SESSIONS / DDH_EVENT_SHORT_TIMEOUT_SECONDS)
++#define DDH_MAX_SESSIONS_PER_SECOND_REMAINDER                   (AVALANCHE_PP_AVARAGE_UNIQUE_ACCELERATED_SESSIONS - (DDH_MAX_SESSIONS_PER_SECOND_QUOTIENT * DDH_EVENT_SHORT_TIMEOUT_SECONDS))
++#define DDH_MAX_SESSIONS_PER_SECOND                             (DDH_MAX_SESSIONS_PER_SECOND_QUOTIENT + DDH_MAX_SESSIONS_PER_SECOND_REMAINDER)
++#define DDH_NOTIFICATIONS_NUM_OF_SAMPLING_WITHOUT_STATE_SWITCH  (3)
++
++/* ID of the destination group who are listening to DDH notifications socket. */
++#define AVALANCHE_PP_DDH_NOIFICATIONS_NETLINK_GROUP             1
+ 
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_VERSION_t
+@@ -195,9 +213,6 @@ typedef struct  // former TI_PP_VERSION
+ AVALANCHE_PP_VERSION_t;
+ #endif
+ 
+-
+-
+-
+ /* ******************************************************************** */
+ /*                                                                      */
+ /*                      ____ ___ ____                                   */
+@@ -218,6 +233,7 @@ AVALANCHE_PP_VERSION_t;
+ #define AVALANCHE_PP_PID_PRIO_OFF_TX_DST_TAG      0x4
+ #define AVALANCHE_PP_PID_CLASSIFY_BYPASS          0x8
+ #define AVALANCHE_PP_PID_DISCARD_ALL_RX           0x40
++#define AVALANCHE_PP_PID_WAN_FLAG                 0x80
+ 
+ /**************************************************************************
+  ****************************** PID Type Definitions **********************
+@@ -230,6 +246,7 @@ AVALANCHE_PP_VERSION_t;
+ #define AVALANCHE_PP_PID_TYPE_CDC                  0x4
+ #define AVALANCHE_PP_PID_TYPE_DOCSIS               0x5
+ #define AVALANCHE_PP_PID_TYPE_ETHERNETSWITCH       0x6
++#define AVALANCHE_PP_PID_TYPE_WAN                  0x7
+ 
+ /**************************************************************************
+  ****************************** PID Ingress Framing ***********************
+@@ -264,7 +281,8 @@ typedef struct // former TI_PP_PID
+ 
+     Uint8           dflt_pri_drp;
+     Uint8           pri_mapping;
+-    Uint16          dflt_fwd_q;
++    Uint16          dflt_host_q;
++    Uint16          dflt_infra_q;
+ 
+     Uint16          dflt_dst_tag;
+     Uint16          tx_pri_q_map[ 8 ];
+@@ -337,27 +355,27 @@ typedef struct // former TI_PP_QOS_QUEUE
+     Uint8               flags;                  /* Control how packets in the queue should be handled */
+     Uint16              egr_q;                  /* Queue manager and queue index of forwarding queue */
+ 
++    Uint32              congst_thrsh_bytes;     /* The size in bytes at which point the QOS queue is considered to be congested. */
++    Uint16              congst_thrsh_packets;   /* The maximum number of packets to be kept in QOS queue */
++
+     /*Strict Schedluing parameters */
+     Uint32              it_credit_bytes;        /* The amount of forwarding byte ?credit? that the queue receives every 25us. */
+     Uint16              it_credit_packets;      /* The amount of forwarding packets ?credit? that the queue receives every 25us. */
+     Uint32              max_credit_bytes;       /* The maximum amount of forwarding byte ?credit? that the queue is allowed to hold at the end of the 25us iteration. */
+     Uint16              max_credit_packets;     /* The maximum amount of forwarding byte ?credit? that the queue is allowed to hold at the end of the 25us iteration. */
+-    Uint32              congst_thrsh_bytes;     /* The size in bytes at which point the QOS queue is considered to be congested. */
+-    Uint16              congst_thrsh_packets;   /* The maximum number of packets to be kept in QOS queue */
++
+     /* WFQ Schedluing parameters */
+     Uint16              q_weight;               /* The Weight given to queue i */
+     Uint16              cpqpi;                  /* Credit byte per queue per iteration (CPQP(i))  This is the relative number of bytes per iteration for queue based on its w(i) */
+-
+-}
+-AVALANCHE_PP_QOS_QUEUE_t;
++} AVALANCHE_PP_QOS_QUEUE_t;
+ 
+ /* QoS manager scheduling mode */
+ typedef enum
+ {
+     PP_QOS_SCH_STRICT,
+-    PP_QOS_SCH_WFQ
+-}
+-PP_QOS_SCH_MODE_e;
++    PP_QOS_SCH_WFQ,
++    PP_QOS_SCH_GRR
++} PP_QOS_SCH_MODE_e;
+ 
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_QOS_CLST_CFG
+@@ -369,8 +387,18 @@ PP_QOS_SCH_MODE_e;
+ typedef struct // former TI_PP_QOS_CLST_CFG
+ {
+     AVALANCHE_PP_QOS_QUEUE_t    qos_q_cfg[AVALANCHE_PP_QOS_CLST_MAX_QCNT];      /* Configuration for all the queues associated with the cluster, arranged in order of priority (qos_q_cfg[0] being lower in priority than qos_q_cfg[1]) */
+-    Uint8                       qos_q_cnt;                                      /* Number of QOS queues in the cluster (1 to 8) */
+     PP_QOS_SCH_MODE_e           sch_mode;                                       /* Scheduling mode */
++    Uint8                       qos_q_cnt;                /* Number of QOS queues in the cluster (1 to 8) */
++    Uint8                       flags;
++#define PP_QOS_CLUSTER_TYPE_WFQ       (1<<0)
++#define PP_QOS_CLUSTER_TYPE_HOST      (1<<1)
++#define PP_QOS_CLUSTER_TYPE_GRR       (1<<2)
++
++    Uint8                       grr_first_bitmask;        /* For Grouped RR Cluster only (Grouped RR cluster does't support QDA) */
++    Uint8                       res;
++    Uint32                      grr_cluster_it_credit_bytes;
++    Uint16                      grr_cluster_it_credit_packets;
++    Uint16                      res2;
+ 
+     /*Strict Schedluing parameters */
+     Uint32                      global_credit_bytes;                            /* The amount of global bytes credit available to the next QOS queue in the cluster */
+@@ -395,12 +423,11 @@ typedef struct // former TI_PP_QOS_CLST_
+     Uint32                      sum_of_weights;                                 /* The total Weights that is configured to the cluster */
+     Uint8                       remaining_credits;                              /* The remaining credits that the cluster have due to the division of total credits in the queues weights */
+ 
+-	/* Iteration Divider DB parameters */
+-	Uint16						it_divider;
++    /* Iteration Divider DB parameters */
++    Uint16                      it_divider;
+ }
+ AVALANCHE_PP_QOS_CLST_CFG_t;
+ 
+-
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_QOS_QUEUE_STATS
+  **************************************************************************
+@@ -422,7 +449,6 @@ typedef struct // former TI_PP_QOS_QUEUE
+ #endif
+ AVALANCHE_PP_QOS_QUEUE_STATS_t;
+ 
+-
+ /* ******************************************************************** */
+ /*                                                                      */
+ /*                __     ______ ___ ____                                */
+@@ -433,8 +459,6 @@ AVALANCHE_PP_QOS_QUEUE_STATS_t;
+ /*                                                                      */
+ /*                                                                      */
+ /* ******************************************************************** */
+-
+-
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_VPID_TYPE_e
+  **************************************************************************
+@@ -462,8 +486,6 @@ AVALANCHE_PP_VPID_TYPE_e;
+ #define AVALANCHE_PP_VPID_FLG_RX_DISBL             (1 << 6)
+ #define AVALANCHE_PP_VPID_FLG_VALID                (1 << 7)
+ 
+-
+-
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_VPID_INFO_t
+  **************************************************************************
+@@ -510,7 +532,6 @@ typedef struct // former TI_PP_VPID
+ }
+ AVALANCHE_PP_VPID_INFO_t;
+ 
+-
+ /**************************************************************************
+  * STRUCTURE NAME : TI_PP_VPID_STATS
+  **************************************************************************
+@@ -551,8 +572,6 @@ typedef struct // former TI_PP_VPID_STAT
+ }AVALANCHE_PP_VPID_STATS_t;
+ #endif
+ 
+-
+-
+ /* ******************************************************************** */
+ /*                                                                      */
+ /*                 ____                _                                */
+@@ -677,7 +696,6 @@ typedef enum
+ }
+ AVALANCHE_PP_LUT2_FIELD_ENABLE_e;
+ 
+-
+ #ifndef CONFIG_WIFI_MESH_TUNNEL
+ typedef struct
+ {
+@@ -760,8 +778,6 @@ typedef struct
+ }
+ __Avalanche_PP_LUTs_Data_t;
+ 
+-
+-
+ #else // #if PUMA7_OR_NEWER_SOC_TYPE
+ 
+ #define PP_LOOKUP_FIELD_UNKNOWN_VALUE           0
+@@ -893,7 +909,6 @@ typedef enum
+ }
+ AVALANCHE_PP_DEV_TYPE_e;
+ 
+-
+ /**************************************************************************
+  * STRUCTURE NAME : AVALANCHE_PP_INGRESS_SESSION_PROPERTY_t
+  **************************************************************************
+@@ -912,7 +927,11 @@ typedef struct // former TI_PP_SESSION_P
+     Uint8                               pid_type;       /* Needed for WAN/LAN direction selection */
+ #endif
+     Uint8                               flags;
+-                                        #define AVALANCHE_PP_INGRESS_MULTICAST   0x1
++                                        #define AVALANCHE_PP_INGRESS_MULTICAST     0x1
++                                        #define AVALANCHE_PP_FULL_CLASSIFICATION   0x2
++                                        #define AVALANCHE_PP_L2_CLASSIFICATION     0x4
++                                        #define AVALANCHE_PP_INGRESS_PID_WAN       0x8
++                                       
+ #if PUMA7_OR_NEWER_SOC_TYPE
+     Uint8                               isFirstFrag;
+ #else
+@@ -1186,7 +1205,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_VLAN                   0x01
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_SYN                0x02
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_CTRL               0x04
+-                                #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_DOCSIS                 0x08
++                                #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_WAN                    0x08
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv4                             0x10
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv6                             0x20
+                                 #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x40
+@@ -1199,7 +1218,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_PSI_VALID                           0x2000
+                                 #define AVALANCHE_PP_EGRESS_WH_UDP                              0x4000
+                                 #define AVALANCHE_PP_EGRESS_L2TP_HDRFLAG                        0x8000
+-    Uint8                       reserved;
++    Uint8                       mac_hash_calculated;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+ 
+@@ -1283,7 +1302,6 @@ typedef enum
+ 
+ }AVALANCHE_PP_WIFI_MESH_HEADER_SIZE_e;
+ 
+-
+ #define AVALNCHE_PP_WIFI_MESH_HEADER_MAX_LEN        (61)
+ 
+ /**************************************************************************
+@@ -1311,7 +1329,6 @@ AVALANCHE_PP_EGRESS_SESSION_PROPERTY_t;
+ 
+ #endif
+ 
+-
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ typedef enum
+ {
+@@ -1544,9 +1561,9 @@ typedef struct
+     Uint32      Classifier1_pkts_default_hop_list_set;
+     Uint32      Classifier1_pkts_default_frag_hop_list_set;
+     Uint32      Classifier1_tcp_pure_ack;
+-    Uint32      Classifier1_res8;
+ 
+     /* Classifier2 */
++    Uint32      Classifier2_bithash_matches;
+     Uint32      Classifier2_rx_pkts;
+     Uint32      Classifier2_session_cache_searches;
+     Uint32      Classifier2_session_cache_matches;
+@@ -1785,17 +1802,6 @@ struct AVALANCHE_PP_SESSION_DELETE_CB_PA
+ 	Uint8	spare;
+ };
+ 
+-#ifdef __KERNEL__
+-/* **************************************************************************************** */
+-/*                                                                                          */
+-/*                                                                                          */
+-/*                                                                                          */
+-/*                      KERNEL only Stuff                                                   */
+-/*                                                                                          */
+-/*                                                                                          */
+-/*                                                                                          */
+-/* **************************************************************************************** */
+-
+ typedef enum
+ {
+     PP_RC_SUCCESS,
+@@ -1808,6 +1814,55 @@ typedef enum
+ }
+ AVALANCHE_PP_RET_e;
+ 
++typedef enum {
++    AVALANCHE_PP_DDH_MODE_INTERNAL,
++    AVALANCHE_PP_DDH_MODE_EXTERNAL,
++} AVALANCHE_PP_Defensive_Mode_e;
++
++typedef enum {
++    AVALANCHE_PP_DDH_STATE_NORMAL           = 0x0,
++    AVALANCHE_PP_DDH_STATE_DS_DEFENSIVE     = 0x1,
++    AVALANCHE_PP_DDH_STATE_FULL_DEFENSIVE   = 0x2,
++    AVALANCHE_PP_DDH_STATE_DOS              = 0x3,
++    AVALANCHE_PP_DDH_STATE_DDOS             = 0x4,
++    AVALANCHE_PP_DDH_STATES_COUNT           /* Must be the last enum! */
++} AVALANCHE_PP_DDH_STATE_e;
++
++enum AVALANCHE_PP_DDH_NOTIFICATIONS_STATE {
++    AVALANCHE_PP_DDH_NOTIFICATIONS_STATE_NORMAL = 0x0,
++    AVALANCHE_PP_DDH_NOTIFICATIONS_STATE_DOS = 0x1,
++};
++typedef Uint32                           avalanche_pp_defensive_state_notification_timeout_ioctl_param_t;
++typedef AVALANCHE_PP_Defensive_Mode_e    avalanche_pp_defensive_mode_ioctl_param_t;
++typedef Uint8                            avalanche_pp_defensive_state_ioctl_param_t;
++
++enum AVALANCHE_PP_DDH_NOTIFICATIONS_MESSAGE_TYPE {
++    AVALANCHE_PP_NEW_MODE_NOTIFICATION_MSG_TYPE,
++};
++
++struct AVALANCHE_PP_DDH_NOTIFICATIONS_INFO {
++    enum AVALANCHE_PP_DDH_NOTIFICATIONS_STATE current_state;
++    Uint32                                    number_of_us_sessions;
++    Uint32                                    number_of_ds_sessions;
++};
++
++struct AVALANCHE_PP_DDH_NOTIFICATIONS_MESSAGE {
++    enum AVALANCHE_PP_DDH_NOTIFICATIONS_MESSAGE_TYPE message_type;
++    union {
++        struct AVALANCHE_PP_DDH_NOTIFICATIONS_INFO   ddh_state_info;
++    } u;
++};
++
++#ifdef __KERNEL__
++/* **************************************************************************************** */
++/*                                                                                          */
++/*                                                                                          */
++/*                                                                                          */
++/*                      KERNEL only Stuff                                                   */
++/*                                                                                          */
++/*                                                                                          */
++/*                                                                                          */
++/* **************************************************************************************** */
+ typedef enum
+ {
+     PP_LIST_ID_INGRESS,
+@@ -1818,6 +1873,28 @@ typedef enum
+ }
+ PP_LIST_ID_e;
+ 
++typedef enum
++{
++    AVALANCHE_PP_BLACKLIST_EMPTY    = 0x0,
++    AVALANCHE_PP_BLACKLIST_FULL     = 0x1,
++    AVALANCHE_PP_BLACKLIST_IN_USE   = 0x2,
++}
++AVALANCHE_PP_BLACKLIST_INFO_e;
++
++typedef AVALANCHE_PP_RET_e   (* AVALANCHE_DDH_NOTIFY_FN_t)(AVALANCHE_PP_DDH_STATE_e *state);
++
++typedef struct
++{
++    AVALANCHE_PP_DDH_STATE_e    ddh_state;                          /* Current DDH state */
++    AVALANCHE_DDH_NOTIFY_FN_t   notify_cb;                          /* DDH Event notification callback */
++    Bool                        multi_drop_enabled;                 /* A flag indicates if multi-drop is enabled or not */
++    Bool                        smart_prioritization_enabled;
++    Bool                        l2_classification_enabled;          /* support L2 classification enable*/
++    Bool                        l2_classification_enabled_by_default;
++    Uint8                       l2_classification_pid;
++}
++AVALANCHE_PP_Defensive_State_t;
++
+ typedef AVALANCHE_PP_RET_e   (* AVALANCHE_EXEC_HOOK_FN_t)      ( AVALANCHE_PP_SESSION_INFO_t *  ptr_session, Ptr     data );
+ typedef AVALANCHE_PP_RET_e   (* AVALANCHE_VPID_EXEC_HOOK_FN_t) (Uint8 vpid_handle, PP_LIST_ID_e list_id, AVALANCHE_EXEC_HOOK_FN_t handler, Ptr data);
+ 
+@@ -1835,6 +1912,7 @@ extern AVALANCHE_PP_RET_e    avalanche_p
+ extern AVALANCHE_PP_RET_e    avalanche_pp_pid_set_flags         ( Uint8     pid_handle,     Uint32  new_flags );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_pid_get_list          ( Uint8 *   num_entries, AVALANCHE_PP_PID_t ** pid_list );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_pid_get_info          ( Uint8     pid_handle,  AVALANCHE_PP_PID_t ** ptr_pid );
++extern AVALANCHE_PP_RET_e    avalanche_pp_pid_set_type          ( Uint8     pid_handle, Uint8 pid_type );
+ 
+ extern AVALANCHE_PP_RET_e    avalanche_pp_vpid_create           ( AVALANCHE_PP_VPID_INFO_t *    ptr_vpid );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_vpid_delete           ( Uint8     vpid_handle );
+@@ -1887,6 +1965,24 @@ extern AVALANCHE_PP_RET_e   avalanche_pp
+ extern AVALANCHE_PP_RET_e   avalanche_pp_reset_stats_global                 ( void );
+ extern void                 avalanche_pp_substract_stats_global_counters(AVALANCHE_PP_GLOBAL_STATS_t* old_stats, AVALANCHE_PP_GLOBAL_STATS_t* new_stats);
+ 
++extern AVALANCHE_PP_RET_e   avalanche_pp_set_defensive_state (AVALANCHE_PP_DDH_STATE_e state);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_defensive_state (AVALANCHE_PP_DDH_STATE_e *state);
++extern AVALANCHE_PP_RET_e   avalanche_pp_set_external_defensive_state(avalanche_pp_defensive_state_ioctl_param_t state);
++extern AVALANCHE_PP_RET_e   avalanche_pp_set_l2classification_default_mode(Bool l2_classification_default_mode);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_l2classification_default_mode(Bool *l2_classification_default_mode);
++extern AVALANCHE_PP_RET_e	avalanche_pp_set_defensive_mode  (AVALANCHE_PP_Defensive_Mode_e defensive_mode);
++extern AVALANCHE_PP_RET_e 	avalanche_pp_get_defensive_mode  (AVALANCHE_PP_Defensive_Mode_e* defensive_mode);
++extern AVALANCHE_PP_RET_e   avalanche_pp_support_multi_drop  (Bool enable_multi_drop);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_blacklist_info(Bool *multi_drop_enabled, Uint8 ip_type, AVALANCHE_PP_BLACKLIST_INFO_e *blacklist_info);
++extern AVALANCHE_PP_RET_e   avalanche_pp_support_smart_prioritization(Bool enable_smart_prioritization);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_smart_prioritization(Bool *smart_prioritization_enabled);
++extern AVALANCHE_PP_RET_e   avalanche_pp_support_l2_classification(Bool enable_l2_classification, Uint8 pid_handle);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_l2_classification(Bool *l2_classification_enabled, Uint8* pid_handle);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_host_packets(Uint32 *host_packets);
++extern AVALANCHE_PP_RET_e   avalanche_pp_defensive_state_notify_bind (AVALANCHE_DDH_NOTIFY_FN_t handler);
++extern AVALANCHE_PP_RET_e   avalanche_pp_set_defensive_mode(AVALANCHE_PP_Defensive_Mode_e defensive_mode);
++extern AVALANCHE_PP_RET_e   avalanche_pp_get_defensive_mode(AVALANCHE_PP_Defensive_Mode_e *defensive_mode);
++
+ #ifdef CONFIG_WIFI_MESH_TUNNEL
+ 
+ #define SRC_MAC_ADDR_COMPARE       BIT0
+@@ -1914,6 +2010,8 @@ typedef enum
+     PP_EV_SESSION_DELETE_FAILED         ,
+     PP_EV_SESSION_EXPIRED               ,
+     PP_EV_MISC_TRIGGER_TDOX_EVALUATION  ,
++    PP_EV_DDH                           ,
++    PP_EV_DDH_NOTIFY                    ,
+     PP_EV_MAX                           ,
+     PP_EV_MAXVAL = 0xFFFFFFFF
+ }
+@@ -1965,6 +2063,8 @@ typedef struct
+     Uint32                              active_PIDs;
+     Uint32                              active_VPIDs;
+     Uint32                              active_sessions;
++    Uint32                              active_us_sessions;
++    Uint32                              active_ds_sessions;
+     Uint32                              active_drop_sessions;
+     Uint32                              active_multi_drop_sessions;
+     Uint32                              active_irreg_moca_sessions;
+@@ -1987,6 +2087,9 @@ AVALANCHE_PP_Misc_Statistics_t;
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ extern AVALANCHE_PP_RET_e    avalanche_pp_event_init(void);
+ #endif
++extern AVALANCHE_PP_RET_e    avalanche_pp_event_poll_timer_init( void );
++extern AVALANCHE_PP_RET_e    avalanche_pp_set_ddh_notify_event_interval(Uint32 number_of_miliseconds_for_interval);
++extern AVALANCHE_PP_RET_e    avalanche_pp_reset_ddh_notify_event_counter(void);
+ 
+ #ifndef CONFIG_WIFI_MESH_TUNNEL
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_set( Uint32 session_handle, Bool     enable );
+@@ -2458,6 +2561,12 @@ typedef     struct
+ 
+ }avalanche_pp_dev_ioctl_param_t;
+ 
++typedef struct
++{
++    char    dev_name[16];
++    Int8    type;
++} avalanche_pp_set_pid_type_ioctl_param_t;
++
+ typedef     struct
+ {
+     Uint32  session_record_base_address;
+@@ -2579,21 +2688,28 @@ typedef struct
+ */
+ #define PP_DRIVER_MODULE_ID                    (0xDF)
+ 
+-#define PP_DRIVER_FLUSH_ALL_SESSIONS                _IO   (PP_DRIVER_MODULE_ID, 1)
+-#define PP_DRIVER_PSM                               _IOWR (PP_DRIVER_MODULE_ID, 2, avalanche_pp_psm_ioctl_param_t)
+-#define PP_DRIVER_DELETE_VPID                       _IOWR (PP_DRIVER_MODULE_ID, 3, avalanche_pp_dev_ioctl_param_t)
+-#define PP_DRIVER_ADD_VPID                          _IOWR (PP_DRIVER_MODULE_ID, 4, avalanche_pp_dev_ioctl_param_t)
+-#define PP_DRIVER_SET_QOS_CLST_MAX_CREDIT           _IOWR (PP_DRIVER_MODULE_ID, 5, avalanche_pp_Qos_ioctl_params_t)
+-#define PP_DRIVER_SET_QOS_QUEUE_MAX_CREDIT          _IOWR (PP_DRIVER_MODULE_ID, 6, avalanche_pp_Qos_ioctl_params_t)
+-#define PP_DRIVER_SET_QOS_QUEUE_ITERATION_CREDIT    _IOWR (PP_DRIVER_MODULE_ID, 7, avalanche_pp_Qos_ioctl_params_t)
+-#define PP_DRIVER_SET_QOS_QUEUE_CONGESTION          _IOWR (PP_DRIVER_MODULE_ID, 8, avalanche_pp_Qos_ioctl_params_t)
+-#define PP_DRIVER_SET_FRAG_MODE                     _IOWR (PP_DRIVER_MODULE_ID, 9, avalanche_pp_frag_mode_ioctl_param_t)
+-#define PP_DRIVER_SET_LOCAL_DEV_ADDR                _IOWR (PP_DRIVER_MODULE_ID, 10, avalanche_pp_local_dev_addr_ioctl_params_t)
+-#define PP_DRIVER_KERNEL_POST_INIT                  _IO   (PP_DRIVER_MODULE_ID, 11)
+-#define PP_DRIVER_SET_ACK_SUPP                      _IOWR (PP_DRIVER_MODULE_ID, 12, avalanche_pp_ackSupp_ioctl_param_t)
+-#define PP_DRIVER_GET_DB_PARAMS                     _IOWR (PP_DRIVER_MODULE_ID, 13, avalanche_pp_db_address_param_t)
+-#define PP_DRIVER_GET_SESSION_STATS                 _IOWR (PP_DRIVER_MODULE_ID, 14, AVALANCHE_PP_EXTENDED_SESSION_STATS_t)
+-#define PP_DRIVER_SHOW_LOCAL_DEV_ADDR               _IOWR (PP_DRIVER_MODULE_ID, 15, avalanche_pp_local_dev_addr_ioctl_params_t)
++#define PP_DRIVER_FLUSH_ALL_SESSIONS                    _IO   (PP_DRIVER_MODULE_ID, 1)
++#define PP_DRIVER_PSM                                   _IOWR (PP_DRIVER_MODULE_ID, 2, avalanche_pp_psm_ioctl_param_t)
++#define PP_DRIVER_DELETE_VPID                           _IOWR (PP_DRIVER_MODULE_ID, 3, avalanche_pp_dev_ioctl_param_t)
++#define PP_DRIVER_ADD_VPID                              _IOWR (PP_DRIVER_MODULE_ID, 4, avalanche_pp_dev_ioctl_param_t)
++#define PP_DRIVER_SET_QOS_CLST_MAX_CREDIT               _IOWR (PP_DRIVER_MODULE_ID, 5, avalanche_pp_Qos_ioctl_params_t)
++#define PP_DRIVER_SET_QOS_QUEUE_MAX_CREDIT              _IOWR (PP_DRIVER_MODULE_ID, 6, avalanche_pp_Qos_ioctl_params_t)
++#define PP_DRIVER_SET_QOS_QUEUE_ITERATION_CREDIT        _IOWR (PP_DRIVER_MODULE_ID, 7, avalanche_pp_Qos_ioctl_params_t)
++#define PP_DRIVER_SET_QOS_QUEUE_CONGESTION              _IOWR (PP_DRIVER_MODULE_ID, 8, avalanche_pp_Qos_ioctl_params_t)
++#define PP_DRIVER_SET_FRAG_MODE                         _IOWR (PP_DRIVER_MODULE_ID, 9, avalanche_pp_frag_mode_ioctl_param_t)
++#define PP_DRIVER_SET_LOCAL_DEV_ADDR                    _IOWR (PP_DRIVER_MODULE_ID, 10, avalanche_pp_local_dev_addr_ioctl_params_t)
++#define PP_DRIVER_KERNEL_POST_INIT                      _IO   (PP_DRIVER_MODULE_ID, 11)
++#define PP_DRIVER_SET_ACK_SUPP                          _IOWR (PP_DRIVER_MODULE_ID, 12, avalanche_pp_ackSupp_ioctl_param_t)
++#define PP_DRIVER_GET_DB_PARAMS                         _IOWR (PP_DRIVER_MODULE_ID, 13, avalanche_pp_db_address_param_t)
++#define PP_DRIVER_GET_SESSION_STATS                     _IOWR (PP_DRIVER_MODULE_ID, 14, AVALANCHE_PP_EXTENDED_SESSION_STATS_t)
++#define PP_DRIVER_SHOW_LOCAL_DEV_ADDR                   _IOWR (PP_DRIVER_MODULE_ID, 15, avalanche_pp_local_dev_addr_ioctl_params_t)
++#define PP_DRIVER_SET_DEFENSIVE_MODE                    _IOWR (PP_DRIVER_MODULE_ID, 16, avalanche_pp_defensive_mode_ioctl_param_t)
++#define PP_DRIVER_SET_DEFENSIVE_STATE                   _IOWR (PP_DRIVER_MODULE_ID, 17, avalanche_pp_defensive_state_ioctl_param_t)
++#define PP_DRIVER_CHANGE_L2CLASSIFICATION_DEFAULT_MODE  _IOWR (PP_DRIVER_MODULE_ID, 18, avalanche_pp_l2classification_default_mode_ioctl_param_t)
++#define PP_DRIVER_SET_DDH_NOTIFICATION_TIMEOUT          _IOWR (PP_DRIVER_MODULE_ID, 19, avalanche_pp_defensive_state_notification_timeout_ioctl_param_t)
++#define PP_DRIVER_PRINT_BITHASH                         _IO   (PP_DRIVER_MODULE_ID, 20)
++#define PP_DRIVER_SET_PID_TYPE                          _IOWR (PP_DRIVER_MODULE_ID, 21, avalanche_pp_set_pid_type_ioctl_param_t)
++
+ #endif //   _AVALANCHE_PP_H
+ 
+ 
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -9,7 +9,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2016-2017 Intel Corporation.
++  Copyright(c) 2016-2018 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -34,7 +34,7 @@
+ 
+   BSD LICENSE
+ 
+-  Copyright(c) 2016 Intel Corporation. All rights reserved.
++  Copyright(c) 2016-2018 Intel Corporation. All rights reserved.
+ 
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+@@ -91,6 +91,8 @@
+ #define PP_QOS_Q_WFQ_ENABELD_FLAG    (1<<5)
+ #define PP_QOS_Q_WFQ_RC_ALLOWED      (1<<6)
+ 
++#define PP_QOS_Q_LIMITED_DEFAULT_CREDIT_BYTES    (2000)
++#define PP_QOS_Q_LIMITED_DEFAULT_CREDIT_PACKETS  (100)
+ 
+ #define PP_QOS_ITERATION_TICK_USEC   (25)
+ #define PP_QOS_ITERATION_PER_SECOND  (1000000 / PP_QOS_ITERATION_TICK_USEC)
+@@ -103,6 +105,16 @@
+ #define PP_QOS_FW_QCFG_BLK_BASE_PHY  (0xF3E10200)
+ #define PP_QOS_FW_CLST_BLK_BASE_PHY  (0xF3E12200)
+ 
++/* Host QoS Queues */
++#define WAN_HIGH_Q              191
++#define WAN_MED_HIGH_Q          190
++#define WAN_MED_Q               189
++#define WAN_MED_LOW_Q           188
++#define WAN_LOW_Q               187
++#define LAN_HIGH_Q              186
++#define LAN_MED_Q               185
++#define LAN_LOW_Q               184
++
+ #define PP_QOS_FW_DIV_SUM_BASE_PHY   (0xF3E13600)                /* 2 Bytes * 255 entries*/
+ #define PP_QOS_FW_IT_DIV_BASE_PHY    (0xF3E13800)
+ 
+@@ -153,7 +165,8 @@ typedef struct
+     PP_QOS_SCH_MODE_e sch_mode;                   /* Strict/WFQ */
+     Uint8             num_of_priorities;          /* Number of priorities for strict scheduling or Number of queues in WFQ scheduling */
+     Uint8             vpid_id;                    /* VPID ID */
+-    Uint16            profile_private_identifier;
++    Uint8             grr_bitmask;                /* GRR bitmask - For GRR scheduling only */
++    Uint8             profile_private_identifier;
+     Uint32            egress_port_queue;          /* Egress queue number */
+     Uint32            egress_queue_depth_packets; /* Egress queue depth (packets) */
+     Uint32            egress_queue_depth_bytes;   /* Egress queue depth (bytes) */
+@@ -181,9 +194,11 @@ PP_QOS_PORT_SHAPER_t;
+ typedef struct
+ {
+     Uint8    active_shared_clusters;
++    Uint8    active_host_clusters;
+     Uint8    active_private_clusters[AVALANCHE_PP_MAX_PID];
+     Uint8    private_clusters_free_pool_cnt[AVALANCHE_PP_MAX_PID];
+     Uint8    active_shared_queues;
++    Uint8    active_host_queues;
+     Uint8    active_private_queues[AVALANCHE_PP_MAX_PID];
+     Uint8    private_queues_free_pool_cnt[AVALANCHE_PP_MAX_PID];
+     Uint32   clusters_starvation_shared;
+@@ -206,7 +221,6 @@ PP_QOS_MIB_STATS_t;
+ 
+ typedef struct
+ {
+-
+     Uint32                      global_credit_bytes;        /* The amount of global credit bytes available to the next Qos queue in the cluster */
+ 
+     Uint16                      global_credit_pkts;         /* The amount of global credit packet available to the next Qos queue in the cluster */
+@@ -215,6 +229,7 @@ typedef struct
+     Uint32                      max_global_credit_bytes;    /* The max amount of global credit bytes allowed carring over to the next queue. */
+ 
+     Uint16                      qda_queue;                  /* The queue which we activated QDA on. INVALID_QDA_QUEUE indicates that QDA wasn't activated on any on the cluster queues */
++#define                         grr_1st_in_group_bm qda_queue   /* For Grouped RR Cluster only (Grouped RR cluster does't support QDA) */
+ 
+ #if defined(__BIG_ENDIAN_BITFIELD)
+     Uint8       egr_q_cnt:4,              /* The total number of egress queues sampled to obtain the egress queue congestion estimation*/
+diff --git a/include/linux/avalanche/puma7/puma7_pp.h b/include/linux/avalanche/puma7/puma7_pp.h
+--- a/include/linux/avalanche/puma7/puma7_pp.h
++++ b/include/linux/avalanche/puma7/puma7_pp.h
+@@ -8,7 +8,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014 - 2017 Intel Corporation.
++  Copyright(c) 2014 - 2018 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -33,7 +33,7 @@
+ 
+   BSD LICENSE
+ 
+-  Copyright(c) 2014 - 2016 Intel Corporation. All rights reserved.
++  Copyright(c) 2014 - 2018 Intel Corporation. All rights reserved.
+ 
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+@@ -127,6 +127,9 @@ typedef enum PP_PID_NUM
+     PP_RESERVED_PID_NUM_31,            // 31
+ }PP_PID_NUM_e;
+ 
++#define PP_PID_NUM_ALL      (0xFE)
++#define PP_PID_NUM_INVALID  (0xFF)
++
+ #if 0
+ #define PP_ETH_PID_COUNT    1   // for backward compatible
+ #define PP_ETH_PID_BASE     31  // for backward compatible
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -298,6 +298,7 @@ enum {
+     #endif
+
+         unsigned int                    flags;
++        struct nf_conn                  *base_conn;
+         int                             input_device_index;
+
+     /* The length of the EPI header is 8 bytes. */
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -1,7 +1,7 @@
+ /*
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2016 -2017 Intel Corporation.
++  Copyright(c) 2016 -2018 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -183,6 +183,11 @@ struct hil_core_notifier_param
+ /* Event generated once Netfilter decides to delete all sessions linked to the same conntrack */
+ #define TI_CT_NETFILTER_DELETE_CONNTRACK_SESSIONS     (TI_CT_EVENT + 0x11)
+ 
++struct ct_entry_created_t {
++	struct sk_buff *skb;
++	struct nf_conn *ct;
++};
++
+ /**************************************************************************
+  ********************* PP Multicast Routing Event Identifiers *************
+  **************************************************************************/
+@@ -309,6 +314,16 @@ typedef enum
+ #define TI_IP_DISCARD_PKT_IPV6   (TI_IP_EVENT + 0x2)
+ 
+ /**************************************************************************
++ ************************* PP DDH Event Identifiers ***********************
++ **************************************************************************/
++
++/* Base for all DDH Event identifiers. */
++#define TI_DDH_EVENT                 0xA0
++
++#define TI_DDH_CHANGE_L2CLASSIFICATION_DEFAULT_MODE   (TI_DDH_EVENT + 0x1)
++#define TI_DDH_SET_DEFENSIVE_STATE                    (TI_DDH_EVENT + 0x2)
++
++/**************************************************************************
+  **************************** HIL Profile Structures **********************
+  **************************************************************************/
+ 
+diff --git a/include/net/netfilter/nf_conntrack.h b/include/net/netfilter/nf_conntrack.h
+--- a/include/net/netfilter/nf_conntrack.h
++++ b/include/net/netfilter/nf_conntrack.h
+@@ -47,12 +47,20 @@
+ 
+ /* Set the flag to indicate that the connection tacking timeout code should execute as
+  *  * such and the entry will be deleted. */
+-#define TI_PP_KILL_CONNTRACK       0x1
++#define TI_PP_KILL_CONNTRACK         0x1
+ 
+ /* Set the flag to 1 indicates that all packets flowing through the box matching the
+  *  * connection will have their BYPASS flag set. */
+-#define TI_PP_BYPASS               0x2
++#define TI_PP_BYPASS                 0x2
++
++/* Set the flag to 1 indicates that this is conntrack connection is upstream */
++#define TI_PP_US_CONNECTION          0x4
++
++/* Set the flag to 1 indicates that all packets flowing through the box matching the
++ * connection will have their BYPASS flag set. */
++#define TI_PP_DS_RESPONSE_HASH_VALID 0x8
+ #endif
++
+ /* per conntrack: protocol private data */
+ union nf_conntrack_proto {
+ 	/* insert conntrack proto private data here */
+@@ -148,6 +156,7 @@ struct nf_conn {
+     struct list_head pp_session_list_head;
+     int             ti_pp_status_flag;
+     int             pp_appcpu_status_flag;
++    u_int16_t       ti_pp_ds_response_hash;
+ #endif
+ 
+ #if defined(CONFIG_NETFILTER_XT_MATCH_LAYER7) || \
+diff --git a/include/uapi/linux/netlink.h b/include/uapi/linux/netlink.h
+--- a/include/uapi/linux/netlink.h
++++ b/include/uapi/linux/netlink.h
+@@ -28,6 +28,9 @@
+ #define NETLINK_RDMA		20
+ #define NETLINK_CRYPTO		21	/* Crypto layer */
+ 
++/* Added definition for netlink socket to notify about DDH defensive states switching. */
++#define NETLINK_DDH_NOTIFICATIONS 22
++
+ #define NETLINK_INET_DIAG	NETLINK_SOCK_DIAG
+ 
+ #define MAX_LINKS 32		
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -981,6 +981,9 @@ init_conntrack(struct net *net, struct n
+ 	struct nf_conntrack_tuple repl_tuple;
+ 	struct nf_conntrack_ecache *ecache;
+ 	struct nf_conntrack_expect *exp;
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	struct ct_entry_created_t entry_info;
++#endif
+ 	u16 zone = tmpl ? nf_ct_zone(tmpl) : NF_CT_DEFAULT_ZONE;
+ 	struct nf_conn_timeout *timeout_ext;
+ 	unsigned int *timeouts;
+@@ -1067,7 +1070,10 @@ init_conntrack(struct net *net, struct n
+ 		nf_ct_expect_put(exp);
+ 	}
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-    ti_hil_pp_event(TI_CT_ENTRY_CREATED, (void *)ct);
++	entry_info.skb = skb;
++	entry_info.ct = ct;
++	/* Generate an event indicating that a connection tracking entry has been created */
++	ti_hil_pp_event(TI_CT_ENTRY_CREATED, (void *)(&entry_info));
+ #endif //CONFIG_TI_PACKET_PROCESSOR
+ 	return &ct->tuplehash[IP_CT_DIR_ORIGINAL];
+ }

@@ -1,0 +1,277 @@
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -61,6 +61,12 @@ config MRPC_HIL_CMDS_CLIENT
+     help
+        Enable Puma7 HIL command handle MRPC between ATOM and ARM
+ 
++config MRPC_VCE_CFG_CLIENT
++    tristate "vce cfg mrpc client"
++    depends on MRPC
++    default n
++    help
++       voice configuration mrpc client
+ config MRPC_CPPI_CLIENT
+     tristate "cppi mrpc client"
+     depends on MRPC
+diff --git a/drivers/mrpc/Makefile b/drivers/mrpc/Makefile
+--- a/drivers/mrpc/Makefile
++++ b/drivers/mrpc/Makefile
+@@ -5,3 +5,4 @@ obj-$(CONFIG_MRPC_CPPI_SERVER) 	 += cppi
+ obj-$(CONFIG_MRPC_HANDSHAKE)		+= handshake_client.o
+ obj-$(CONFIG_MRPC_CPPI_SERVER) 		+= cppi_server.o
+ obj-$(CONFIG_MRPC_CPPI_CLIENT)		+= cppi_client.o
++obj-$(CONFIG_MRPC_VCE_CFG_CLIENT)   += voice_cfg_client.o
+diff --git a/drivers/mrpc/voice_cfg_client.c b/drivers/mrpc/voice_cfg_client.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/mrpc/voice_cfg_client.c
+@@ -0,0 +1,237 @@
++/*
++ *
++ * voice_cfg_client.c
++ * Description:
++ * voice config mrpc client driver
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++#define pr_fmt(fmt) KBUILD_MODNAME ":%s:%d " fmt "\n", __func__, __LINE__
++
++/************************************************/
++/**                    Includes                 */
++/************************************************/
++#include <linux/platform_device.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
++#include <linux/byteorder/generic.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/mutex.h>
++#include <linux/workqueue.h>
++#include <linux/err.h>
++#include <linux/netdevice.h>
++#include <linux/ethtool.h>
++#include <linux/mrpc.h>
++
++#ifdef DEBUG
++#define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
++#else
++#define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
++#endif
++
++/* driver private database */
++struct voice_private {
++    struct platform_device *pdev;   /* platform device */
++    struct mrpc_client *mrpc;       /* mrpc client handle */
++};
++
++static struct voice_private *this;
++
++enum {
++    VOICE_CONFIG_SPI_TDM = 0,
++    VOICE_CONFIG_SSI = 1,
++};
++
++static inline int voice_cfg_mrpc_call(__u8 procid)
++{
++    struct voice_private *priv = this;
++    int ret, errcode;
++    Uint32 rep;
++
++    if (!priv) {
++        pr_err("ERROR: mrpc voice_cfg not initialized");
++        return -EFAULT;
++    }
++
++    ret = mrpc_call(priv->mrpc, procid, NULL, 0, &rep, sizeof(rep), 0, &errcode);
++
++    if (ret || errcode) {
++        pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
++        return errcode;
++    }
++
++    return ntohl(rep);
++}
++
++Uint32 voice_cfg_init_ssi(void)
++{
++    return voice_cfg_mrpc_call(VOICE_CONFIG_SSI);
++}
++EXPORT_SYMBOL(voice_cfg_init_ssi);
++
++Uint32 voice_cfg_init_spi_tdm(void)
++{
++    return voice_cfg_mrpc_call(VOICE_CONFIG_SPI_TDM);
++}
++EXPORT_SYMBOL(voice_cfg_init_spi_tdm);
++
++/* sysfs for future use */
++static ssize_t status_show(struct device *dev,
++                           struct device_attribute *attr, char *buf)
++{
++    struct voice_private *priv = dev_get_drvdata(dev);
++
++    if (!priv)
++        return -EINVAL;
++
++    return scnprintf(buf, PAGE_SIZE, "status ok");
++}
++
++static DEVICE_ATTR(status, S_IRUGO, status_show, NULL);
++
++static struct attribute *voice_attrs[] = {
++    &dev_attr_status.attr,
++    NULL
++};
++
++static struct attribute_group voice_attrs_group = {
++    .attrs = voice_attrs,
++};
++
++/**
++ * voice_mrpc_probe
++ *
++ * @param pdev   platform device
++ *
++ * @return 0 for success, error code otherwise
++ */
++static int voice_mrpc_probe(struct platform_device *pdev)
++{
++    struct voice_private *priv;
++    int ret;
++
++    priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
++    if (!priv) {
++        pr_err("memory allocation failed");
++        return -ENOMEM;
++    }
++
++    dev_set_drvdata(&pdev->dev, priv);
++    priv->pdev = pdev;
++
++    ret = sysfs_create_group(&priv->pdev->dev.kobj, &voice_attrs_group);
++    if (ret) {
++        pr_err("sysfs_create_group failed (ret=%d)", ret);
++        return ret;
++    }
++
++    priv->mrpc = mrpc_client_register(MRPC_RESERVED_ID_VOICE, "voice_cfg");
++    if (!priv->mrpc) {
++        pr_err("failed to register voice");
++        ret = -ENODEV;
++        goto out_remove_group;
++    }
++
++    this = priv;
++    return 0;
++
++out_remove_group:
++    sysfs_remove_group(&priv->pdev->dev.kobj, &voice_attrs_group);
++    return 0;
++}
++
++/**
++ * voice_mrpc_remove
++ *
++ * This function is called when the voice mrpc driver is
++ * removed.
++ *
++ * @param pdev   platform device
++ *
++ * @return 0 for success, error code otherwise
++ */
++static int voice_mrpc_remove(struct platform_device *pdev)
++{
++    struct voice_private *priv = platform_get_drvdata(pdev);
++    mrpc_client_unregister(priv->mrpc);
++    sysfs_remove_group(&priv->pdev->dev.kobj, &voice_attrs_group);
++    dev_set_drvdata(&pdev->dev, NULL);
++    this = NULL;
++
++    return 0;
++}
++
++static struct platform_driver voice_driver = {
++    .driver = {
++        .name   = "voice",
++    },
++    .probe = voice_mrpc_probe,
++    .remove = voice_mrpc_remove,
++};
++
++static struct platform_device *voice_device;
++
++static int __init voice_mrpc_init(void)
++{
++    int ret;
++
++    ret = platform_driver_register(&voice_driver);
++    if (ret < 0) {
++        pr_err("Failed to register voice platform driver: %d\n", ret);
++        return ret;
++    }
++
++    voice_device = platform_device_register_simple("voice", -1, NULL, 0);
++    if (IS_ERR(voice_device)) {
++        pr_err("Failed to register voice platform device\n");
++        platform_driver_unregister(&voice_driver);
++        return PTR_ERR(voice_device);
++    }
++
++    return 0;
++}
++
++static void __exit voice_mrpc_exit(void)
++{
++    platform_device_unregister(voice_device);
++    platform_driver_unregister(&voice_driver);
++}
++
++/******************************************************/
++/**    Module Declarations                           **/
++/******************************************************/
++module_init(voice_mrpc_init);
++module_exit(voice_mrpc_exit);
++
++MODULE_AUTHOR("Intel Corporation");
++MODULE_DESCRIPTION("voice mrpc client");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.0");
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -81,6 +81,7 @@ enum {
+     MRPC_RESERVED_ID_CONNTRACK,
+     MRPC_RESERVED_ID_HILCMDS,
+     MRPC_RESERVED_ID_CPPI,
++    MRPC_RESERVED_ID_VOICE = 15,
+     MRPC_RESERVED_ID_LAST,
+ };
+ 

@@ -1,0 +1,165 @@
+Source-Makefile: feeds/open_applications/mini-httpd/Makefile
+Package: mini-httpd
+Menu: 1
+Submenu: Web
+Version: 1.19-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ltq-mapi ltq-webcgi
+Section: net
+Category: Network
+Title: A small web server
+Maintainer: 
+Source: mini_httpd-1.19.tar.gz
+Type: ipkg
+Description:  mini_httpd is a small HTTP server. Its performance is not great, but for 
+ low or medium traffic sites it's quite adequate. It implements all the 
+ basic features of an HTTP server, including: 
+ - GET, HEAD, and POST methods
+ - CGI
+ - Basic authentication
+ - Security against ".." filename snooping
+ - The common MIME types
+ - Trailing-slash redirection
+ - index.html, index.htm, index.cgi
+ - Directory listings
+ - Multihoming / virtual hosting
+ - Standard logging
+ - Custom error pages
+ It can also be configured to do IPv6.
+http://www.acme.com/software/mini_httpd/
+
+@@
+Config:
+   	menu "overwrite package version"
+		depends on PACKAGE_mini-httpd
+	config mini-httpd_USE_CUSTOM_VERSION
+		depends on PACKAGE_mini-httpd
+		bool "Use custom package version"
+		default n
+	config mini-httpd_CUSTOM_VERSION
+		depends on mini-httpd_USE_CUSTOM_VERSION
+		string "mini-httpd version as string (default version: 1.19)"
+		default "1.19"
+	endmenu
+   	menu "custom source directory"
+		depends on PACKAGE_mini-httpd
+	config mini-httpd_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_mini-httpd
+		bool "Use custom source directory"
+		default n
+	config mini-httpd_CUSTOM_SOURCE_DIR
+		depends on mini-httpd_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default ""
+	endmenu
+@@
+
+Package: mini-httpd-matrixssl
+Menu: 1
+Submenu: Web
+Version: 1.19-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +matrixssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ltq-mapi ltq-webcgi
+Section: net
+Category: Network
+Title: A small web server (built with MatrixSSL)
+Maintainer: 
+Source: mini_httpd-1.19.tar.gz
+Type: ipkg
+Description:  mini_httpd is a small HTTP server. Its performance is not great, but for 
+ low or medium traffic sites it's quite adequate. It implements all the 
+ basic features of an HTTP server, including: 
+ - GET, HEAD, and POST methods
+ - CGI
+ - Basic authentication
+ - Security against ".." filename snooping
+ - The common MIME types
+ - Trailing-slash redirection
+ - index.html, index.htm, index.cgi
+ - Directory listings
+ - Multihoming / virtual hosting
+ - Standard logging
+ - Custom error pages
+ It can also be configured to do IPv6.
+ This package is built with SSL/HTTPS using MatrixSSL.
+http://www.acme.com/software/mini_httpd/
+
+@@
+
+Package: mini-httpd-openssl
+Menu: 1
+Submenu: Web
+Version: 1.19-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ltq-mapi ltq-webcgi
+Section: net
+Category: Network
+Title: A small web server (built with OpenSSL)
+Maintainer: 
+Source: mini_httpd-1.19.tar.gz
+Type: ipkg
+Description:  mini_httpd is a small HTTP server. Its performance is not great, but for 
+ low or medium traffic sites it's quite adequate. It implements all the 
+ basic features of an HTTP server, including: 
+ - GET, HEAD, and POST methods
+ - CGI
+ - Basic authentication
+ - Security against ".." filename snooping
+ - The common MIME types
+ - Trailing-slash redirection
+ - index.html, index.htm, index.cgi
+ - Directory listings
+ - Multihoming / virtual hosting
+ - Standard logging
+ - Custom error pages
+ It can also be configured to do IPv6.
+ This package is built with SSL/HTTPS using OpenSSL.
+http://www.acme.com/software/mini_httpd/
+
+@@
+
+Package: mini-httpd-htpasswd
+Menu: 1
+Submenu: Web
+Version: 1.19-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ltq-mapi ltq-webcgi
+Section: net
+Category: Network
+Title: Utility to generate HTTP access files
+Maintainer: 
+Source: mini_httpd-1.19.tar.gz
+Type: ipkg
+Description:  mini_httpd is a small HTTP server. Its performance is not great, but for 
+ low or medium traffic sites it's quite adequate. It implements all the 
+ basic features of an HTTP server, including: 
+ - GET, HEAD, and POST methods
+ - CGI
+ - Basic authentication
+ - Security against ".." filename snooping
+ - The common MIME types
+ - Trailing-slash redirection
+ - index.html, index.htm, index.cgi
+ - Directory listings
+ - Multihoming / virtual hosting
+ - Standard logging
+ - Custom error pages
+ It can also be configured to do IPv6.
+ This package generates .htaccess/.htpasswd files to use HTTP access authentication.
+http://www.acme.com/software/mini_httpd/
+
+@@
+
+

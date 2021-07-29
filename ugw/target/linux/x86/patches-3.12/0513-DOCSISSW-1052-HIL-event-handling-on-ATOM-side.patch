@@ -1,0 +1,171 @@
+From 81d50eba9bc510cac1ea2d8f3874440bb8278f30 Mon Sep 17 00:00:00 2001
+From: ylermanx <ylermanx@intel.com>
+Date: Tue, 1 Nov 2016 17:23:46 +0200
+Subject: [PATCH 513/639] DOCSISSW-1052 HIL event handling on ATOM side
+
+---
+ include/linux/mrpc.h    |   1 +
+ net/ti/pp/ti_hil_core.c | 102 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 103 insertions(+)
+
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+index 9c6fc24..c75aeaf 100644
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -84,6 +84,7 @@ enum {
+     MRPC_RESERVED_ID_WIFI_PROXY_FUNC_CALL,
+     MRPC_RESERVED_ID_DOCSIS_NETDEV,
+ 	MRPC_RESERVED_ID_SGC,
++    MRPC_RESERVED_ID_HILEVENTS,
+     MRPC_RESERVED_ID_LAST,
+ };
+ 
+diff --git a/net/ti/pp/ti_hil_core.c b/net/ti/pp/ti_hil_core.c
+index 93cbe92..d0a6ad7 100755
+--- a/net/ti/pp/ti_hil_core.c
++++ b/net/ti/pp/ti_hil_core.c
+@@ -61,6 +61,10 @@
+ #include <linux/netdevice.h>
+ #endif
+ 
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++#include <linux/mrpc.h>
++#endif
++
+ /**************************************************************************
+  ***************************** Static Declarations  ***********************
+  **************************************************************************/
+@@ -71,6 +75,36 @@ static unsigned int dropped_packets_bit_map;
+ 
+ #define DROPPED_PACKETS_BITMAP_IS_SET(__n)          ((dropped_packets_bit_map & (1 << (__n))) != 0)
+ 
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++#define MAX_NAME_SIZE   50
++#define HILEVENTS_MRPC_ID        MRPC_RESERVED_ID_HILEVENTS
++
++#define HILEVENTS_SERV_PROC(proc, func, arglen) \
++[proc] = {                                      \
++        .procid   = proc,                       \
++        .p_func   = func,                       \
++        .p_arglen = arglen,                     \
++        .p_replen = 0,                          \
++        .p_name   = #func,                      \
++}
++
++/*HIL events MRPC PROC id*/
++enum
++{
++    MRPC_HIL_INIT_PROC_ID = 0,
++    MRPC_HIL_REMOTE_PROC_ID,
++    MRPC_HIL_NUM_IDS
++};
++
++typedef struct
++{
++    char                    name[MAX_NAME_SIZE];
++    struct  mrpc_server *   mrpc_serv;
++
++    struct mrpc_procinfo    hilevents_mrpc_procs[MRPC_HIL_NUM_IDS];
++} hil_mrpc_info_t;
++#endif
++
+ static int hil_core_register_notifier_block(struct notifier_block *nb)
+ {
+     if(!notifier_list_was_init)
+@@ -143,6 +177,11 @@ static struct notifier_block hil_pp_notifier_block =
+     .notifier_call = ti_hil_net_event_handler,
+ };
+ 
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++static int mrpc_hil_init_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_hil_remote_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++#endif
++
+ /**************************************************************************
+  * STRUCTURE NAME : TI_HIL_MCB
+  **************************************************************************
+@@ -187,10 +226,64 @@ TI_HIL_MAC_AGING_DELETE_SESSION ti_hil_mac_aging_delete_session_notification_cb
+ EXPORT_SYMBOL(ti_hil_mac_aging_delete_session_notification_cb);
+ #endif
+ 
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++static hil_mrpc_info_t mrpc =
++{
++    .hilevents_mrpc_procs =
++    {
++        HILEVENTS_SERV_PROC(MRPC_HIL_INIT_PROC_ID, mrpc_hil_init_proc, 0),
++        HILEVENTS_SERV_PROC(MRPC_HIL_REMOTE_PROC_ID, mrpc_hil_remote_proc, sizeof(unsigned int)),
++    }
++};
++#endif
++
+ /**************************************************************************
+  ******************************* Functions  *******************************
+  **************************************************************************/
+ 
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++/**************************************************************************
++ * FUNCTION NAME : mrpc_hil_init_proc
++ **************************************************************************
++  * DESCRIPTION   :
++ *  MRPC proc server function. This function receives init event
++ *  from ARM side
++ *
++ * RETURNS       :
++ *  0   -   Success
++ *  <0  -   Error
++ **************************************************************************/
++static int mrpc_hil_init_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    printk ("HIL Core: %s invoked, remote profile on ARM activated \n", __func__);
++    return 0;
++}
++
++/**************************************************************************
++ * FUNCTION NAME : mrpc_hil_remote_proc
++ **************************************************************************
++  * DESCRIPTION   :
++ *  MRPC proc server function. This function receives event from remote
++ *  profile from ARM side
++ *
++ * RETURNS       :
++ *  0   -   Success
++ *  <0  -   Error
++ **************************************************************************/
++static int mrpc_hil_remote_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    unsigned int module = TI_PP;
++    unsigned int *p_arg = arg;
++    Uint32 event = ntohl(*p_arg);
++
++    /* printk ("HIL Core: %s invoked for event %d\n", __func__, event); */
++
++    hil_mcb.active_profile->profile_handler (module, event, NULL);
++
++    return 0;
++}
++#endif
++
+ /**************************************************************************
+  * FUNCTION NAME : ti_hil_net_event_handler
+  **************************************************************************
+@@ -332,7 +425,16 @@ int ti_hil_register_profile (TI_HIL_PROFILE* ptr_profile)
+ 
+     /* Initialize the profile. */
+     if (ti_hil_load_profile (hil_mcb.active_profile) == 0)
++    {
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++        snprintf(mrpc.name, MAX_NAME_SIZE, "HIL events MRPC");
++        mrpc.mrpc_serv = mrpc_server_register(  HILEVENTS_MRPC_ID,
++                                                mrpc.name,
++                                                mrpc.hilevents_mrpc_procs,
++                                                ARRAY_SIZE(mrpc.hilevents_mrpc_procs) );
++#endif
+         return 0;
++    }
+ 
+     /* Error: Unable to initialize the profile. */
+     printk ("HIL Core: HIL Profile %s failed to initialize.\n", hil_mcb.active_profile->name);
+-- 
+2.10.1
+

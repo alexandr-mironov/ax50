@@ -1,0 +1,149 @@
+From 16d5330075e4539613251fe2dd6a83fe1015cac9 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 4 Dec 2016 17:11:51 +0200
+Subject: [PATCH 533/639] Move GMAC4 to atom
+
+---
+ .../linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h    | 12 +++----
+ include/linux/avalanche/puma7/puma7_cppi_prv.h     | 37 +++-------------------
+ net/ti.Kconfig                                     |  6 ----
+ 3 files changed, 10 insertions(+), 45 deletions(-)
+
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+index 7c66c55..a41c41d 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+@@ -553,12 +553,12 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_WIFI_FW_RX_EMB_FD_Q_NUM)
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_VOICE_DSP_RX_EMB_FD_Q_NUM)                            /* PAL_CPPI_PP_QMGR_G2_Q490 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_VOICE_INFRA_RX_EMB_FD_Q_NUM)                          /* PAL_CPPI_PP_QMGR_G2_Q491 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_WIFI_FW_RX_REASSEMBLY_EMB_FD_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G2_Q492 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_SHARED_LOW_INFRA_HOST_FD_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G2_Q493 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_SHARED_HIGH_INFRA_HOST_FD_Q_NUM)                  /* PAL_CPPI_PP_QMGR_G2_Q494 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_HOST_FD_Q_NUM)                        /* PAL_CPPI_PP_QMGR_G2_Q495 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_HIGH_HOST_FD_Q_NUM)                       /* PAL_CPPI_PP_QMGR_G2_Q496 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_TX_COMPLETE_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G2_Q497 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_HI_TX_COMPLETE_Q_NUM)                     /* PAL_CPPI_PP_QMGR_G2_Q498 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q46)                                           /* PAL_CPPI_PP_QMGR_G2_Q493 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q47)                                           /* PAL_CPPI_PP_QMGR_G2_Q494 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q48)                                           /* PAL_CPPI_PP_QMGR_G2_Q495 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q49)                                           /* PAL_CPPI_PP_QMGR_G2_Q496 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q50)                                           /* PAL_CPPI_PP_QMGR_G2_Q497 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q51)                                           /* PAL_CPPI_PP_QMGR_G2_Q498 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_APP2NP_INFRA_CTRL_PPINFO_HOST_FD_Q_NUM)               /* PAL_CPPI_PP_QMGR_G2_Q499 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_APP2NP_INFRA_CTRL_DATA_HOST_FD_Q_NUM)                 /* PAL_CPPI_PP_QMGR_G2_Q500 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_NP2APP_INFRA_CTRL_PPINFO_HOST_FD_Q_NUM)               /* PAL_CPPI_PP_QMGR_G2_Q501 */\
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+index f3f5b60..919cefc 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -513,13 +513,6 @@ typedef enum PAL_CPPI_PP_DESC_REGIONs
+ #define PAL_CPPI_PP_SHARED_LOW_INFRA_HOST_FD_DESC_COUNT                                     512
+ #endif
+ 
+-#if !defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL) && defined(CONFIG_ARM_AVALANCHE_SOC)
+-#define PAL_CPPI_PP_QMGR_G2_ARM_SHARED_LOW_INFRA_HOST_FD_DESC_COUNT                         64
+-#define PAL_CPPI_PP_QMGR_G2_ARM_SHARED_HIGH_INFRA_HOST_FD_DESC_COUNT                        0
+-#define PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_HOST_FD_DESC_COUNT                              64
+-#define PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_HIGH_HOST_FD_DESC_COUNT                             0
+-#endif
+-
+ #define PAL_CPPI_PP_DOCSIS_LOW_INFRA_HOST_FD_DESC_COUNT                                     128
+ #define PAL_CPPI_PP_DOCSIS_HI_INFRA_HOST_FD_DESC_COUNT                                      64
+ #define PAL_CPPI_PP_DOCSIS_RX_MGMT_HOST_FD_DESC_COUNT                                       64
+@@ -1536,7 +1529,7 @@ typedef enum PAL_CPPI_DSG_DMA_BLOCKS
+     0       0           HOST to PP Tx Complete LOW                              0       0           In Use
+     1                   HOST to PP Tx Complete HIGH                             1
+     -------------------------------------------                                 -------------------------------------------
+-    2       1           MoCA RX                                                 2       1           Arm TX Complete
++    2       1           MoCA RX                                                 2       1           
+     3                                                                           3
+     4                                                                           4
+     5                                                                           5
+@@ -1633,12 +1626,8 @@ typedef enum PAL_CPPI_PP_ACCUMULATOR_INTD1_CHANNELS
+ {
+     PAL_CPPI_PP_RESERVED_INTD1_ACC_CH_NUM_0,                                                                        // 0 *** This INTD is already in use ***
+     PAL_CPPI_PP_RESERVED_INTD1_ACC_CH_NUM_1,                                                                        // 1 *** This INTD is already in use ***
+-
+-    PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_CH_BASE,
+-        PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_LOW_INTD1_ACC_CH_NUM = PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_CH_BASE,   // 2
+-        PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_HIGH_INTD1_ACC_CH_NUM,                                                          // 3
+-    PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_CH_LAST = PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_HIGH_INTD1_ACC_CH_NUM,
+-        
++    PAL_CPPI_PP_RESERVED_INTD1_ACC_CH_NUM_2,                                                                        // 2
++    PAL_CPPI_PP_RESERVED_INTD1_ACC_CH_NUM_3,                                                                        // 3
+     PAL_CPPI_PP_RESERVED_INTD1_ACC_CH_NUM_4,                                                                        // 4
+     PAL_CPPI_PP_RESERVED_INTD1_ACC_CH_NUM_5,                                                                        // 5
+     PAL_CPPI_PP_IPSEC_ENCRYPT_INTD1_ACC_CH_NUM,                                                                     // 6
+@@ -1687,7 +1676,7 @@ typedef enum PAL_CPPI_PP_ACCUMULATOR_INTD0_INTERRUPT_VECTORS
+ typedef enum PAL_CPPI_PP_ACCUMULATOR_INTD1_INTERRUPT_VECTORS
+ {
+     PAL_CPPI_PP_RESERVED_INTD1_ACC_INTV_NUM_0,                                                                      // 0 *** This INTV is already in use ***
+-    PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_INTV_NUM,                                                         // 1
++    PAL_CPPI_PP_RESERVED_INTD1_ACC_INTV_NUM_1,                                                                      // 1
+     PAL_CPPI_PP_IPSEC_ENCRYPT_INTD1_ACC_INTV_NUM,                                                                   // 2
+     PAL_CPPI_PP_IPSEC_DECRYPT_INTD1_ACC_INTV_NUM,                                                                   // 3
+     PAL_CPPI_PP_NP2APP_RX_INTD1_ACC_INTV_NUM,                                                                       // 4
+@@ -1702,7 +1691,6 @@ typedef enum PAL_CPPI_PP_ACCUMULATOR_INTD1_INTERRUPT_VECTORS
+ }PAL_CPPI_PP_ACCUMULATOR_INTD1_INTERRUPT_VECTORS_e;
+ 
+ #define PAL_CPPI41_WPD_ACC_INTV_NUM(devInstance)       (PAL_CPPI_PP_WiFi_0_INTD1_ACC_INTV_NUM + (devInstance))
+-#define ARM_TX_COMPLETE_MAP_INTD1_VEC_TO_ACC_INT(irq)  (irq + PAL_CPPI_PP_ACCUMULATOR_INTD0_MAX_INTERRUPT_VECTORS)
+ 
+ /**********************************************************************************************************************
+ 
+@@ -1799,12 +1787,7 @@ typedef enum PAL_CPPI_PP_SOURCE_PORTS
+ #define PAL_CPPI_PP_RGMII1_INFRA_DMA_CH_NUM(ch)                                (PAL_CPPI_PP_DMA10_RGMII1_LOW_INFRA_RX_CH + (ch))
+ #define PAL_CPPI_PP_SGMII0_INFRA_DMA_CH_NUM(ch)                                (PAL_CPPI_PP_DMA10_SGMII0_LOW_INFRA_RX_CH + (ch))
+ #define PAL_CPPI_PP_SGMII1_INFRA_DMA_CH_NUM(ch)                                (PAL_CPPI_PP_DMA10_SGMII1_LOW_INFRA_RX_CH + (ch))
+-
+-#if !defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL) && defined(CONFIG_ARM_AVALANCHE_SOC)
+-#define PAL_CPPI_PP_ATOM_INFRA_HOST_FD_Q_NUM(pri)                              ((pri) == 0 ? PAL_CPPI_PP_QMGR_G2_ARM_SHARED_LOW_INFRA_HOST_FD_Q_NUM : PAL_CPPI_PP_QMGR_G2_ATOM_HI_INFRA_HOST_FD_Q_NUM)
+-#else
+ #define PAL_CPPI_PP_ATOM_INFRA_HOST_FD_Q_NUM(pri)                              ((pri) == 0 ? PAL_CPPI_PP_QMGR_G2_SHARED_LOW_INFRA_HOST_FD_Q_NUM : PAL_CPPI_PP_QMGR_G2_ATOM_HI_INFRA_HOST_FD_Q_NUM)
+-#endif
+ #define PAL_CPPI_PP_RGMII0_INFRA_HOST_FD_Q_NUM(pri)                            ((pri) == 0 ? PAL_CPPI_PP_QMGR_G2_SHARED_LOW_INFRA_HOST_FD_Q_NUM : PAL_CPPI_PP_QMGR_G2_RGMII0_HI_INFRA_HOST_FD_Q_NUM)
+ #define PAL_CPPI_PP_RGMII1_INFRA_HOST_FD_Q_NUM(pri)                            ((pri) == 0 ? PAL_CPPI_PP_QMGR_G2_SHARED_LOW_INFRA_HOST_FD_Q_NUM : PAL_CPPI_PP_QMGR_G2_RGMII1_HI_INFRA_HOST_FD_Q_NUM)
+ #define PAL_CPPI_PP_SGMII0_INFRA_HOST_FD_Q_NUM(pri)                            ((pri) == 0 ? PAL_CPPI_PP_QMGR_G2_SHARED_LOW_INFRA_HOST_FD_Q_NUM : PAL_CPPI_PP_QMGR_G2_SGMII0_HI_INFRA_HOST_FD_Q_NUM)
+@@ -1840,22 +1823,10 @@ typedef enum PAL_CPPI_PP_SOURCE_PORTS
+ #define PAL_CPPI_PP_HOST2PP_INFRA_EMB_FD_Q_NUM(pri)                             (PAL_CPPI_PP_QMGR_G2_HOST2PP_INFRA_LOW_EMB_FD_Q_NUM + (pri))
+ #define PAL_CPPI_PP_HOST2PP_INFRA_DMA_CH_COUNT                                  (PAL_CPPI_PP_DMA11_HOST2PP_HIGH_INFRA_RX_CH - PAL_CPPI_PP_DMA11_HOST2PP_LOW_INFRA_RX_CH + 1)
+ #define PAL_CPPI_PP_HOST2PP_INFRA_DMA_CH_NUM(ch)                                (PAL_CPPI_PP_DMA11_HOST2PP_LOW_INFRA_RX_CH + (ch))
+-
+-#if !defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL) && defined(CONFIG_ARM_AVALANCHE_SOC)
+-#define PAL_CPPI_PP_HOST2PP_TX_COMPLETE_Q_NUM(pri)                              (PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_TX_COMPLETE_Q_NUM + (pri))
+-#else
+ #define PAL_CPPI_PP_HOST2PP_TX_COMPLETE_Q_NUM(pri)                              (PAL_CPPI_PP_QMGR_G2_HOST2PP_LOW_TX_COMPLETE_Q_NUM + (pri))
+-#endif
+-
+-#if !defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL) && defined(CONFIG_ARM_AVALANCHE_SOC)
+-#define PAL_CPPI_PP_HOST2PP_HOST_FD_Q_NUM(pri)                                  (PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_HOST_FD_Q_NUM + (pri))
+-#define PAL_CPPI_PP_HOST2PP_TX_COMPLETE_ACC_CH_NUM(pri)                         (PAL_CPPI_PP_ACC_INTD1_CH_TO_ACC_CH(PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_CH_BASE + (pri)))
+-#define PAL_CPPI_PP_HOST2PP_TX_COMPLETE_ACC_CH_COUNT                            (PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_CH_LAST - PAL_CPPI_PP_ARM_HOST2PP_TX_COMPLETE_INTD1_ACC_CH_BASE + 1)
+-#else
+ #define PAL_CPPI_PP_HOST2PP_HOST_FD_Q_NUM(pri)                                  (PAL_CPPI_PP_QMGR_G2_HOST2PP_LOW_HOST_FD_Q_NUM + (pri))
+ #define PAL_CPPI_PP_HOST2PP_TX_COMPLETE_ACC_CH_NUM(pri)                         (PAL_CPPI_PP_HOST2PP_TX_COMPLETE_INTD0_ACC_CH_BASE + (pri))
+ #define PAL_CPPI_PP_HOST2PP_TX_COMPLETE_ACC_CH_COUNT                            (PAL_CPPI_PP_HOST2PP_TX_COMPLETE_INTD0_ACC_CH_LAST - PAL_CPPI_PP_HOST2PP_TX_COMPLETE_INTD0_ACC_CH_BASE + 1)
+-#endif
+ #define PAL_CPPI_NETDEV_BUILD_Q_INFO(qMgr, qNum)                                ( ((qMgr) << CPPI41_EM_PKTINFO_RETQMGR_SHIFT) | (qNum) )
+ 
+ #ifdef CONFIG_MACH_PUMA7_FPGA
+diff --git a/net/ti.Kconfig b/net/ti.Kconfig
+index 226dc3c..10ca4bb 100644
+--- a/net/ti.Kconfig
++++ b/net/ti.Kconfig
+@@ -194,12 +194,6 @@ config NPCPU_HARDCODED_OFFCHIP_INFO
+ 		Force Mapping NPCPU DDR in a hardcoded manner
+ 		Address and size will be hardcoded
+ 
+-config EXCLUDE_GMAC4
+-        bool "Exclude GMAC4"
+-    default y
+-        help
+-	exclude GMAC4 from synopsys-gbe driver
+-
+ config TI_PACKET_PROCESSOR
+ 	bool "TI Packet Processor"
+     default n
+-- 
+2.10.1
+

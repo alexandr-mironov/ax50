@@ -1,0 +1,123 @@
+From 84d6a8ece0251f359ba6e0889a78699737c92576 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Fri, 3 Feb 2017 15:07:41 -0700
+Subject: [PATCH 593/639] netip-subsystem: Update service request message
+
+If power manager requests state of change of services that were initiali
+zed, before dual boot handshake is done, the driver should resend servic
+e request for the already initialized services with previous service sta
+tes.
+Also driver should notify the NetIP state to the platform driver only af
+ter receiving the service request replies for the all the ready services
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 44 ++++++++++++++++++---------
+ 1 file changed, 29 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index d95f757..63de93e 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -691,11 +691,23 @@ static void netss_update_sysfs_attributes(netss_sysfs_attributes_info_t *sysfs_i
+    {
+       NETSS_PM_PRINT("services_change requested = %X change complete %X service status = %X\n", g_netip_services_change_requested, g_netip_services_change_complete, sysfs_info->service_status);
+    }
+-   /*If we have received service request replies for all the services we requested */
+-   if( (!g_netss_boot_handshake_done && (g_netip_services_status_ready == g_netip_services_init_complete)) ||
++
++   /*This part of the code updates the overall system state and should be exceuted on two condtions
++    *1. During boot, i.e before dual boot hand shake, after all the available service status are recieved
++    * and the service request replies received for all the ready services.
++    *2. After boot, i.e dual boot handshake, power manager might have requested state change in that
++    *case check if all change requests are completed with replies.
++    **/
++   if( (!g_netss_boot_handshake_done && (g_netip_services_status_received  == g_netip_services_available) &&
++                                        (g_netip_services_status_ready == g_netip_services_init_complete)) ||
+        (g_netss_boot_handshake_done && (g_netip_services_change_complete == g_netip_services_change_requested)) )
+    {
+-      uint32_t temp = g_current_netip_power_state;
++      uint32_t temp = NETSS_POWER_LEVEL_ENABLE;
++      /**This is before dualboot handshake is done, system boot*/
++      if (g_current_netip_power_state != NETSS_POWER_LEVEL_INVALID)
++      {
++         temp = g_current_netip_power_state;
++      }
+       g_current_netip_power_state = service_msg->netip_level;
+ 
+       if(g_timer_created)
+@@ -704,6 +716,7 @@ static void netss_update_sysfs_attributes(netss_sysfs_attributes_info_t *sysfs_i
+           * a service_request change initiated by user after dualboot handshake */
+          del_timer_sync(&netss_pm_timer);
+       }
++
+       /**update the status vector with battery status */
+       if(g_onBattery)
+       {
+@@ -797,15 +810,18 @@ static void netss_update_sysfs_attributes(netss_sysfs_attributes_info_t *sysfs_i
+ }
+ 
+ 
+-static bool netss_request_for_service_level_change(int index)
++static bool netss_request_for_service_level_change(int index, uint32_t level)
+ {
+    bool add_service_to_msg = false;
+    uint32_t service_mask = (1 << (index - 1));
++   uint32_t status = g_netss_sysfs_attributes_info.service_status;
+    if(g_netip_services_status_ready & service_mask) {
+       if(g_netss_boot_handshake_done)
+          add_service_to_msg = !(g_netip_services_change_requested & service_mask);
+       else
+-         add_service_to_msg = !(g_netip_services_init_complete & service_mask);
++         add_service_to_msg = !(g_netip_services_init_complete & service_mask) ||
++                               (NETSS_GET_SERVICE_POWER_LEVEL(index, status) !=
++                                NETSS_GET_SERVICE_POWER_LEVEL(index, level));
+    }
+    return add_service_to_msg;
+ }
+@@ -872,6 +888,7 @@ static int netss_send_service_request_msg(uint32_t service_level)
+    netss_service_request_msg_t *service_msg = NULL;
+    uint8_t *msg;
+    uint32_t service_msg_len;
++   uint16_t service_count = 0;
+ 
+    /*Need one service for null termination */
+    service_msg_len = sizeof(netss_service_request_msg_t)+((g_num_netip_services_status_ready+1)*sizeof(netss_service_status_t));
+@@ -896,8 +913,13 @@ static int netss_send_service_request_msg(uint32_t service_level)
+       }
+ 
+       for(i = NETSS_SERVICE_ID_DOCSIS; i < NETSS_SERVICE_ID_MAX; i++) {
+-         if(netss_request_for_service_level_change(i)) {
++         if(netss_request_for_service_level_change(i, service_level)) {
+             uint32_t level = NETSS_GET_SERVICE_POWER_LEVEL(i, service_level);
++            service_count++;
++            if (service_count > g_num_netip_services_status_ready) {
++               printk(KERN_ERR "Allocated memory for %d services only\n", g_num_netip_services_status_ready);
++               break;
++            }
+             if(level == NETSS_SERVICE_POWER_LEVEL_RESERVED) {
+                NETSS_PM_PRINT("ERROR Cannot set service id %d to level %d\n", i, NETSS_SERVICE_POWER_LEVEL_RESERVED);
+             } else {
+@@ -1081,18 +1103,10 @@ static int netss_configure_and_setup_netip_services(void *data)
+                   /**Count is already one so dont increament */
+                   //pm_runtime_get_noresume(&pnetss_drv_data->dev->dev);
+ #endif
+-                  if(g_onBattery)
+-                  {
+-                     puma_netip_notify_state(1);
+-                  }
+-                  else
+-                  {
+-                     puma_netip_notify_state(0);
+-                  }
+                }
+                else
+                {
+-                  NETSS_PM_PRINT("Status of all services not recvd Available %X status recvd %X\n", g_netip_services_status_received, g_netip_services_available);
++                  NETSS_PM_PRINT("Status of all services not recvd Available %X status recvd %X\n", g_netip_services_available, g_netip_services_status_received);
+                }
+             }
+          }
+-- 
+2.10.1
+

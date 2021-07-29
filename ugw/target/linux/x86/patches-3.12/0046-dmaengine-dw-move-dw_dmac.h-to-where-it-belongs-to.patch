@@ -1,0 +1,174 @@
+From 63f2a6ec70cccf9b4a5dd9559e8f20dd514fdf68 Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Tue, 19 Aug 2014 20:29:12 +0300
+Subject: [PATCH 046/639] dmaengine: dw: move dw_dmac.h to where it belongs to
+
+There is a common storage for platform data related structures and definitions
+inside kernel source tree. The patch moves file from include/linux to
+include/linux/platform_data and renames it acoordingly. The users are also
+updated.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Acked-by: Viresh Kumar <viresh.kumar@linaro.org>
+[For the arch/avr32/.* and .*sound/atmel.*]
+Acked-by: Hans-Christian Egtvedt <egtvedt@samfundet.no>
+Signed-off-by: Vinod Koul <vinod.koul@intel.com>
+
+(cherry picked from commit 3d598f47e804a77208c6bb0a454123018e2f2281)
+Signed-off-by: Maladau Mou <maladau.mou@intel.com>
+---
+ MAINTAINERS                                         | 2 +-
+ arch/avr32/mach-at32ap/at32ap700x.c                 | 2 +-
+ arch/avr32/mach-at32ap/include/mach/atmel-mci.h     | 2 +-
+ drivers/dma/dw/internal.h                           | 2 +-
+ drivers/dma/dw/regs.h                               | 6 +++---
+ include/linux/{dw_dmac.h => platform_data/dma-dw.h} | 0
+ include/sound/atmel-abdac.h                         | 2 +-
+ include/sound/atmel-ac97c.h                         | 2 +-
+ sound/atmel/abdac.c                                 | 2 +-
+ sound/atmel/ac97c.c                                 | 2 +-
+ 10 files changed, 11 insertions(+), 11 deletions(-)
+ rename include/linux/{dw_dmac.h => platform_data/dma-dw.h} (100%)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 44881ab..7a3ba12 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -7259,7 +7259,7 @@ SYNOPSYS DESIGNWARE DMAC DRIVER
+ M:	Viresh Kumar <viresh.linux@gmail.com>
+ M:	Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+ S:	Maintained
+-F:	include/linux/dw_dmac.h
++F:	include/linux/platform_data/dma-dw.h
+ F:	drivers/dma/dw/
+ 
+ SYNOPSYS DESIGNWARE MMC/SD/SDIO DRIVER
+diff --git a/arch/avr32/mach-at32ap/at32ap700x.c b/arch/avr32/mach-at32ap/at32ap700x.c
+index a68f3cf..fc87e2f 100644
+--- a/arch/avr32/mach-at32ap/at32ap700x.c
++++ b/arch/avr32/mach-at32ap/at32ap700x.c
+@@ -7,7 +7,7 @@
+  */
+ #include <linux/clk.h>
+ #include <linux/delay.h>
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ #include <linux/fb.h>
+ #include <linux/init.h>
+ #include <linux/platform_device.h>
+diff --git a/arch/avr32/mach-at32ap/include/mach/atmel-mci.h b/arch/avr32/mach-at32ap/include/mach/atmel-mci.h
+index 4bba585..11d7f4b 100644
+--- a/arch/avr32/mach-at32ap/include/mach/atmel-mci.h
++++ b/arch/avr32/mach-at32ap/include/mach/atmel-mci.h
+@@ -1,7 +1,7 @@
+ #ifndef __MACH_ATMEL_MCI_H
+ #define __MACH_ATMEL_MCI_H
+ 
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ 
+ /**
+  * struct mci_dma_data - DMA data for MCI interface
+diff --git a/drivers/dma/dw/internal.h b/drivers/dma/dw/internal.h
+index 32667f9..43cc1df 100644
+--- a/drivers/dma/dw/internal.h
++++ b/drivers/dma/dw/internal.h
+@@ -12,7 +12,7 @@
+ #define _DW_DMAC_INTERNAL_H
+ 
+ #include <linux/device.h>
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ 
+ #include "regs.h"
+ 
+diff --git a/drivers/dma/dw/regs.h b/drivers/dma/dw/regs.h
+index 7ce76504..266c602 100644
+--- a/drivers/dma/dw/regs.h
++++ b/drivers/dma/dw/regs.h
+@@ -11,7 +11,7 @@
+ 
+ #include <linux/interrupt.h>
+ #include <linux/dmaengine.h>
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ 
+ #define DW_DMA_MAX_NR_CHANNELS	8
+ #define DW_DMA_MAX_NR_REQUESTS	16
+@@ -161,7 +161,7 @@ struct dw_dma_regs {
+ #define DWC_CTLH_DONE		0x00001000
+ #define DWC_CTLH_BLOCK_TS_MASK	0x00000fff
+ 
+-/* Bitfields in CFG_LO. Platform-configurable bits are in <linux/dw_dmac.h> */
++/* Bitfields in CFG_LO. Platform-configurable bits are in <linux/platform_data/dma-dw.h> */
+ #define DWC_CFGL_CH_PRIOR_MASK	(0x7 << 5)	/* priority mask */
+ #define DWC_CFGL_CH_PRIOR(x)	((x) << 5)	/* priority */
+ #define DWC_CFGL_CH_SUSP	(1 << 8)	/* pause xfer */
+@@ -172,7 +172,7 @@ struct dw_dma_regs {
+ #define DWC_CFGL_RELOAD_SAR	(1 << 30)
+ #define DWC_CFGL_RELOAD_DAR	(1 << 31)
+ 
+-/* Bitfields in CFG_HI. Platform-configurable bits are in <linux/dw_dmac.h> */
++/* Bitfields in CFG_HI. Platform-configurable bits are in <linux/platform_data/dma-dw.h> */
+ #define DWC_CFGH_DS_UPD_EN	(1 << 5)
+ #define DWC_CFGH_SS_UPD_EN	(1 << 6)
+ 
+diff --git a/include/linux/dw_dmac.h b/include/linux/platform_data/dma-dw.h
+similarity index 100%
+rename from include/linux/dw_dmac.h
+rename to include/linux/platform_data/dma-dw.h
+diff --git a/include/sound/atmel-abdac.h b/include/sound/atmel-abdac.h
+index edff6a8..a8f735d 100644
+--- a/include/sound/atmel-abdac.h
++++ b/include/sound/atmel-abdac.h
+@@ -10,7 +10,7 @@
+ #ifndef __INCLUDE_SOUND_ATMEL_ABDAC_H
+ #define __INCLUDE_SOUND_ATMEL_ABDAC_H
+ 
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ 
+ /**
+  * struct atmel_abdac_pdata - board specific ABDAC configuration
+diff --git a/include/sound/atmel-ac97c.h b/include/sound/atmel-ac97c.h
+index e6aabdb..31979c4 100644
+--- a/include/sound/atmel-ac97c.h
++++ b/include/sound/atmel-ac97c.h
+@@ -10,7 +10,7 @@
+ #ifndef __INCLUDE_SOUND_ATMEL_AC97C_H
+ #define __INCLUDE_SOUND_ATMEL_AC97C_H
+ 
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ 
+ #define AC97C_CAPTURE	0x01
+ #define AC97C_PLAYBACK	0x02
+diff --git a/sound/atmel/abdac.c b/sound/atmel/abdac.c
+index 872d59e..a4c7560 100644
+--- a/sound/atmel/abdac.c
++++ b/sound/atmel/abdac.c
+@@ -9,7 +9,7 @@
+  */
+ #include <linux/clk.h>
+ #include <linux/bitmap.h>
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ #include <linux/dmaengine.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/init.h>
+diff --git a/sound/atmel/ac97c.c b/sound/atmel/ac97c.c
+index ae63d22..9b7b066 100644
+--- a/sound/atmel/ac97c.c
++++ b/sound/atmel/ac97c.c
+@@ -31,7 +31,7 @@
+ #include <sound/atmel-ac97c.h>
+ #include <sound/memalloc.h>
+ 
+-#include <linux/dw_dmac.h>
++#include <linux/platform_data/dma-dw.h>
+ 
+ #include <mach/cpu.h>
+ #include <mach/gpio.h>
+-- 
+2.10.1
+

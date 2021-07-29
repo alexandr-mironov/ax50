@@ -1,0 +1,133 @@
+From 74d6c750a82a6e5f8d38ee7e2a638e7b6fc9a3fe Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Wed, 22 Feb 2017 14:13:18 -0700
+Subject: [PATCH] netip-subsystem: Update Atom services in CFG msg
+
+The atom side network interfaces service IDs that were included in the
+configure message were incorrect. These changes fixes the service ids
+based on the port mapping message received from NETIP. The incorrect
+service id will make to NETIP to incorrectly manage those physcial res
+ources.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 89 ++++++++++++++++++++++++---
+ 1 file changed, 79 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index 63de93e8f340..59d6f0ac4366 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -242,6 +242,64 @@ static uint8_t get_interface_id(uint8_t service_id)
+    };
+    return interface_id;
+ }
++static uint8_t map_id_to_service_id(uint8_t idx, uint8_t map_id)
++{
++   uint8_t service_id = 0;
++
++   if (map_id == NETSS_PORTMAP_BARE) {
++      if (idx == 0)
++         service_id = NETSS_SERVICE_ID_SGMII0_BARE;
++      else if (idx == 1)
++         service_id = NETSS_SERVICE_ID_SGMII1_BARE;
++      else if (idx == 2)
++         service_id = NETSS_SERVICE_ID_RGMII2_BARE;
++      else if (idx == 3)
++         service_id = NETSS_SERVICE_ID_RGMII3_BARE;
++   } else if (map_id == NETSS_PORTMAP_EXSW) {
++      service_id = NETSS_SERVICE_ID_EXSW;
++   } else if (map_id == NETSS_PORTMAP_ETHPHY) {
++      service_id = NETSS_SERVICE_ID_ETHPHY;
++   } else if (map_id == NETSS_PORTMAP_SFP) {
++      service_id = NETSS_SERVICE_ID_SFP;
++   }
++   return service_id;
++}
++
++/* port map ids shared between Arm's PM SRV and Atom's NetSS driver
++   NETSS_PORTMAP_BARE = 0,
++   NETSS_PORTMAP_EXSW = 1,
++   NETSS_PORTMAP_ETHPHY = 2,
++   NETSS_PORTMAP_SFP = 3
++*/
++static uint8_t get_service_id(uint8_t interface_id)
++{
++   uint8_t service_id = 0;
++   uint8_t map_id = 0;
++   netss_sysfs_attributes_info_t *sysfs = &g_netss_sysfs_attributes_info;
++   switch (interface_id)
++   {
++      case NETSS_BRD_INTRFC_SGMII0:
++        map_id = sysfs->port_mapping & 0xFF;
++        service_id = map_id_to_service_id(0, map_id);
++      break;
++      case NETSS_BRD_INTRFC_SGMII1:
++        map_id = (sysfs->port_mapping >> 8) & 0xFF;
++        service_id = map_id_to_service_id(1, map_id);
++      break;
++      case NETSS_BRD_INTRFC_RGMII2:
++        map_id = (sysfs->port_mapping >> 16) & 0xFF;
++        service_id = map_id_to_service_id(2, map_id);
++      break;
++      case NETSS_BRD_INTRFC_RGMII3:
++        map_id = (sysfs->port_mapping >> 24) & 0xFF;
++        service_id = map_id_to_service_id(3, map_id);
++      break;
++      default:
++      break;
++   }
++   NETSS_PM_PRINT("Interface id=%d Service ID=%d\n", interface_id, service_id);
++   return service_id;
++}
+ 
+ static void netss_handle_resource_power_state(uint8_t service_id, uint8_t state)
+ {
+@@ -518,6 +576,7 @@ static void netss_send_configure_msg (void)
+    uint32_t reply_len;
+    int msg_len;
+    int services_offset = sizeof(netss_configure_msg_t);
++   uint8_t service_id;
+ 
+    msg_len = sizeof(netss_configure_msg_t);
+ 
+@@ -553,16 +612,26 @@ static void netss_send_configure_msg (void)
+    cfg_msg->RCE_filter = RCE_Filter;
+ 
+ #ifdef CONFIG_NETIP_SERVICES_ON_ATOM
+-    msg += services_offset;
+-    if(sgmii0_on_atom)
+-        *msg++ = NETSS_SERVICE_ID_SGMII0_BARE;
+-    if(sgmii1_on_atom)
+-       *msg++ = NETSS_SERVICE_ID_SGMII1_BARE;
+-    if(rgmii2_on_atom)
+-       *msg++ = NETSS_SERVICE_ID_RGMII2_BARE;
+-    if(rgmii3_on_atom)
+-       *msg++ = NETSS_SERVICE_ID_RGMII3_BARE;
+-     msg = (uint8_t *)cfg_msg;
++   msg += services_offset;
++
++   /**Get the service ID connected at sgmii0 */
++   service_id = get_service_id(NETSS_BRD_INTRFC_SGMII0);
++   if (sgmii0_on_atom && service_id)
++      *msg++ = service_id;
++   /**Get the service ID connected at sgmii1 */
++   service_id = get_service_id(NETSS_BRD_INTRFC_SGMII1);
++   if (sgmii1_on_atom && service_id)
++      *msg++ = service_id;
++   /**Get the service ID connected at rgmii2 */
++   service_id = get_service_id(NETSS_BRD_INTRFC_RGMII2);
++   if (rgmii2_on_atom && service_id)
++      *msg++ = service_id;
++   /**Get the service ID connected at rgmii3 */
++   service_id = get_service_id(NETSS_BRD_INTRFC_RGMII3);
++   if (rgmii3_on_atom && service_id)
++      *msg++ = service_id;
++
++   msg = (uint8_t *)cfg_msg;
+ #endif
+ 
+    NETSS_PM_PRINT("configure Msg:");
+-- 
+2.11.0
+

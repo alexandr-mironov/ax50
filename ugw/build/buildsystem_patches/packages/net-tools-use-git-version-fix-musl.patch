@@ -1,0 +1,245 @@
+From: Dirk Neukirchen <dirkneukirchen@web.de>
+Date: Wed, 15 Apr 2015 16:51:25 +0200
+
+net-tools: use git version + fix musl
+
+From 2f7a736531c03fdee2a74d2d4b6437c641d030a0 Mon Sep 17 00:00:00 2001
+net-tools is deprecated in some distributions
+however development still continues in SF git
+but there are no official releases in the past years
+
+fix build with musl:
+patch taken from alpine linux
+
+Signed-off-by: Dirk Neukirchen <dirkneukirchen@web.de>
+
+Fix for local version-number:
+Signed-off-by: Thomas Langer <thomas.langer@intel.com>
+---
+ net/net-tools/Makefile                        | 16 ++---
+ net/net-tools/patches/001-config.patch        | 92 +++++++++++++++++++++++++--
+ net/net-tools/patches/002-compile-fixes.patch | 74 ---------------------
+ 3 files changed, 94 insertions(+), 88 deletions(-)
+ delete mode 100644 net/net-tools/patches/002-compile-fixes.patch
+
+diff --git a/net/net-tools/Makefile b/net/net-tools/Makefile
+--- a/net/net-tools/Makefile
++++ b/net/net-tools/Makefile
+@@ -8,14 +8,14 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=net-tools
+-PKG_VERSION:=1.60
+-PKG_RELEASE:=3
++PKG_VERSION:=2015-3-10
++PKG_RELEASE:=$(PKG_SOURCE_VERSION)
+ 
+-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+-PKG_SOURCE_URL:=http://www.tazenda.demon.co.uk/phil/net-tools/
+-PKG_MD5SUM:=888774accab40217dde927e21979c165
+-
+-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
++PKG_SOURCE_VERSION:=69e64639de380cfb8298bb71919d871b8ab41903
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_URL:=http://git.code.sf.net/p/net-tools/code/
++PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+diff --git a/net/net-tools/patches/001-config.patch b/net/net-tools/patches/001-config.patch
+--- a/net/net-tools/patches/001-config.patch
++++ b/net/net-tools/patches/001-config.patch
+@@ -1,5 +1,5 @@
+---- /dev/null	2006-11-02 13:38:16.000000000 +0100
+-+++ net-tools-1.60.works/config.make	2007-01-14 04:43:34.000000000 +0100
++--- /dev/null
+++++ b/config.make
+ @@ -0,0 +1,35 @@
+ +# I18N=0
+ +HAVE_AFUNIX=1
+@@ -36,8 +36,8 @@
+ +HAVE_FW_MASQUERADE=1
+ +HAVE_IP_TOOLS=1
+ +HAVE_MII=1
+---- /dev/null	2006-11-02 13:38:16.000000000 +0100
+-+++ net-tools-1.60.works/config.status	2007-01-14 04:43:34.000000000 +0100
++--- /dev/null
+++++ b/config.status
+ @@ -0,0 +1,91 @@
+ +#
+ +# config.in	Configure.sh source for the net-tools.
+@@ -130,8 +130,8 @@
+ +bool 'IP Masquerading support' HAVE_FW_MASQUERADE y
+ +bool 'Build iptunnel and ipmaddr' HAVE_IP_TOOLS y
+ +bool 'Build mii-tool' HAVE_MII y
+---- /dev/null	2006-11-02 13:38:16.000000000 +0100
+-+++ net-tools-1.60.works/config.h	2007-01-14 04:43:34.000000000 +0100
++--- /dev/null
+++++ b/config.h
+ @@ -0,0 +1,74 @@
+ +/*
+ +* config.h	Automatically generated configuration includefile
+@@ -207,3 +207,83 @@
+ +#define HAVE_FW_MASQUERADE 1
+ +#define HAVE_IP_TOOLS 1
+ +#define HAVE_MII 1
++--- a/lib/inet6_gr.c
+++++ b/lib/inet6_gr.c
++@@ -23,7 +23,7 @@
++ #include <string.h>
++ #include <stdio.h>
++ #include <unistd.h>
++-#ifndef __GLIBC__
+++#ifdef HAVE_IPV6_ROUTE_H
++ #include <netinet6/ipv6_route.h>	/* glibc doesn't have this */
++ #endif
++ #include "version.h"
++--- a/lib/inet6_sr.c
+++++ b/lib/inet6_sr.c
++@@ -28,10 +28,10 @@
++ #include <string.h>
++ #include <stdio.h>
++ #include <unistd.h>
++-#ifdef __GLIBC__
++-#include <net/route.h>
++-#else
+++#ifdef HAVE_IPV6_ROUTE_H
++ #include <netinet6/ipv6_route.h>	/* glibc does not have this */
+++#else
+++#include <net/route.h>
++ #endif
++ #include "version.h"
++ #include "net-support.h"
++--- a/lib/inet_sr.c
+++++ b/lib/inet_sr.c
++@@ -28,6 +28,7 @@
++ #include <string.h>
++ #include <stdio.h>
++ #include <unistd.h>
+++#include <asm-generic/param.h>
++ #include "version.h"
++ #include "net-support.h"
++ #include "pathnames.h"
++--- a/lib/util-ank.c
+++++ b/lib/util-ank.c
++@@ -14,6 +14,7 @@
++  * Rani Assaf <rani@magic.metawire.com> 980929:	resolve addresses
++  */
++ 
+++#include <limits.h>
++ #include <stdio.h>
++ #include <stdlib.h>
++ #include <unistd.h>
++--- a/mii-tool.c
+++++ b/mii-tool.c
++@@ -46,10 +46,6 @@
++ #include <net/if.h>
++ #include <linux/sockios.h>
++ 
++-#ifndef __GLIBC__
++-#include <linux/if_arp.h>
++-#include <linux/if_ether.h>
++-#endif
++ #include <linux/mii.h>
++ #include <linux/sockios.h>
++ #include "version.h"
++--- a/netstat.c
+++++ b/netstat.c
++@@ -88,6 +88,7 @@
++ #include <sys/stat.h>
++ #include <net/if.h>
++ #include <dirent.h>
+++#include <asm-generic/param.h>
++ 
++ #include "net-support.h"
++ #include "pathnames.h"
++--- a/slattach.c
+++++ b/slattach.c
++@@ -44,6 +44,7 @@
++ #include <string.h>
++ #include <unistd.h>
++ #include <getopt.h>
+++#include <termios.h>
++ #include <linux/if_slip.h>
++ 
++ #if defined(__GLIBC__)
+diff --git a/net/net-tools/patches/002-compile-fixes.patch b/net/net-tools/patches/002-compile-fixes.patch
+deleted file mode 100644
+--- a/net/net-tools/patches/002-compile-fixes.patch
++++ /dev/null
+@@ -1,74 +0,0 @@
+---- net-tools-1.60/lib/inet_sr.c	2000-02-20 22:46:45.000000000 +0100
+-+++ net-tools-1.60.works/lib/inet_sr.c	2007-01-14 04:44:40.000000000 +0100
+-@@ -105,6 +105,7 @@
+-     case 2:
+-        isnet = 0; break;
+-     default:
+-+       break;
+-     }
+- 
+-     /* Fill in the other fields. */
+---- net-tools-1.60/hostname.c	2001-04-08 19:04:23.000000000 +0200
+-+++ net-tools-1.60.works/hostname.c	2007-01-14 04:46:09.000000000 +0100
+-@@ -98,6 +98,7 @@
+- 	    fprintf(stderr, _("%s: name too long\n"), program_name);
+- 	    break;
+- 	default:
+-+            break;
+- 	}
+- 	exit(1);
+-     };
+-@@ -117,6 +118,7 @@
+- 	    fprintf(stderr, _("%s: name too long\n"), program_name);
+- 	    break;
+- 	default:
+-+            break;
+- 	}
+- 	exit(1);
+-     };
+-@@ -174,6 +176,7 @@
+- 	printf("%s\n", hp->h_name);
+- 	break;
+-     default:
+-+        break;
+-     }
+- }
+- 
+-@@ -330,7 +333,7 @@
+- 	case 'h':
+- 	default:
+- 	    usage();
+--
+-+            break;
+- 	};
+- 
+- 
+---- net-tools-1.60/mii-tool.c	2000-05-21 16:31:17.000000000 +0200
+-+++ net-tools-1.60.works/mii-tool.c	2007-01-14 04:47:42.000000000 +0100
+-@@ -379,16 +379,16 @@
+- /*--------------------------------------------------------------------*/
+- 
+- const char *usage =
+--"usage: %s [-VvRrwl] [-A media,... | -F media] [interface ...]
+--       -V, --version               display version information
+--       -v, --verbose               more verbose output
+--       -R, --reset                 reset MII to poweron state
+--       -r, --restart               restart autonegotiation
+--       -w, --watch                 monitor for link status changes
+--       -l, --log                   with -w, write events to syslog
+--       -A, --advertise=media,...   advertise only specified media
+--       -F, --force=media           force specified media technology
+--media: 100baseT4, 100baseTx-FD, 100baseTx-HD, 10baseT-FD, 10baseT-HD,
+-+"usage: %s [-VvRrwl] [-A media,... | -F media] [interface ...]\n\
+-+       -V, --version               display version information\n\
+-+       -v, --verbose               more verbose output\n\
+-+       -R, --reset                 reset MII to poweron state\n\
+-+       -r, --restart               restart autonegotiation\n\
+-+       -w, --watch                 monitor for link status changes\n\
+-+       -l, --log                   with -w, write events to syslog\n\
+-+       -A, --advertise=media,...   advertise only specified media\n\
+-+       -F, --force=media           force specified media technology\n\
+-+media: 100baseT4, 100baseTx-FD, 100baseTx-HD, 10baseT-FD, 10baseT-HD,\n\
+-        (to advertise both HD and FD) 100baseTx, 10baseT\n";
+- 
+- int main(int argc, char **argv)

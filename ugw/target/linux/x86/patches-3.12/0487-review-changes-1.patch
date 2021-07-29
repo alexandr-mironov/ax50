@@ -1,0 +1,356 @@
+From e5a7b878ad4a4f7c990bb910ab10437582b5cf4b Mon Sep 17 00:00:00 2001
+From: Artur Saygin <artur.saygin@intel.com>
+Date: Tue, 27 Sep 2016 18:41:59 -0700
+Subject: [PATCH 487/639] review changes #1
+
+---
+ arch/x86/Kconfig                                  |  9 +--
+ arch/x86/NetIP_SubSystem/netip_subsystem_config.c |  8 ++-
+ arch/x86/NetIP_SubSystem/netip_subsystem_config.h |  2 +
+ drivers/mrpc/Kconfig                              |  5 +-
+ drivers/net/ethernet/lantiq/Kconfig               | 70 +++++------------------
+ include/linux/skbuff.h                            |  3 +-
+ include/net/datapath_api.h                        | 29 ++++++++++
+ include/net/datapath_proc_api.h                   | 29 ++++++++++
+ include/net/directconnect_dp_api.h                | 29 ++++++++++
+ include/net/puma_datapath_api.h                   | 29 ++++++++++
+ 10 files changed, 147 insertions(+), 66 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 5d5869b..6699d32 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -458,15 +458,16 @@ config NET_SUBSYSTEM_SYSFS
+           Exposes sysfs interface to get and set NET-IP subsystem attributes.
+ 
+ #
+-# WIFI Proxy network device driver configuration
++# WiFi Proxy network device driver configuration
+ #
+ 
+ menu "Intel Puma7 wifi-proxy Support"
+ config WIFI_PROXY
+-        bool "WIFI proxy network device driver"
++        bool "WiFi proxy network device driver"
+         default n
++        depends on X86_PUMA7 && INTEL_KERNEL_PP_DRIVER_LOCAL
+         ---help---
+-          If PP to WIFI devices communication is needed
++          If PP to WiFi devices communication is needed
+           then select yes.
+           else, select no.
+ 
+@@ -485,7 +486,7 @@ config WIFI_PROXY_DEBUG_BUFF_SIZE
+           Configure extra shared memory for debugging, default 2MB for PUMA6_SOC, 512KB for PUMA5_SOC
+ 
+ config WIFI_PROXY_EMULATOR
+-        tristate "WIFI proxy emulator"
++        tristate "WiFi proxy emulator"
+         default n
+         depends on WIFI_PROXY_DEBUG
+         ---help---
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_config.c b/arch/x86/NetIP_SubSystem/netip_subsystem_config.c
+index 1557f3b..c1a5777 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_config.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_config.c
+@@ -31,6 +31,7 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ #include "netip_subsystem_defs.h"
++#include "netip_subsystem_config.h"
+ 
+ #define NETSS_DEV_BOOTCFG_BASE    0xF00C0000
+ #define NETSS_SILICON_STEPPING         0xFFFF3FF4
+@@ -166,8 +167,6 @@ void netss_enable_snooped_mode(void)
+     pr_info("netip snooped mode enabled!\n");
+ }
+ 
+-extern struct net_subsystem_drv_data *pnetss_drv_data;
+-
+ /* SATT configuration*/
+ #define SATT_HOST_INDEX_MIN            (5)
+ #define SATT_HOST_INDEX_MAX            (8)
+@@ -233,7 +232,7 @@ int netss_sattn_iosf_prim_set(int idx, phys_addr_t brg_ba,
+        if (sap_size & 0x3)
+                return -EINVAL;
+ 
+-       /* SATT is limited to 32 MB range*/
++       /* SATT is limited to 64 MB range*/
+        if (sap_size > SATT_SAP_SIZE_MAX)
+                return -EINVAL;
+ 
+@@ -257,6 +256,9 @@ EXPORT_SYMBOL(netss_sattn_iosf_prim_set);
+ void netss_sattn_get(int idx, uint32_t *ctrl, uint32_t *sap_ba,
+                    uint32_t *sap_size, uint32_t *brg_ba)
+ {
++
++       BUG_ON(!ctrl || !sap_ba || !sap_size || !brg_ba);
++
+        *ctrl = netss_sattn_reg_read(SATT_N_CTRL(idx));
+        *sap_ba = netss_sattn_reg_read(SATT_N_SAP_BA(idx));
+        *sap_size = netss_sattn_reg_read(SATT_N_SAP_SIZE(idx));
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_config.h b/arch/x86/NetIP_SubSystem/netip_subsystem_config.h
+index 3ad4daf..95a9e91 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_config.h
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_config.h
+@@ -32,4 +32,6 @@
+ void netss_bootcfg_init(void);
+ void netss_enable_snooped_mode(void);
+ 
++extern struct net_subsystem_drv_data *pnetss_drv_data;
++
+ #endif
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+index e80f25c..529b7b4 100755
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -62,9 +62,10 @@ config MRPC_WIFI_PROXY_CLIENT
+        Enable wifi MRPC between ATOM and ARM
+ 
+ config MRPC_CPPI_CLIENT
+-    tristate "cppi mrpc client"
++    tristate "CPPI MRPC client"
+     depends on MRPC
+     default n
+     help
+-       cppi mrpc client
++       CPPI MRPC client provides CPPI related operations that are implemented
++       on ARM side over MRPC interface.
+ 
+diff --git a/drivers/net/ethernet/lantiq/Kconfig b/drivers/net/ethernet/lantiq/Kconfig
+index cd84664..10df80fb 100644
+--- a/drivers/net/ethernet/lantiq/Kconfig
++++ b/drivers/net/ethernet/lantiq/Kconfig
+@@ -30,15 +30,21 @@ source "drivers/net/ethernet/lantiq/switch-api/Kconfig"
+ config LTQ_DIRECTCONNECT_DP
+         tristate "Lantiq DirectConnect Datapath driver"
+         default n
++        depends on LTQ_DATAPATH
+         ---help---
+-          Lantiq DirectConnect Datapath driver.
++          Lantiq DirectConnect Datapath driver. DirectConnect provides a common
++          interface for network devices to receive partial or full acceleration
++          services from the underlaying packet acceleration engine.
++
+ 
+ config LTQ_DIRECTCONNECT_DP_GRX750
+         tristate "Lantiq DirectConnect Datapath driver for GRX750"
+         default n
+-        depends on LTQ_DIRECTCONNECT_DP
++        depends on LTQ_DIRECTCONNECT_DP && LTQ_DATAPATH_GRX750
+         ---help---
+-          Lantiq DirectConnect Datapath driver for XRX750 series.
++          Lantiq DirectConnect Datapath driver for GRX750 series. Provides
++          common interface for network devices to get partial or full
++          acceleration services from the GRX750 packet processor.
+ 
+ config LTQ_DIRECTCONNECT_DP_DBG
+         bool "Datapath Debug Tool"
+@@ -57,6 +63,7 @@ config LTQ_DIRECTCONNECT_DP_DBG
+ config LTQ_DATAPATH
+         bool "Datapath Lib"
+         default n
++	depends on WIFI_PROXY
+         ---help---
+         Datapath Lib is to provide common rx/tx wrapper API without taking
+         care of much HW knowledge and also provide common interface for legacy
+@@ -64,29 +71,13 @@ config LTQ_DATAPATH
+         Take note: All devices need to register to datapath API first
+ 
+ config LTQ_DATAPATH_GRX750
+-        bool "Datapath Lib"
+-        default n
+-        ---help---
+-        Datapath Lib for XRX750 platform
+-
+-config LTQ_DATAPATH_MIB
+-        bool "Datapath aggregated mib support"
+-        default n
+-        ---help---
+-        It is to aggregate GSWIP-L/R, TMU and driver's MIB counter
+-
+-config LTQ_DATAPATH_CPUFREQ
+-        bool "Datapath DFS(COC) support"
+-        default n
+-        ---help---
+-        It is to support DFS(COC) in Datapath
+-
+-config LTQ_DATAPATH_LOCAL_SESSION
+-        bool "Datapath local session accelerate"
++        bool "Datapath Lib for GRX750"
++        depends on LTQ_DATAPATH
+         default n
+         ---help---
+-        It is to accelerate local sessions
+-
++        Datapath Lib for GRX750 platform. This option enables the datapath
++        library implementation for GRX750. This library provides an abstraction
++        layer above GRX750 cppi interface for partial or full offload.
+ 
+ config LTQ_DATAPATH_DBG
+         bool "Datapath Debug Tool"
+@@ -98,35 +89,4 @@ config LTQ_DATAPATH_DBG
+         Once this flag is enabled, the debugging information will be printed out
+         otherwise, no debugging information for this flag will be printed
+ 
+-config LTQ_DATAPATH_LOOPETH
+-        bool "pseudo driver simulation"
+-        default n
+-        depends on LTQ_DATAPATH
+-        ---help---
+-        Pseudo driver is to simulate ethernet/wifi device to register to datapath
+-        api. Use this pseudo driver can test whether datatpath API is implemented
+-        properly or not.
+-        Also it can be used to measure the directpath performance
+-
+-config LTQ_DP_MPE_FASTHOOK_TEST
+-        bool "MPE FW Fast Hook Test for skb"
+-        default n
+-        depends on  LTQ_DATAPATH
+-        ---help---
+-        MPE FW Fast Hook is used to quick verify MPE FW Functionality without
+-        fullPPA support. Once it is enabled, it will add some fields in skb structure
+-        in order to support MPE FAST HOOK. The reason is that some network driver is
+-        pre-build out of this build system.
+-
+-config LTQ_DP_MPE_FASTHOOK_TEST_COMPILE
+-        bool "MPE FW Fast Hook Test"
+-        default n
+-        depends on  LTQ_DP_MPE_FASTHOOK_TEST
+-        ---help---
+-        MPE FW Fast Hook is used to quick verify MPE FW Functionality without
+-        fullPPA support. It will install two hook in dp_rx/dp_xmit API and
+-        quickly learn session informatin. Once the session is learned,
+-        it will configure MPE FW session table, ie, the compare table and
+-        test MPE FW functionalities.
+-
+ endif # NET_VENDOR_LANTIQ
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+index 979497a..8af696d 100755
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -473,9 +473,8 @@ struct sk_buff {
+ 	struct sk_buff		*next;
+ 	struct sk_buff		*prev;
+ 
+-#ifdef CONFIG_LTQ_DIRECTCONNECT_DP
++	/* used by directconnect peripherals to store session info */
+ 	__u32 DW0, DW1, DW2, DW3;
+-#endif
+ 
+ 	ktime_t			tstamp;
+ 
+diff --git a/include/net/datapath_proc_api.h b/include/net/datapath_proc_api.h
+index 53d81fa..70618fe 100644
+--- a/include/net/datapath_proc_api.h
++++ b/include/net/datapath_proc_api.h
+@@ -1,3 +1,32 @@
++/*
++ * datapath_proc_api.h
++ *
++ *  GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 016 Intel Corporation. All rights reserved.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *    Intel Corporation
++ *    2200 Mission College Blvd.
++ *    Santa Clara, CA  97052
++ *
++ */
++
+ #ifndef DATAPATH_PROC_H
+ #define DATAPATH_PROC_H
+ 
+diff --git a/include/net/directconnect_dp_api.h b/include/net/directconnect_dp_api.h
+index 0982031..c6f572a 100644
+--- a/include/net/directconnect_dp_api.h
++++ b/include/net/directconnect_dp_api.h
+@@ -1,3 +1,32 @@
++/*
++ * directconnect_dp_api.h
++ *
++ *  GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 016 Intel Corporation. All rights reserved.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *    Intel Corporation
++ *    2200 Mission College Blvd.
++ *    Santa Clara, CA  97052
++ *
++ */
++
+ #ifndef _UGW_DIRECTCONNECT_DP_API_H_
+ #define _UGW_DIRECTCONNECT_DP_API_H_
+ 
+diff --git a/include/net/puma_datapath_api.h b/include/net/puma_datapath_api.h
+index d88e5ce..9f0eb76 100644
+--- a/include/net/puma_datapath_api.h
++++ b/include/net/puma_datapath_api.h
+@@ -1,3 +1,32 @@
++/*
++ *  puma_datapath_api.h
++ *
++ *  GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 016 Intel Corporation. All rights reserved.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *    Intel Corporation
++ *    2200 Mission College Blvd.
++ *    Santa Clara, CA  97052
++ *
++ */
++
+ #ifndef __PPA_PUMA_DATAPATH_API_H__
+ #define __PPA_PUMA_DATAPATH_API_H__
+ 
+-- 
+2.10.1
+

@@ -1,0 +1,863 @@
+From fc13eb3bfdb49f2a66c13198d58aa2ccea7ed7e1 Mon Sep 17 00:00:00 2001
+From: opeyrik <oleg.peyrik@intel.com>
+Date: Sat, 12 Nov 2016 17:10:45 +0200
+Subject: [PATCH 523/639] PUMALANSW-30 - Use mRPC instead of RPC for GPIO and
+ MODHY
+
+---
+ drivers/mrpc/Kconfig                              |   7 +
+ drivers/mrpc/Makefile                             |   1 +
+ drivers/mrpc/gpio_client.c                        | 402 ++++++++++++++++++++++
+ drivers/mrpc/modphy_client.c                      | 129 ++++++-
+ include/linux/avalanche/generic/gpio_mrpc_api.h   | 187 ++++++++++
+ include/linux/avalanche/generic/modphy_mrpc_api.h |  19 +
+ include/linux/mrpc.h                              |   1 +
+ 7 files changed, 745 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/mrpc/gpio_client.c
+ create mode 100644 include/linux/avalanche/generic/gpio_mrpc_api.h
+
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+index f689ed0..d06d2d8 100755
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -82,3 +82,10 @@ config MRPC_HIL_EVENTS_SERVER
+     default n
+     help
+        Enable HIL events MRPC between ARM and ATOM
++
++config MRPC_GPIO_CLIENT
++    tristate "GPIO MRPC client for NETIP GPIOs"
++    depends on MRPC
++    default n
++    help
++       GPIO MRPC client for NETIP GPIOs
+diff --git a/drivers/mrpc/Makefile b/drivers/mrpc/Makefile
+index 173d2f3..5177697 100755
+--- a/drivers/mrpc/Makefile
++++ b/drivers/mrpc/Makefile
+@@ -5,3 +5,4 @@ obj-$(CONFIG_MRPC_HANDSHAKE)	        += handshake_client.o
+ obj-$(CONFIG_MRPC_CPPI_CLIENT)	        += cppi_client.o
+ obj-$(CONFIG_MRPC_SGC_SERVER)           += sgc_server.o
+ obj-$(CONFIG_MRPC_HIL_EVENTS_SERVER)    += hil_events_server.o
++obj-$(CONFIG_MRPC_GPIO_CLIENT)          += gpio_client.o
+diff --git a/drivers/mrpc/gpio_client.c b/drivers/mrpc/gpio_client.c
+new file mode 100644
+index 0000000..77f75bd
+--- /dev/null
++++ b/drivers/mrpc/gpio_client.c
+@@ -0,0 +1,402 @@
++/*
++ *
++ * gpio_client.c
++ * Description:
++ * gpio mrpc client driver
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++/************************************************/
++/**                    Includes                 */
++/************************************************/
++#include <linux/platform_device.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
++#include <linux/byteorder/generic.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/mutex.h>
++#include <linux/workqueue.h>
++#include <linux/err.h>
++#include <linux/netdevice.h>
++#include <linux/ethtool.h>
++#include <linux/mrpc.h>
++#include <linux/ioctl.h>
++#include <linux/cdev.h>
++#include <linux/avalanche/generic/gpio_mrpc_api.h>
++
++#define DEV_NAME          "docsis_gpio_dev"
++
++#define FIRST_MINOR 0
++#define MINOR_CNT   1
++
++#define GPIO_CLIENT_MRPC_CALL_TIMEOUT_MS (1000) /* Timeout is needed due to delays in gpio server */
++
++static long gpio_proxy_ioctl(struct file *fd, unsigned int cmd, unsigned long arg);
++
++/**************************************************************************/
++/*      LOCAL VARIABLES:                                                  */
++/**************************************************************************/
++
++static dev_t dev;
++static struct cdev *c_dev;
++static struct class *cl;
++
++/* Structure to map driver functions to kernel */
++static struct file_operations gpio_drv_fops =
++{
++    .owner   = THIS_MODULE,
++    .unlocked_ioctl   = gpio_proxy_ioctl /*We assume there are no 2 processes in a race condition*/
++};
++
++/* driver private database */
++struct gpio_private {
++    struct platform_device *pdev;   /* platform device */
++    struct mrpc_client *mrpc;       /* mrpc client handle */
++};
++
++static struct gpio_private *this;
++
++enum {
++    GPIO_SET_DIR_PROC = 0,
++    GPIO_SET_VAL_PROC
++};
++
++static inline int gpio_mrpc_call(__u8 procid,
++		                           int gpio,
++								   int dir,
++                                   int value)
++{
++    struct gpio_private *priv = this;
++    struct gpio_user_info args;
++    int ret, errcode;
++
++    if (!priv) {
++        pr_err("ERROR: mrpc gpio not initialized");
++        return GPIO_FAIL;
++    }
++
++    args.gpio_pin = htonl(gpio);
++    args.pin_direction = htonl(dir);
++    args.value = htonl(value);
++
++    ret = mrpc_call(priv->mrpc,
++                    procid,
++                    &args,
++                    sizeof(args),
++                    NULL,
++                    0,
++                    GPIO_CLIENT_MRPC_CALL_TIMEOUT_MS,
++                    &errcode);
++
++    if (ret || errcode) {
++        pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
++        return GPIO_FAIL;
++    }
++
++    return GPIO_OK;
++}
++
++int gpio_set_value(int gpio, int value)
++{
++	return gpio_mrpc_call(GPIO_SET_VAL_PROC, gpio, GPIO_OUTPUT_DIR, value);
++}
++EXPORT_SYMBOL(gpio_set_value);
++
++int gpio_set_direction(int gpio, int dir)
++{
++	return gpio_mrpc_call(GPIO_SET_DIR_PROC, gpio, dir, 0);
++}
++EXPORT_SYMBOL(gpio_set_direction);
++
++/* sysfs for future use */
++static ssize_t status_show(struct device *dev,
++                           struct device_attribute *attr, char *buf)
++{
++    struct gpio_private *priv = dev_get_drvdata(dev);
++
++    if (!priv)
++        return -EINVAL;
++
++    return scnprintf(buf, PAGE_SIZE, "status ok");
++}
++
++static DEVICE_ATTR(status, S_IRUGO, status_show, NULL);
++
++static struct attribute *gpio_attrs[] = {
++    &dev_attr_status.attr,
++    NULL
++};
++
++static struct attribute_group gpio_attrs_group = {
++    .attrs = gpio_attrs,
++};
++
++/**
++ * gpio_mrpc_probe
++ *
++ * @param pdev   platform device
++ *
++ * @return 0 for success, error code otherwise
++ */
++static int gpio_mrpc_probe(struct platform_device *pdev)
++{
++    struct gpio_private *priv;
++    int ret;
++
++    priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
++    if (!priv) {
++        pr_err("memory allocation failed");
++        return -ENOMEM;
++    }
++
++    dev_set_drvdata(&pdev->dev, priv);
++    priv->pdev = pdev;
++
++    ret = sysfs_create_group(&priv->pdev->dev.kobj, &gpio_attrs_group);
++    if (ret) {
++        pr_err("sysfs_create_group failed (ret=%d)", ret);
++        return ret;
++    }
++
++    priv->mrpc = mrpc_client_register(MRPC_RESERVED_ID_GPIO, "gpio");
++    if (!priv->mrpc) {
++        pr_err("failed to register gpio");
++        ret = -ENODEV;
++        goto out_remove_group;
++    }
++
++    this = priv;
++    return 0;
++
++out_remove_group:
++    sysfs_remove_group(&priv->pdev->dev.kobj, &gpio_attrs_group);
++    return 0;
++}
++
++/**
++ * gpio_mrpc_remove
++ *
++ * This function is called when the gpio mrpc driver is
++ * removed.
++ *
++ * @param pdev   platform device
++ *
++ * @return 0 for success, error code otherwise
++ */
++static int gpio_mrpc_remove(struct platform_device *pdev)
++{
++    struct gpio_private *priv = platform_get_drvdata(pdev);
++    mrpc_client_unregister(priv->mrpc);
++    sysfs_remove_group(&priv->pdev->dev.kobj, &gpio_attrs_group);
++    dev_set_drvdata(&pdev->dev, NULL);
++    this = NULL;
++
++    return 0;
++}
++
++static struct platform_driver gpio_driver = {
++    .driver = {
++        .name   = "gpio",
++    },
++    .probe = gpio_mrpc_probe,
++    .remove = gpio_mrpc_remove,
++};
++
++static struct platform_device *gpio_device;
++
++static int create_proxy_device(void)
++{
++	int ret;
++    struct device *dev_ret;
++
++    if ((ret = alloc_chrdev_region(&dev, 0, 1, DEV_NAME)) < 0)
++    {
++        printk(KERN_ERR "gpio: Failed alloc_chrdev_region\n");
++        return ret;
++    }
++    pr_debug("alloc_chrdev_region - Done");
++
++    if (!(c_dev = cdev_alloc()))
++    {
++        printk(KERN_ERR "%s:%d Failed to allocate character device gpio_driver\n", __FUNCTION__, __LINE__);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return (-1);
++    }
++    pr_debug("cdev_alloc - Done");
++
++    /* Init the driver */
++    cdev_init(c_dev, &gpio_drv_fops);
++    pr_debug("cdev_init - Done");
++
++    if ((ret = cdev_add(c_dev, dev, MINOR_CNT)) < 0)
++    {
++        printk(KERN_ERR "%s:%d Failed to add character device gpio_driver\n", __FUNCTION__, __LINE__);
++        cdev_del(c_dev);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return ret;
++    }
++    pr_debug("cdev_add - Done");
++
++    if (IS_ERR(cl = class_create(THIS_MODULE, DEV_NAME)))
++    {
++        printk(KERN_ERR "gpio: class_create failed\n");
++        cdev_del(c_dev);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return PTR_ERR(cl);
++    }
++    pr_debug("class_create - Done");
++
++    if (IS_ERR(dev_ret = device_create(cl, NULL, dev, NULL, DEV_NAME)))
++    {
++        printk(KERN_ERR "device_create failed\n");
++        class_destroy(cl);
++        cdev_del(c_dev);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return PTR_ERR(dev_ret);
++    }
++    pr_debug("device_create %s - Done", DEV_NAME);
++
++    return 0;
++}
++
++
++static int __init gpio_mrpc_init(void)
++{
++    int ret;
++
++    ret = platform_driver_register(&gpio_driver);
++    if (ret < 0) {
++        pr_err("Failed to register gpio platform driver: %d\n", ret);
++        return ret;
++    }
++    pr_debug("Done to register gpio platform driver");
++
++    gpio_device = platform_device_register_simple("gpio", -1, NULL, 0);
++    if (IS_ERR(gpio_device)) {
++        pr_err("Failed to register gpio platform device\n");
++        platform_driver_unregister(&gpio_driver);
++        return PTR_ERR(gpio_device);
++    }
++    pr_debug("Done to register gpio platform device");
++
++    return create_proxy_device();
++}
++
++/**************************************************************************/
++/*! \fn static void delete_proxy_device(void)
++ **************************************************************************
++ *  \brief     Delete proxy device created in create_proxy_device()
++ *  \param[in] none
++ *  \return    none
++ *************************************************************************/
++static void delete_proxy_device(void)
++{
++    device_destroy(cl, dev);
++    class_destroy(cl);
++    cdev_del(c_dev);
++    unregister_chrdev_region(dev, MINOR_CNT);
++}
++
++static void __exit gpio_mrpc_exit(void)
++{
++    platform_device_unregister(gpio_device);
++    platform_driver_unregister(&gpio_driver);
++
++    delete_proxy_device();
++}
++
++static long gpio_proxy_ioctl(struct file *fd, unsigned int cmd, unsigned long arg)
++{
++    struct gpio_user_info  gpio_info;
++    struct io_ctrl_user_info io_ctrl_info;
++    int ret = 0;
++
++    /* Check for valid pointer to the parameter list */
++    if (0 == arg)
++    {
++        printk(KERN_ERR "[%s] Arg == 0\n",__FUNCTION__);
++        return -EINVAL;
++    }
++    if (cmd == GPIO_CTRL_IO_PAD)
++    {
++        if (copy_from_user(&io_ctrl_info, (void __user *)arg, sizeof(struct io_ctrl_user_info)))
++        {
++            printk(KERN_ERR "[%s] Copy from user the IO ctrl data failed\n",__FUNCTION__);
++            return -EFAULT;
++            /* Execute ioctl request */
++        }
++    }
++    else
++    {
++        if (copy_from_user(&gpio_info, (void __user *)arg, sizeof(struct gpio_user_info)))
++        {
++            printk(KERN_ERR "[%s] Copy from user the GPIO data failed\n",__FUNCTION__);
++            return -EFAULT;
++        }
++    }
++
++    switch (cmd)
++    {
++        /*---------------------------------------------------------------------------*/
++    case GPIO_SET_DIRECTION_CMD:
++            printk(KERN_DEBUG "[%s] Request to set GPIO pin = %d , direction = %d\n",__FUNCTION__,gpio_info.gpio_pin,gpio_info.pin_direction);
++            if (gpio_set_direction(gpio_info.gpio_pin, gpio_info.pin_direction) == GPIO_FAIL)
++            {
++                ret = -ENOSYS;
++            }
++            break;
++        /*---------------------------------------------------------------------------*/
++    case GPIO_OUT_BIT_CMD:
++            printk(KERN_DEBUG "[%s] Set GPIO pin = %d data out for value = %d\n",__FUNCTION__,gpio_info.gpio_pin,gpio_info.value);
++            if (gpio_set_value(gpio_info.gpio_pin, gpio_info.value) == GPIO_FAIL)
++            {
++                ret = -ENOSYS;
++            }
++            break;
++        /*---------------------------------------------------------------------------*/
++    default:
++            printk(KERN_ERR "[%s] iosfsb no legal command given\n",__FUNCTION__);
++            ret = -ENOSYS;
++            break;
++        }
++    return ret;
++}
++
++/******************************************************/
++/**    Module Declarations                           **/
++/******************************************************/
++module_init(gpio_mrpc_init);
++module_exit(gpio_mrpc_exit);
++
++MODULE_AUTHOR("Intel Corporation");
++MODULE_DESCRIPTION("gpio mrpc client");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.0");
+diff --git a/drivers/mrpc/modphy_client.c b/drivers/mrpc/modphy_client.c
+index c3cbd7c..b0d5806 100644
+--- a/drivers/mrpc/modphy_client.c
++++ b/drivers/mrpc/modphy_client.c
+@@ -50,7 +50,13 @@
+ #include <linux/netdevice.h>
+ #include <linux/ethtool.h>
+ #include <linux/mrpc.h>
++#include <linux/ioctl.h>
+ #include <linux/avalanche/generic/modphy_mrpc_api.h>
++#include <linux/cdev.h>
++
++
++#define FIRST_MINOR 0
++#define MINOR_CNT   1
+ 
+ #ifdef DEBUG
+ #define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
+@@ -60,6 +66,24 @@
+ 
+ #define MODPHY_CLIENT_MRPC_CALL_TIMEOUT_MS (1000) /* Timeout is needed due to delays in modphy server */
+ 
++
++static long modphy_proxy_ioctl(struct file *fd, unsigned int cmd, unsigned long arg);
++
++/**************************************************************************/
++/*      LOCAL VARIABLES:                                                  */
++/**************************************************************************/
++
++static dev_t dev;
++static struct cdev *c_dev;
++static struct class *cl;
++
++/* Structure to map driver functions to kernel */
++static struct file_operations modphy_drv_fops =
++{
++    .owner   = THIS_MODULE,
++    .unlocked_ioctl   = modphy_proxy_ioctl /*We assume there are no 2 processes in a race condition*/
++};
++
+ /* driver private database */
+ struct modphy_private {
+     struct platform_device *pdev;   /* platform device */
+@@ -277,6 +301,60 @@ static struct platform_driver modphy_driver = {
+ 
+ static struct platform_device *modphy_device;
+ 
++static int create_proxy_device(void)
++{
++	int ret;
++    struct device *dev_ret;
++
++    if ((ret = alloc_chrdev_region(&dev, 0, 1, MODPHY_NAME)) < 0)
++    {
++        pr_err("MODPHY: Failed alloc_chrdev_region\n");
++        return ret;
++    }
++    pr_debug("MODPHY: alloc_chrdev_region - Done\n");
++
++    if (!(c_dev = cdev_alloc()))
++    {
++        pr_err("%s:%d Failed to allocate character device modphy_driver\n", __FUNCTION__, __LINE__);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return (-1);
++    }
++    pr_debug("MODPHY: cdev_alloc - Done\n");
++
++    /* Init the driver */
++    cdev_init(c_dev, &modphy_drv_fops);
++    pr_debug("MODPHY: cdev_init - Done\n");
++
++    if ((ret = cdev_add(c_dev, dev, MINOR_CNT)) < 0)
++    {
++        pr_err("%s:%d Failed to add character device modphy_driver\n", __FUNCTION__, __LINE__);
++        cdev_del(c_dev);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return ret;
++    }
++    pr_debug("MODPHY: cdev_add - Done\n");
++
++    if (IS_ERR(cl = class_create(THIS_MODULE, MODPHY_NAME)))
++    {
++        pr_err("MODPHY: class_create -Fail\n");
++        cdev_del(c_dev);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return PTR_ERR(cl);
++    }
++    pr_debug("MODPHY: class_create - Done\n");
++
++    if (IS_ERR(dev_ret = device_create(cl, NULL, dev, NULL, MODPHY_NAME)))
++    {
++        class_destroy(cl);
++        cdev_del(c_dev);
++        unregister_chrdev_region(dev, MINOR_CNT);
++        return PTR_ERR(dev_ret);
++    }
++
++    return 0;
++}
++
++
+ static int __init modphy_mrpc_init(void)
+ {
+     int ret;
+@@ -294,13 +372,62 @@ static int __init modphy_mrpc_init(void)
+         return PTR_ERR(modphy_device);
+     }
+ 
+-    return 0;
++    return create_proxy_device();
++}
++
++/**************************************************************************/
++/*! \fn static void delete_proxy_device(void)
++ **************************************************************************
++ *  \brief     Delete proxy device created in create_proxy_device()
++ *  \param[in] none
++ *  \return    none
++ *************************************************************************/
++static void delete_proxy_device(void)
++{
++    device_destroy(cl, dev);
++    class_destroy(cl);
++    cdev_del(c_dev);
++    unregister_chrdev_region(dev, MINOR_CNT);
+ }
+ 
+ static void __exit modphy_mrpc_exit(void)
+ {
+     platform_device_unregister(modphy_device);
+     platform_driver_unregister(&modphy_driver);
++
++    delete_proxy_device();
++}
++
++static long modphy_proxy_ioctl(struct file *fd, unsigned int cmd, unsigned long arg)
++{
++    int ret = MODPHY_OK;
++    ModphyController_e modphyClientId;
++
++    if (fd == NULL)
++    {
++        pr_err("\nMODPHY Error value\n");
++        return MODPHY_FAIL;
++    }
++
++    switch (cmd)
++    {
++    case MODPHY_RESET_LANE:
++        {
++            if (copy_from_user(&modphyClientId, (void __user *)arg, sizeof(modphyClientId)))
++            {
++            	pr_err("\n MODPHY failed to copy from user data. IOCTL=%d\n", cmd);
++                return -EFAULT;
++            }
++
++            modphy_reset_client(modphyClientId);
++            break;
++        }
++    default:
++        pr_err("%s:%d Invalid IOCTL(0x%08X) has been received \n", __FUNCTION__, __LINE__, cmd);
++        return -ENOSYS;
++    }
++
++    return ret;
+ }
+ 
+ /******************************************************/
+diff --git a/include/linux/avalanche/generic/gpio_mrpc_api.h b/include/linux/avalanche/generic/gpio_mrpc_api.h
+new file mode 100644
+index 0000000..ebc6ffc
+--- /dev/null
++++ b/include/linux/avalanche/generic/gpio_mrpc_api.h
+@@ -0,0 +1,187 @@
++
++/*
++ *
++ * gpio_mrpc_api.h
++ *
++  This file is provided under a dual BSD/GPLv2 license.  When using or 
++  redistributing this file, you may do so under either license.
++
++  GPL LICENSE SUMMARY
++
++  Copyright(c) 2014-2015 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify 
++  it under the terms of version 2 of the GNU General Public License as
++  published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful, but 
++  WITHOUT ANY WARRANTY; without even the implied warranty of 
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
++  General Public License for more details.
++
++  You should have received a copy of the GNU General Public License 
++  along with this program; if not, write to the Free Software 
++  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++  The full GNU General Public License is included in this distribution 
++  in the file called LICENSE.GPL.
++
++
++  Contact Information:
++  Intel Corporation
++  2200 Mission College Blvd.
++  Santa Clara, CA  97052
++
++  BSD LICENSE 
++
++  Copyright(c) 2014-2015 Intel Corporation. All rights reserved.
++
++  Redistribution and use in source and binary forms, with or without 
++  modification, are permitted provided that the following conditions 
++  are met:
++
++    * Redistributions of source code must retain the above copyright 
++      notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above copyright 
++      notice, this list of conditions and the following disclaimer in 
++      the documentation and/or other materials provided with the 
++      distribution.
++
++    * Neither the name of Intel Corporation nor the names of its 
++      contributors may be used to endorse or promote products derived 
++      from this software without specific prior written permission.
++
++  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
++  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
++  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
++  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
++  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
++  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
++  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
++  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
++  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
++  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
++  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++
++/*------------------------------------------------------------------------------
++* File Name: gpio_mrpc_api.h
++*------------------------------------------------------------------------------
++*/
++//! \file
++#ifndef  GPIO_MRPC_API_H
++#define  GPIO_MRPC_API_H
++
++
++/********************************************************************************************************/
++/* IOCTL commands:
++
++   If you are adding new ioctl's to the kernel, you should use the _IO
++   macros defined in <linux/ioctl.h> _IO macros are used to create ioctl numbers:
++
++    _IO(type, nr)         - an ioctl with no parameter.
++   _IOW(type, nr, size)  - an ioctl with write parameters (copy_from_user), kernel would actually read data from user space
++   _IOR(type, nr, size)  - an ioctl with read parameters (copy_to_user), kernel would actually write data to user space
++   _IOWR(type, nr, size) - an ioctl with both write and read parameters
++
++   'Write' and 'read' are from the user's point of view, just like the
++    system calls 'write' and 'read'.  For example, a SET_FOO ioctl would
++    be _IOW, although the kernel would actually read data from user space;
++    a GET_FOO ioctl would be _IOR, although the kernel would actually write
++    data to user space.
++
++    The first argument to _IO, _IOW, _IOR, or _IOWR is an identifying letter
++    or number from the SoC_ModuleIds_e enum located in this file.
++
++    The second argument to _IO, _IOW, _IOR, or _IOWR is a sequence number
++    to distinguish ioctls from each other.
++
++   The third argument to _IOW, _IOR, or _IOWR is the type of the data going
++   into the kernel or coming out of the kernel (e.g.  'int' or 'struct foo').
++
++   NOTE!  Do NOT use sizeof(arg) as the third argument as this results in
++   your ioctl thinking it passes an argument of type size_t.
++
++*/
++
++#define GPIO_OK   (0)
++#define GPIO_FAIL (-1)
++
++#define GPIO_MODULE_ID                         (0x02)
++#define GPIO_SET_DIRECTION_CMD                 _IOW(GPIO_MODULE_ID, 1, unsigned long)
++#define GPIO_GET_DIRECTION_CMD                 _IOWR(GPIO_MODULE_ID, 2, unsigned long)
++#define GPIO_OUT_BIT_CMD                       _IOW(GPIO_MODULE_ID, 3, unsigned long)
++#define GPIO_IN_BIT_CMD                        _IOWR(GPIO_MODULE_ID, 4, unsigned long)
++#define GPIO_CTRL_IO_PAD                       _IOW(GPIO_MODULE_ID, 5, unsigned long)
++
++#define GPIO_INTERFACE_DRIVER_DEV_NAME "/dev/docsis_gpio_dev"
++#define GPIO_PROC_FILE   "/proc/gpio"
++#define GPIO_PROC_NAME   "gpio"
++
++
++struct gpio_user_info
++{
++    unsigned int  gpio_pin;
++    unsigned int  pin_direction;
++    unsigned int  value;
++
++};
++
++struct io_ctrl_user_info
++{
++    unsigned int  opcode;
++    unsigned int  value1;
++    unsigned int  value2;
++};
++
++
++typedef enum GPIO_PIN_DIRECTION_tag
++{
++    GPIO_OUTPUT_DIR = 0,
++    GPIO_INPUT_DIR = 1
++} GPIO_PIN_DIRECTION_T;
++
++/*All PUMA7 platform uses the same GPIO representation*/
++typedef enum
++{
++    PUMA7_GPIO_US_BAND_SEL = 0,
++    PUMA7_GPIO_DS_BAND_SEL,
++    PUMA7_GPIO_NUM2,
++    PUMA7_GPIO_NUM3,
++    PUMA7_GPIO_TUNER_RESET,
++    PUMA7_GPIO_NUM5,
++    PUMA7_GPIO_NUM6,
++    PUMA7_GPIO_NUM7,
++    PUMA7_GPIO_NUM8,
++    PUMA7_GPIO_NUM9,
++    PUMA7_GPIO_NUM10,
++    PUMA7_GPIO_NUM11,
++    PUMA7_GPIO_NUM12,
++    PUMA7_GPIO_NUM13,
++    PUMA7_GPIO_NUM14,
++    PUMA7_GPIO_NUM15,
++    PUMA7_GPIO_RGMII_CONNECTOR_RESET,
++    PUMA7_GPIO_EXTSWITCH_POWER,
++    PUMA7_GPIO_ETH_PHY_RESET,
++    PUMA7_GPIO_EXTSWITCH_RESET,
++    PUMA7_GPIO_LED_POWER,
++    PUMA7_GPIO_LED_DS,
++    PUMA7_GPIO_LED_US,
++    PUMA7_GPIO_LED_ONLINE,
++    PUMA7_GPIO_LED_LINK,
++    PUMA7_GPIO_LED_LINE1,
++    PUMA7_GPIO_LED_LINE2,
++    PUMA7_GPIO_LED_DECT,
++    PUMA7_GPIO_LED_BATTERY,
++    PUMA7_GPIO_LED_MOCA,
++    PUMA7_GPIO_LED_WIFI2_4G,
++    PUMA7_GPIO_LED_WIFI5G,
++
++    PUMA7_MAX_GPIOS
++
++}GPIO_PIN_NUMBER_T;
++
++#endif /* GPIO_MRPC_API_H */
++
++
+diff --git a/include/linux/avalanche/generic/modphy_mrpc_api.h b/include/linux/avalanche/generic/modphy_mrpc_api.h
+index 8af6572..f620509 100644
+--- a/include/linux/avalanche/generic/modphy_mrpc_api.h
++++ b/include/linux/avalanche/generic/modphy_mrpc_api.h
+@@ -82,6 +82,10 @@
+ #define MODPHY_OK   (0)
+ #define MODPHY_FAIL (-1)
+ 
++#define MODPHY_DEV_NAME  "/dev/modphy_drv"
++#define MODPHY_NAME "modphy_drv"
++
++
+ typedef enum modphyController_e
+ {
+     MODPHY_MOCA_CLIENT_ID,
+@@ -111,6 +115,21 @@ typedef struct modphyClient_t
+     ModphyLanes_e      laneId;
+ }ModphyClient_t;
+ 
++#define MODPHY_DRIVER_DEV_NAME                  MODPHY_DEV_NAME
++#define MODPHY_DRIVER_ID                        (0xBE)
++#define MODPHY_INIT                             _IOW(MODPHY_DRIVER_ID, 1, ModphyController_e)
++#define MODPHY_CFG                              _IOW(MODPHY_DRIVER_ID, 2, ModphyClient_t)
++#define MODPHY_DISABLE_TX                       _IOW(MODPHY_DRIVER_ID, 3, ModphyClient_t)
++#define MODPHY_RESET_K_ALIGN                    _IOW(MODPHY_DRIVER_ID, 4, ModphyController_e)
++#define MODPHY_RESET_LANE                       _IOW(MODPHY_DRIVER_ID, 5, ModphyController_e)
++#define MODPHY_GO2_FAST_RECOVERY                _IOW(MODPHY_DRIVER_ID, 6, ModphyClient_t)
++#define MODPHY_GO2_FULL_FUNCTIONAL              _IOW(MODPHY_DRIVER_ID, 7, ModphyClient_t)
++#define MODPHY_COMMON_LANE_RESET                _IOW(MODPHY_DRIVER_ID, 8, ModphyController_e)
++#define MODPHY_COMMON_LANE_INIT                 _IOW(MODPHY_DRIVER_ID, 9, ModphyController_e)
++#define MODPHY_SET_KGREGS                       _IOW(MODPHY_DRIVER_ID, 10, modphyClientKgregs_t)
++#define MODPHY_LANE_POWER_STATE_TRANSITION      _IOW(MODPHY_DRIVER_ID, 11, ModphyClientPowerGate_t)
++
++
+ /*********************************************************************************************************/
+ /*! \fn int modphy_init(ModphyController_e modphyClientId)
+  *********************************************************************************************************
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+index c75aeaf..9cb9c8d 100644
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -85,6 +85,7 @@ enum {
+     MRPC_RESERVED_ID_DOCSIS_NETDEV,
+ 	MRPC_RESERVED_ID_SGC,
+     MRPC_RESERVED_ID_HILEVENTS,
++    MRPC_RESERVED_ID_GPIO,
+     MRPC_RESERVED_ID_LAST,
+ };
+ 
+-- 
+2.10.1
+

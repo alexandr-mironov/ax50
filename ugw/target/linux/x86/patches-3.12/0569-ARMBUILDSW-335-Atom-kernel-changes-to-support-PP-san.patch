@@ -1,0 +1,570 @@
+From e35785c73ef4668536ca9d64dd6a1a634da1f63c Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Tue, 27 Dec 2016 18:23:47 +0200
+Subject: [PATCH 569/639] ARMBUILDSW-335: Atom kernel changes to support PP
+ sanity test tool
+
+---
+ arch/x86/NetIP_SubSystem/netip_mem_util.c          | 176 +++++++++++++++++++++
+ arch/x86/pal_cppi41/pal_cppi41.c                   |  28 +++-
+ drivers/mrpc/cppi_client.c                         |  57 ++++++-
+ include/linux/avalanche/generic/avalanche_pp_api.h |   4 +-
+ .../linux/avalanche/generic/cppi41_hw_mbox_if.h    |  17 ++
+ include/linux/avalanche/generic/pal_cppi41.h       |  38 ++++-
+ include/linux/netip_mem_util.h                     |   4 +
+ net/ti.Kconfig                                     |   9 +-
+ 8 files changed, 318 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_mem_util.c b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+index f33011d..98158ff 100644
+--- a/arch/x86/NetIP_SubSystem/netip_mem_util.c
++++ b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+@@ -99,6 +99,32 @@ struct netip_mem_rgion_device {
+     char* name;
+ };
+ 
++#ifdef CONFIG_PP_SANITY_TESTS
++struct netip_mem_rgion_cppi_bPool {
++    void *virtual_base_address;
++    bool ioremapped;
++    size_t npcpu_pool_physical_mem_size;
++    phys_addr_t npcpu_pool_physical_mem_base;
++    char* name;
++};
++
++static struct netip_mem_rgion_cppi_bPool mem_util_cppi_bPool[] =
++{
++    {NULL, false, 0, 0, "PAL_CPPI_PP_SHARED_RX_LOW_512B_BUFFER_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_SHARED_RX_LOW_2KB_BUFFER_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_SHARED_RX_LOW_4KB_BUFFER_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_SHARED_RX_HIGH_BUFFER_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_WIFI_RX_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_WIFI_TX_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_BUFFER_POOL6"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_BUFFER_POOL7"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_BUFFER_POOL8"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_PACKET_RAM_512B_BUFFER_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_PACKET_RAM_2KB_BUFFER_POOL"},
++    {NULL, false, 0, 0, "PAL_CPPI_PP_VOICE_DSP_BUFFER_POOL"},
++};
++#endif
++
+ static struct netip_mem_rgion_device mem_util_dev[] =
+ {
+     {NETSS_DEV_PACKET_PROCESSOR1, NULL, false, 0xF3000000, NULL, "NETSS_DEV_PACKET_PROCESSOR1"},
+@@ -122,6 +148,12 @@ static struct netip_mem_rgion_device mem_util_dev[] =
+     {NETSS_DEV_BOOT_RAM, NULL, false, 0xFFFF0000, NULL, "NETSS_DEV_BOOT_RAM"},
+ };
+ 
++/**************** Local functions Declarations*****************/
++#ifdef CONFIG_PP_SANITY_TESTS
++static void _netip_memmap_cleanup_bPools(void);
++#endif
++/*************************************************************/
++
+ int netip_memmap_init(void)
+ {
+ 	int i, ret = 0, hw_mbox_ret = 0;
+@@ -237,6 +269,83 @@ int netip_memmap_init(void)
+ }
+ EXPORT_SYMBOL(netip_memmap_init);
+ 
++#ifdef CONFIG_PP_SANITY_TESTS
++int netip_memmap_cppi_bPool(unsigned int pool)
++{
++    int ret = 0, hw_mbox_ret = 0;
++    u64 npcpu_rpc_phys_addr = 0;
++    u64 npcpu_rpc_mem_size = 0;
++    phys_addr_t max_phys_addr = 0;
++
++    Cppi41HwMboxCppiBpoolMemInfoGetMsg_t   off_chip_get;
++    Cppi41HwMboxCppiBpoolMemInfoReplyMsg_t *off_chip_reply;
++
++    size_t dataLen = sizeof(Cppi41HwMboxCppiBpoolMemInfoGetMsg_t); // Size should be the same as Cppi41HwMboxCppiBpoolMemInfoReplyMsg_t
++
++    if (mem_util_cppi_bPool[pool].virtual_base_address != NULL)
++    {
++        pr_info("netip_memmap_cppi_bPool: virtual_mem_base of %s already mapped\n",
++                mem_util_cppi_bPool[pool].name);
++        return 0;
++    }
++    /* Un-map other pools if mapped */
++    _netip_memmap_cleanup_bPools();
++
++    pr_info("netip_memmap_cppi_bPool: Request offChip bPool information from NPCPU\n");
++
++    /* Request offChip information from NPCPU */
++    off_chip_get.cmd = cpu_to_be32(CPPI41_HWMBOX_CMD_GET_BPOOL_MEM_INFO_REPLY);
++    off_chip_get.pool = cpu_to_be32(pool);
++
++    if(hwMbox_isReady()) {
++        pr_err("HW mailbox isn't ready yet.");
++        return -ENODEV;
++    }
++
++    hw_mbox_ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU,
++            NPCPU_APPCPU_HW_MBOX_TAG_CPPI41_MBX,
++            (uint8_t *)&off_chip_get,
++            dataLen,
++            dataLen,
++            &dataLen);
++    if(hw_mbox_ret) {
++        pr_err("HW mailbox hwMbox_sendOpcode failed (retCode =%d).",
++            hw_mbox_ret);
++        return -ECOMM;
++    }
++
++    off_chip_reply = (Cppi41HwMboxCppiBpoolMemInfoReplyMsg_t*)(&off_chip_get); // The reply is recieved from HW mailbox
++
++    npcpu_rpc_phys_addr = be32_to_cpu(off_chip_reply->off_chip_phy_addr);
++    npcpu_rpc_mem_size = be32_to_cpu(off_chip_reply->length);
++
++    max_phys_addr = sizeof(phys_addr_t) > 4 ? U64_MAX : U32_MAX;
++
++    /* We can now absorb these addresses in their correct types */
++
++    mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_base = npcpu_rpc_phys_addr;
++    mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_size = npcpu_rpc_mem_size;
++
++    pr_info("netip_memmap_cppi_bPool: received offChip base addr %llx len 0x%zx\n",
++            mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_base,
++            mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_size);
++    printk("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
++    printk("!!!!!!!!!!!!! Mapping %010dB chunk of memory for buffer pool %02d !!!!!!!!!!!!!\n",
++           mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_size, pool);
++    printk("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
++    mem_util_cppi_bPool[pool].virtual_base_address = ioremap_nocache(
++            mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_base,
++            mem_util_cppi_bPool[pool].npcpu_pool_physical_mem_size);
++    if(!mem_util_cppi_bPool[pool].virtual_base_address) {
++        pr_err("NPCPU_VIRTUAL_MEM_BASE IOREMAP error \n");
++        return -ENOMEM;
++    }
++    mem_util_cppi_bPool[pool].ioremapped = true;
++    return ret;
++}
++EXPORT_SYMBOL(netip_memmap_cppi_bPool);
++#endif
++
+ void netip_memmap_cleanup(void)
+ {
+     int i;
+@@ -255,10 +364,21 @@ void netip_memmap_cleanup(void)
+             mem_util_dev[i].virtual_base_address = NULL;
+         }
+     }
++#ifdef CONFIG_PP_SANITY_TESTS
++    _netip_memmap_cleanup_bPools();
++#endif
+ 
+ }
+ EXPORT_SYMBOL(netip_memmap_cleanup);
+ 
++#ifdef CONFIG_PP_SANITY_TESTS
++void netip_memmap_cleanup_bPools(void)
++{
++    _netip_memmap_cleanup_bPools();
++}
++EXPORT_SYMBOL(netip_memmap_cleanup_bPools);
++#endif
++
+ void *netip_mmio_to_virtual(unsigned long netip_phys_addr)
+ {
+ 	unsigned long offset = 0;
+@@ -274,7 +394,27 @@ void *netip_mmio_to_virtual(unsigned long netip_phys_addr)
+ 			offset);
+ 		return (void *)(npcpu_descriptor_virtual_mem_base + offset);
+ 	}
++#ifdef CONFIG_PP_SANITY_TESTS
++    for (i=0; i < ARRAY_SIZE(mem_util_cppi_bPool); i++)
++    {
++        if (!mem_util_cppi_bPool[i].ioremapped)
++            continue;
++
++        if (netip_phys_addr > mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base + mem_util_cppi_bPool[i].npcpu_pool_physical_mem_size)
++            continue;
++
++        if (netip_phys_addr < mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base)
++            continue;
++
++        offset = netip_phys_addr - mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base;
++
++        pr_debug("Physical to virtual (buffer pool) called netip_phys_addr=%p virt _addr=%p offset=%x\n",
++            netip_phys_addr, (mem_util_cppi_bPool[i].virtual_base_address + offset), offset);
++
++        return (mem_util_cppi_bPool[i].virtual_base_address + offset);
+ 
++    }
++#endif
+ 	for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+ 
+ 		if (!mem_util_dev[i].ioremapped)
+@@ -314,7 +454,23 @@ void *netip_mmio_to_physical(void* virt_addr)
+ 				offset);
+         return (void*)(npcpu_descriptor_physical_mem_base + offset);
+     }
++#ifdef CONFIG_PP_SANITY_TESTS
++    for (i=0; i < ARRAY_SIZE(mem_util_cppi_bPool); i++)
++    {
++        if (!mem_util_cppi_bPool[i].ioremapped)
++            continue;
+ 
++        if (virt_addr > mem_util_cppi_bPool[i].virtual_base_address + mem_util_cppi_bPool[i].npcpu_pool_physical_mem_size)
++            continue;
++
++        if (virt_addr < mem_util_cppi_bPool[i].virtual_base_address)
++            continue;
++
++        offset = virt_addr - mem_util_cppi_bPool[i].virtual_base_address;
++        pr_debug("Virtual to physical (buffer pool called virtual address=%p phy_addr=%p  offset=%x\n", virt_addr, (mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base + offset), offset);
++        return (mem_util_cppi_bPool[i].npcpu_pool_physical_mem_base + offset);
++    }
++#endif
+     for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+ 
+         if (!mem_util_dev[i].ioremapped)
+@@ -341,3 +497,23 @@ void cache_flush_buffer(void *bufptr, int size)
+ 	clflush_cache_range(bufptr, size);
+ }
+ EXPORT_SYMBOL(cache_flush_buffer);
++
++#ifdef CONFIG_PP_SANITY_TESTS
++/* Un-map regions which were mapped for CPPI buffer pools*/
++static void _netip_memmap_cleanup_bPools(void)
++{
++    int i;
++
++    pr_info("cleaningup mapped buffer pools memory \n");
++
++    for (i=0; i < ARRAY_SIZE(mem_util_cppi_bPool); i++)
++    {
++        if(mem_util_cppi_bPool[i].ioremapped)
++        {
++            iounmap(mem_util_cppi_bPool[i].virtual_base_address);
++            mem_util_cppi_bPool[i].ioremapped = false;
++            mem_util_cppi_bPool[i].virtual_base_address = NULL;
++        }
++    }
++}
++#endif
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index 9b55923..d0aeace 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -166,8 +166,10 @@ static spinlock_t init_lock;
+ 
+ 
+ /*********************************/
+-/**  local Functions declaration  **/
++/**  external Functions declaration  **/
+ /*********************************/
++extern Ptr mrpc_PAL_cppi4BufPopBuf (Cppi4BufPool pool);
++extern int netip_memmap_cppi_bPool(unsigned int pool);
+ 
+ /*********************************/
+ /**  Functions Implementations  **/
+@@ -236,6 +238,12 @@ PAL_Cppi4QueueHnd PAL_cppi4QueueOpen(PAL_Handle hnd, Cppi4Queue  queue)
+ }
+ EXPORT_SYMBOL(PAL_cppi4QueueOpen);
+ 
++PAL_Cppi4QueueHnd PAL_cppi4QueueOpenNoReset (PAL_Handle hnd, Cppi4Queue  queue)
++{
++    return PAL_cppi4QueueOpen(hnd, queue);
++}
++EXPORT_SYMBOL(PAL_cppi4QueueOpenNoReset);
++
+ int PAL_cppi4QueueClose(PAL_Handle hnd, PAL_Cppi4QueueHnd qHnd)
+ {
+     DPRINTK("Close queue %p", qHnd);
+@@ -298,6 +306,24 @@ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *
+ }
+ EXPORT_SYMBOL(PAL_cppi4QueueGetEntryCount);
+ 
++/*
++ * PAL_cppi4BufPopBuf
++ *  - Decrement the reference count of the valid buffer
++ */
++Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool)
++{
++    // Approach mem_util with the pool to map
++    if (netip_memmap_cppi_bPool(pool.bPool))
++    {
++        printk("%s:%d ERROR !!! Failed to map buffer pool memory region !!!\n",__FUNCTION__,__LINE__);
++        return NULL;
++    }
++
++    /* Approach MRPC to get the physical to pop buffer and get physical address*/
++    return mrpc_PAL_cppi4BufPopBuf(pool);
++}
++EXPORT_SYMBOL(PAL_cppi4BufPopBuf);
++
+ #define SIZE_IN_WORD(p) ((sizeof(p) + 0x3) >> 2)
+ 
+ static Int32 (*__pdsp_cmd_send)(pdsp_id_t, pdsp_cmd_t, void *, Uint32, void *, Uint32) = NULL;
+diff --git a/drivers/mrpc/cppi_client.c b/drivers/mrpc/cppi_client.c
+index 6f66e16..a57539c 100644
+--- a/drivers/mrpc/cppi_client.c
++++ b/drivers/mrpc/cppi_client.c
+@@ -66,18 +66,34 @@ struct cppi_private {
+ 
+ static struct cppi_private *this;
+ 
+-struct cppi_args {
++struct cppi_sanity_dma_args {
++    Uint32 freeQMgr;
++    Uint32 freeQNum;
++    Uint32 freeBMgr;
++    Uint32 freeBpool;
++};
++
++struct cppi_wifi_args {
+     Uint32 buffers_base_addr;
+     Uint32 buffer_sz;
+     Uint32 buffer_cnt;
+ };
+ 
++struct cppi_pp_buf_args {
++    Uint32 bMgr;
++    Uint32 bPool;
++    Uint32 bufAddr;
++};
++
+ enum {
+     CPPI_INIT_PP_WIFI_BUFFER_POOL = 0,
++    CPPI_COFIGURE_SANITY_DMA_CHANNELS,
++    CPPI_POP_BUFFER_PP_REGION,
++    CPPI_DEC_BUFFER_REF_CNT_PP_REGION,
+ };
+ 
+ 
+-static inline int cppi_mrpc_call(__u8 procid, struct cppi_args *args)
++static inline int cppi_mrpc_call(__u8 procid, void *args, ssize_t args_size )
+ {
+     struct cppi_private *priv = this;
+     int ret, errcode;
+@@ -88,7 +104,7 @@ static inline int cppi_mrpc_call(__u8 procid, struct cppi_args *args)
+         return -EFAULT;
+     }
+ 
+-    ret = mrpc_call(priv->mrpc, procid, args, sizeof(*args), &rep, sizeof(rep),
++    ret = mrpc_call(priv->mrpc, procid, args, args_size, &rep, sizeof(rep),
+ 								   0, &errcode);
+ 
+     if (ret || errcode) {
+@@ -105,16 +121,45 @@ Uint32 avalanche_cppi_init_pp_wifi_buffer_pool(PAL_Handle palHandle,
+ 					       Uint32 buffer_cnt)
+ 
+ {
+-    struct cppi_args args;
++    struct cppi_wifi_args args;
+ 
+     args.buffers_base_addr = htonl(buffers_base_addr);
+-    args.buffer_sz = htonl(buffer_sz); 
++    args.buffer_sz = htonl(buffer_sz);
+     args.buffer_cnt = htonl(buffer_cnt);
+ 
+-    return cppi_mrpc_call(CPPI_INIT_PP_WIFI_BUFFER_POOL, &args);
++    return cppi_mrpc_call(CPPI_INIT_PP_WIFI_BUFFER_POOL, &args, sizeof(args));
+ }
+ EXPORT_SYMBOL(avalanche_cppi_init_pp_wifi_buffer_pool);
+ 
++/* DMA channels configuration for sanity tool */
++Int32 avalanche_cppi_init_pp_sanity_dma_channels(PAL_Handle palHandle, Cppi4Queue freeQ, Cppi4BufPool freeBuf)
++
++{
++    struct cppi_sanity_dma_args args;
++
++    args.freeQMgr = htonl(freeQ.qMgr);
++    args.freeQNum = htonl(freeQ.qNum);
++    args.freeBMgr = htonl(freeBuf.bMgr);
++    args.freeBpool = htonl(freeBuf.bPool);
++
++    return cppi_mrpc_call(CPPI_COFIGURE_SANITY_DMA_CHANNELS, &args, sizeof(args));
++}
++EXPORT_SYMBOL(avalanche_cppi_init_pp_sanity_dma_channels);
++
++/* Pop buffer from CPPI */
++Ptr mrpc_PAL_cppi4BufPopBuf (Cppi4BufPool pool)
++
++{
++    struct cppi_pp_buf_args args;
++
++    args.bMgr = htonl(pool.bMgr);
++    args.bPool = htonl(pool.bPool);
++    args.bufAddr = NULL;
++
++    return cppi_mrpc_call(CPPI_POP_BUFFER_PP_REGION, &args, sizeof(args));
++}
++EXPORT_SYMBOL(mrpc_PAL_cppi4BufPopBuf);
++
+ /* sysfs for future use */
+ static ssize_t status_show(struct device *dev,
+                            struct device_attribute *attr, char *buf)
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 31b5274..60ac90b 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -2345,7 +2345,6 @@ typedef     struct
+     Uint8   mocaPaddingMode;
+ }avalanche_pp_db_address_param_t;
+ 
+-/***************** Sanity manager api *******************/
+ typedef struct
+ {
+     Uint8* pktDataIngressDevName;
+@@ -2358,8 +2357,9 @@ typedef struct
+ }
+ sanity_session_info_t;
+ 
++#ifdef CONFIG_PP_SANITY_TESTS
+ #define SANITY_PROC_NAME "sanity"
+-
++#endif
+ 
+ /************** Power management info ****************/
+ 
+diff --git a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+index 9784059..e3f1592 100644
+--- a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
++++ b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+@@ -49,6 +49,7 @@ typedef enum
+     CPPI41_HWMBOX_CMD_GET_REGION_MEM_INFO       ,    /* Descriptors region memory info command */
+     CPPI41_HWMBOX_CMD_GET_REGION_MEM_INFO_REPLY ,    /* Descriptors region memory info reply command */
+     CPPI41_HWMBOX_CMD_GET_OFFCHIP_MEM_INFO_REPLY,    /* OffChip memory info reply command */
++    CPPI41_HWMBOX_CMD_GET_BPOOL_MEM_INFO_REPLY  ,    /* OffChip cppi buffer pool memory info reply command */
+     CPPI41_HWMBOX_CMD_FAILED                    ,    /* command processing failed command, use only for reply - the error code is from the type Cppi41HwMboxRetCode_e */
+     CPPI41_HWMBOX_CMD_COUNT
+ }Cppi41HwMboxCmd_e;
+@@ -114,6 +115,22 @@ typedef struct
+     Uint32              off_chip_phy_addr;  /* offChip physical address */
+     Uint32              length;             /* offChip memory length in bytes */
+ } Cppi41HwMboxOffChipMemInfoReplyMsg_t;
++
++/* Cppi HW mailbox message to reply to a get offChip cppi buffer pool memory info message */
++typedef struct
++{
++    Cppi41HwMboxCmd_e   cmd;                /* command type */
++    Uint32              pool;               /* buffer pool number */
++    Uint32              pHldr;              /* Place holder */
++} Cppi41HwMboxCppiBpoolMemInfoGetMsg_t;
++
++/* Cppi HW mailbox message to reply to a get offChip cppi buffer pool memory info message */
++typedef struct
++{
++    Cppi41HwMboxCmd_e   cmd;                /* command type */
++    Uint32              off_chip_phy_addr;  /* offChip physical address */
++    Uint32              length;             /* offChip memory length in bytes */
++} Cppi41HwMboxCppiBpoolMemInfoReplyMsg_t;
+ #endif /* __CPPI41_HW_MBOX_IF_H__ */
+ 
+ /*! \fn int cppi41_hw_mbox_init (void) 
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+index 1a14ff3..5a85e4e 100644
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -230,6 +230,21 @@ typedef struct {
+ 
+ } Cppi4HostDesc;
+ 
++typedef struct {
++
++  Uint32 BufInfo;
++  Uint32 BufPtr;                // Pointer to the physical data buffer
++} Cppi4EmbdBuf;
++
++typedef struct {
++    Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
++    Uint32 tagInfo;      /**< Source tag (31:16), Dest Tag (15:0) (valid only in Host PD)*/
++    Uint32 pktInfo;      /**< pkt err state, type, proto flags, return info, desc location */
++    Cppi4EmbdBuf Buf[1];
++    Uint32 EPI[2];       /**< Extended Packet Information (from SR) */
++    Uint32 PS[3];       /**< Extended Packet Information (from SR) */
++} Cppi4EmbdDesc_ps;
++
+ typedef struct
+ {
+ 	Cppi4HostDesc       hw;         /* The Hardware Descriptor */
+@@ -598,6 +613,12 @@ int PAL_cppi4Exit(PAL_Handle hnd, void *param);
+  */
+ PAL_Cppi4QueueHnd PAL_cppi4QueueOpen(PAL_Handle hnd, Cppi4Queue  queue);
+ 
++/*
++ *  PAL_cppi4QueueOpenNoReset
++ *  - Sanity tool compatibility
++ */
++PAL_Cppi4QueueHnd PAL_cppi4QueueOpenNoReset (PAL_Handle hnd, Cppi4Queue  queue);
++
+ /**
+  * \brief CPPI4.1 Queue Close
+  *  closes a specified Queue when the last time it is called.
+@@ -656,13 +677,20 @@ PAL_Cppi4BD *PAL_cppi4QueuePop(PAL_Cppi4QueueHnd hnd);
+ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *entryCount);
+ 
+ /**
+- *  \brief PAL CPPI 4.1 accumulator channel enable rate limit.
++ *  \brief PAL CPPI4.1 Pop buffer and Increment reference count
++ *
++ *  Pop buffer from buffer pool and Increment reference count.
+  *
+- * Sets up an accumulator channel rate limit onfiguration
+- * 
+- *  @param  accCfg        [IN]      Pointer to the accumulator
+- *                        rate limit configuration structure.
++ *  @param  hnd        [IN]      PAL handle returned from a previous PAL_cppi4Init() call.
+  *
++ *  @param  pool       [IN]      The buffer pool to which buffer belonged.
++ *
++ *  @return Buffer point, NULL is pool is empty
++ */
++Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool);
++
++/**
++ *  \brief PAL CPPI 4.1 accumulator channel enable rate limit.
+  */
+ void PAL_cppi4AccChEnRateLimit(Cppi4AccumulatorRateLimitCfg* accCfg);
+ 
+diff --git a/include/linux/netip_mem_util.h b/include/linux/netip_mem_util.h
+index 2613911..411770b 100644
+--- a/include/linux/netip_mem_util.h
++++ b/include/linux/netip_mem_util.h
+@@ -29,6 +29,10 @@
+ 
+ int netip_memmap_init(void);
+ void netip_memmap_cleanup(void);
++#ifdef CONFIG_PP_SANITY_TESTS
++void netip_memmap_cleanup_bPools(void);
++int netip_memmap_cppi_bPool(unsigned int pool);
++#endif
+ void *netip_mmio_to_virtual(unsigned long phys_addr);
+ void *netip_mmio_to_physical(void* virt_addr);
+ void cache_flush_buffer(void *bufptr, int size);
+diff --git a/net/ti.Kconfig b/net/ti.Kconfig
+index 9ba4423..8d119e6 100644
+--- a/net/ti.Kconfig
++++ b/net/ti.Kconfig
+@@ -268,6 +268,13 @@ config INTEL_PP_TUNNEL_SUPPORT
+       Enable this to support L2TPv3 and GRE-MPLS tunnels by PP.
+       This tunnels should be configured statically and regular session will not be created by PP.
+ 
++config PP_SANITY_TESTS
++    	bool "Enable SanityTestModule"
++    	default n
++	depends on TI_PACKET_PROCESSOR
++    help
++      Select if Sanity test module support is needed
++      
+ config NP_APP_DATAPIPE
+         bool "NP-CPU APP-CPU Datapipe network device"
+         default y
+@@ -276,7 +283,7 @@ config NP_APP_DATAPIPE
+           than select yes.
+           If gateway capabilities is on NP-CPU(Arm11)
+           than select no.
+-      
++
+ endmenu
+ config INTEL_IRQ_THREAD_CHANGE_PRIORITY
+ 	bool "Change scheduler policy and priority "
+-- 
+2.10.1
+

@@ -1,0 +1,185 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/hostapd/ctrl_iface.c hostapd-2.6/hostapd/ctrl_iface.c
+--- hostapd-2.6-orig/hostapd/ctrl_iface.c	2017-08-21 16:31:39.748153512 +0300
++++ hostapd-2.6/hostapd/ctrl_iface.c	2017-08-22 09:52:39.509966979 +0300
+@@ -636,6 +636,17 @@ static int hostapd_ctrl_iface_hs20_wnm_n
+ 	u8 addr[ETH_ALEN];
+ 	const char *url;
+ 
++	hapd = get_bss_index(cmd, hapd->iface);
++	if (NULL == hapd) {
++		return -1;
++	}
++
++	cmd = os_strchr(cmd, ' ');
++	if (NULL == cmd) {
++		return -1;
++	}
++	cmd++;
++
+ 	if (hwaddr_aton(cmd, addr))
+ 		return -1;
+ 	url = cmd + 17;
+@@ -662,6 +673,17 @@ static int hostapd_ctrl_iface_hs20_deaut
+ 	size_t url_len;
+ 	struct wpabuf *req;
+ 
++	hapd = get_bss_index(cmd, hapd->iface);
++	if (NULL == hapd) {
++		return -1;
++	}
++
++	cmd = os_strchr(cmd, ' ');
++	if (NULL == cmd) {
++		return -1;
++	}
++	cmd++;
++
+ 	/* <STA MAC Addr> <Code(0/1)> <Re-auth-Delay(sec)> [URL] */
+ 	if (hwaddr_aton(cmd, addr))
+ 		return -1;
+@@ -738,6 +760,17 @@ static int hostapd_ctrl_iface_set_qos_ma
+ 	const char *pos = cmd;
+ 	int val, ret;
+ 
++	hapd = get_bss_index(pos, hapd->iface);
++	if (NULL == hapd) {
++		return -1;
++	}
++
++	pos = os_strchr(pos, ' ');
++	if (NULL == pos) {
++		return -1;
++	}
++	pos++;
++
+ 	for (;;) {
+ 		if (count == sizeof(qos_map_set)) {
+ 			wpa_printf(MSG_ERROR, "Too many qos_map_set parameters");
+@@ -785,6 +818,17 @@ static int hostapd_ctrl_iface_send_qos_m
+ 	u8 qos_map_set_len = hapd->conf->qos_map_set_len;
+ 	int ret;
+ 
++	hapd = get_bss_index(cmd, hapd->iface);
++	if (NULL == hapd) {
++		return -1;
++	}
++
++	cmd = os_strchr(cmd, ' ');
++	if (NULL == cmd) {
++		return -1;
++	}
++	cmd++;
++
+ 	if (!qos_map_set_len) {
+ 		wpa_printf(MSG_INFO, "QoS Map Set is not set");
+ 		return -1;
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/hostapd/hostapd_cli.c hostapd-2.6/hostapd/hostapd_cli.c
+--- hostapd-2.6-orig/hostapd/hostapd_cli.c	2017-08-21 16:31:39.749153492 +0300
++++ hostapd-2.6/hostapd/hostapd_cli.c	2017-08-22 09:20:14.790399376 +0300
+@@ -875,14 +875,14 @@ static int hostapd_cli_cmd_set_qos_map_s
+ 	char buf[200];
+ 	int res;
+ 
+-	if (argc != 1) {
++	if (argc != 2) {
+ 		printf("Invalid 'set_qos_map_set' command - "
+-		       "one argument (comma delimited QoS map set) "
+-		       "is needed\n");
++		       "two arguments (BSS name and comma delimited QoS map set) "
++		       "are needed\n");
+ 		return -1;
+ 	}
+ 
+-	res = os_snprintf(buf, sizeof(buf), "SET_QOS_MAP_SET %s", argv[0]);
++	res = os_snprintf(buf, sizeof(buf), "SET_QOS_MAP_SET %s %s", argv[0], argv[1]);
+ 	if (os_snprintf_error(sizeof(buf), res))
+ 		return -1;
+ 	return wpa_ctrl_command(ctrl, buf);
+@@ -895,13 +895,13 @@ static int hostapd_cli_cmd_send_qos_map_
+ 	char buf[50];
+ 	int res;
+ 
+-	if (argc != 1) {
++	if (argc != 2) {
+ 		printf("Invalid 'send_qos_map_conf' command - "
+-		       "one argument (STA addr) is needed\n");
++		       "two arguments (BSS name and STA addr) are needed\n");
+ 		return -1;
+ 	}
+ 
+-	res = os_snprintf(buf, sizeof(buf), "SEND_QOS_MAP_CONF %s", argv[0]);
++	res = os_snprintf(buf, sizeof(buf), "SEND_QOS_MAP_CONF %s %s", argv[0], argv[1]);
+ 	if (os_snprintf_error(sizeof(buf), res))
+ 		return -1;
+ 	return wpa_ctrl_command(ctrl, buf);
+@@ -914,14 +914,14 @@ static int hostapd_cli_cmd_hs20_wnm_noti
+ 	char buf[300];
+ 	int res;
+ 
+-	if (argc < 2) {
+-		printf("Invalid 'hs20_wnm_notif' command - two arguments (STA "
+-		       "addr and URL) are needed\n");
++	if (argc < 3) {
++		printf("Invalid 'hs20_wnm_notif' command - three arguments ("
++		       "BSS name, STA addr and URL) are needed\n");
+ 		return -1;
+ 	}
+ 
+-	res = os_snprintf(buf, sizeof(buf), "HS20_WNM_NOTIF %s %s",
+-			  argv[0], argv[1]);
++	res = os_snprintf(buf, sizeof(buf), "HS20_WNM_NOTIF %s %s %s",
++			  argv[0], argv[1], argv[2]);
+ 	if (os_snprintf_error(sizeof(buf), res))
+ 		return -1;
+ 	return wpa_ctrl_command(ctrl, buf);
+@@ -934,19 +934,20 @@ static int hostapd_cli_cmd_hs20_deauth_r
+ 	char buf[300];
+ 	int res;
+ 
+-	if (argc < 3) {
+-		printf("Invalid 'hs20_deauth_req' command - at least three arguments (STA addr, Code, Re-auth Delay) are needed\n");
++	if (argc < 4) {
++		printf("Invalid 'hs20_deauth_req' command - at least four arguments ("
++		       "BSS name STA addr, Code, Re-auth Delay) are needed\n");
+ 		return -1;
+ 	}
+ 
+-	if (argc > 3)
++	if (argc > 4)
+ 		res = os_snprintf(buf, sizeof(buf),
+-				  "HS20_DEAUTH_REQ %s %s %s %s",
+-				  argv[0], argv[1], argv[2], argv[3]);
++				  "HS20_DEAUTH_REQ %s %s %s %s %s",
++				  argv[0], argv[1], argv[2], argv[3], argv[4]);
+ 	else
+ 		res = os_snprintf(buf, sizeof(buf),
+-				  "HS20_DEAUTH_REQ %s %s %s",
+-				  argv[0], argv[1], argv[2]);
++				  "HS20_DEAUTH_REQ %s %s %s %s",
++				  argv[0], argv[1], argv[2], argv[3]);
+ 	if (os_snprintf_error(sizeof(buf), res))
+ 		return -1;
+ 	return wpa_ctrl_command(ctrl, buf);
+@@ -2005,12 +2006,18 @@ static const struct hostapd_cli_cmd host
+ 	  "= exit hostapd_cli" },
+ 	{ "set", hostapd_cli_cmd_set, NULL, NULL },
+ 	{ "get", hostapd_cli_cmd_get, NULL, NULL },
+-	{ "set_qos_map_set", hostapd_cli_cmd_set_qos_map_set, NULL, NULL },
++	{ "set_qos_map_set", hostapd_cli_cmd_set_qos_map_set, NULL,
++	  "<BSS name> <arg,arg,...> = set QoS Map set element" },
+ 	{ "update_wan_metrics", hostapd_cli_cmd_update_wan_metrics, NULL, NULL },
+-	{ "send_qos_map_conf", hostapd_cli_cmd_send_qos_map_conf, NULL, NULL },
++	{ "send_qos_map_conf", hostapd_cli_cmd_send_qos_map_conf, NULL,
++	  "<BSS name> <addr> = send QoS Map Configure frame" },
+ 	{ "chan_switch", hostapd_cli_cmd_chan_switch, NULL, NULL },
+-	{ "hs20_wnm_notif", hostapd_cli_cmd_hs20_wnm_notif, NULL, NULL },
+-	{ "hs20_deauth_req", hostapd_cli_cmd_hs20_deauth_req, NULL, NULL },
++	{ "hs20_wnm_notif", hostapd_cli_cmd_hs20_wnm_notif, NULL,
++	  "<BSS name> <addr> <url>\n"
++	  "  = send WNM-Notification Subscription Remediation Request" },
++	{ "hs20_deauth_req", hostapd_cli_cmd_hs20_deauth_req, NULL,
++	  "<BSS name> <addr> <code (0/1)> <Re-auth-Delay(sec)> [url]\n"
++	  "  = send WNM-Notification imminent deauthentication indication" },
+ 	{ "vendor", hostapd_cli_cmd_vendor, NULL, NULL },
+ 	{ "acs_recalc", hostapd_cli_cmd_acs_recalc, NULL, NULL },
+ 	{ "enable", hostapd_cli_cmd_enable, NULL, NULL },

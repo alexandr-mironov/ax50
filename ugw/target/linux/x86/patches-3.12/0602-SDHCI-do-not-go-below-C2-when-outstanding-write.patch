@@ -1,0 +1,202 @@
+From 9168e39beb847f769ce18ab58bceb1a725faccf9 Mon Sep 17 00:00:00 2001
+From: Eric Ernst <eric.ernst@intel.com>
+Date: Thu, 4 Sep 2014 12:48:36 -0700
+Subject: [PATCH 602/639] SDHCI: do not go below C2 when outstanding write
+
+Our host-controller's IP block has bug where if the platform
+goes below C2 and a write transaction is still outstanding,
+the system will hang.
+
+To work around this, we add a pm_qos to the mmc driver and
+update our qos to stay above C2 when starting a transaction,
+and cleaing it when the transaction completes.
+
+Change-Id: I29e9f4764b41719bf4998b40fdb760de7f59105f
+Signed-off-by: Eric Ernst <eric.ernst@intel.com>
+
+cleaner messages
+
+Change-Id: Id8ee838a107ce314d12c6b32363f61851a28f2d7
+Signed-off-by: Eric Ernst <eric.ernst@intel.com>
+(cherry picked from commit d77b16b0a2fb36f24294bc64ac13d8f0f833bb5e)
+
+Conflicts:
+
+	drivers/mmc/core/core.c
+	drivers/mmc/host/sdhci-acpi.c
+	include/linux/mmc/host.h
+
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/core/core.c       | 23 ++++++++++++++++++++++-
+ drivers/mmc/host/sdhci-acpi.c | 30 ++++++++++++++++++++++++++++++
+ include/linux/mmc/host.h      |  3 +++
+ 3 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mmc/core/core.c b/drivers/mmc/core/core.c
+index f426236..fcfb55f 100644
+--- a/drivers/mmc/core/core.c
++++ b/drivers/mmc/core/core.c
+@@ -23,6 +23,8 @@
+ #include <linux/log2.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/pm_runtime.h>
++#include <linux/pm_qos.h>
++#include <linux/intel_mid_pm.h>
+ #include <linux/suspend.h>
+ #include <linux/fault-inject.h>
+ #include <linux/random.h>
+@@ -200,6 +202,21 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
+ 
+ EXPORT_SYMBOL(mmc_request_done);
+ 
++static void mmc_qos_update(struct mmc_host *host, struct mmc_request *mrq,
++				s32 new_value)
++{
++	if (!host || !host->qos || !mrq)
++		return;
++
++	if (host->card && mmc_card_mmc(host->card) && mrq->data) {
++		/* qos fixup only needed for write transactions */
++		if (mrq->data->flags & MMC_DATA_WRITE)
++			pm_qos_update_request(host->qos, new_value);
++	} else {
++		pm_qos_update_request(host->qos, new_value);
++	}
++}
++
+ static void
+ mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
+ {
+@@ -261,6 +278,7 @@ mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
+ 	}
+ 	mmc_host_clk_hold(host);
+ 	led_trigger_event(host->led, LED_FULL);
++	mmc_qos_update(host, mrq, CSTATE_EXIT_LATENCY_C2);
+ 	host->ops->request(host, mrq);
+ }
+ 
+@@ -418,6 +436,7 @@ static int mmc_wait_for_data_req_done(struct mmc_host *host,
+ 			    mmc_card_removed(host->card)) {
+ 				err = host->areq->err_check(host->card,
+ 							    host->areq);
++				mmc_qos_update(host, mrq, PM_QOS_DEFAULT_VALUE);
+ 				break; /* return err */
+ 			} else {
+ 				pr_info("%s: req failed (CMD%u): %d, retrying...\n",
+@@ -467,8 +486,10 @@ static void mmc_wait_for_req_done(struct mmc_host *host,
+ 			}
+ 		}
+ 		if (!cmd->error || !cmd->retries ||
+-		    mmc_card_removed(host->card))
++		    mmc_card_removed(host->card)) {
++			mmc_qos_update(host, mrq, PM_QOS_DEFAULT_VALUE);
+ 			break;
++		}
+ 
+ 		pr_debug("%s: req failed (CMD%u): %d, retrying...\n",
+ 			 mmc_hostname(host), cmd->opcode, cmd->error);
+diff --git a/drivers/mmc/host/sdhci-acpi.c b/drivers/mmc/host/sdhci-acpi.c
+index 8119786..cf747ce 100644
+--- a/drivers/mmc/host/sdhci-acpi.c
++++ b/drivers/mmc/host/sdhci-acpi.c
+@@ -37,6 +37,7 @@
+ #include <linux/acpi_gpio.h>
+ #include <linux/pm.h>
+ #include <linux/pm_runtime.h>
++#include <linux/pm_qos.h>
+ #include <linux/delay.h>
+ 
+ #include <linux/mmc/host.h>
+@@ -158,12 +159,37 @@ static const struct sdhci_acpi_chip sdhci_acpi_chip_int_puma7_emmc = {
+ 	.ops = &sdhci_acpi_ops_int_puma7_emmc,
+ };
+ 
++/*
++ * This probe slot routine is being added to address an issue on the host
++ * controller's IP where hangs will occur of the platform enters a C state
++ * below C2 while there is an outstanding write transaction. This is observed
++ * on Baytrail based platforms, and should only be enabled on platforms with
++ * host controller IP blocks that exhibit this.  We're calling based on the
++ * ACPI-ID of the IP block.
++ */
++static int sdhci_acpi_probe_slot(struct platform_device *pdev)
++{
++	struct sdhci_acpi_host *c = platform_get_drvdata(pdev);
++	struct sdhci_host *host;
++
++	if (!c || !c->host)
++		return 0;
++
++	host = c->host;
++	host->mmc->qos = kzalloc(sizeof(struct pm_qos_request), GFP_KERNEL);
++	pm_qos_add_request(host->mmc->qos, PM_QOS_CPU_DMA_LATENCY,
++					PM_QOS_DEFAULT_VALUE);
++
++	return 0;
++}
++
+ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_emmc = {
+ 	.chip    = &sdhci_acpi_chip_int,
+ 	.caps    = MMC_CAP_8_BIT_DATA | MMC_CAP_NONREMOVABLE | MMC_CAP_HW_RESET,
+ 	.caps2   = MMC_CAP2_HC_ERASE_SZ,
+ 	.flags   = SDHCI_ACPI_RUNTIME_PM,
+ 	.quirks2 = SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
++	.probe_slot = sdhci_acpi_probe_slot,
+ };
+ 
+ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_puma7_emmc1 = {
+@@ -177,6 +203,7 @@ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_puma7_emmc1 = {
+ 	.quirks2 = SDHCI_QUIRK2_TUNING_POLL | SDHCI_QUIRK2_PRESET_VALUE_BROKEN
+ 		| SDHCI_QUIRK2_HW_MUTEX,
+ 	.pm_caps = MMC_PM_TUNING_AFTER_RTRESUME,
++	.probe_slot = sdhci_acpi_probe_slot,
+ };
+ 
+ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_puma7_emmc2 = {
+@@ -189,6 +216,7 @@ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_puma7_emmc2 = {
+ 	.flags   = SDHCI_ACPI_RUNTIME_PM,
+ 	.quirks2 = SDHCI_QUIRK2_TUNING_POLL | SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
+ 	.pm_caps = MMC_PM_TUNING_AFTER_RTRESUME,
++	.probe_slot = sdhci_acpi_probe_slot,
+ };
+ 
+ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_sdio = {
+@@ -197,11 +225,13 @@ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_sdio = {
+ 	.caps    = MMC_CAP_NONREMOVABLE | MMC_CAP_POWER_OFF_CARD,
+ 	.flags   = SDHCI_ACPI_RUNTIME_PM,
+ 	.pm_caps = MMC_PM_KEEP_POWER,
++	.probe_slot = sdhci_acpi_probe_slot,
+ };
+ 
+ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_sd = {
+ 	.flags   = SDHCI_ACPI_SD_CD | SDHCI_ACPI_RUNTIME_PM,
+ 	.quirks2 = SDHCI_QUIRK2_CARD_ON_NEEDS_BUS_ON,
++	.probe_slot = sdhci_acpi_probe_slot,
+ };
+ 
+ struct sdhci_acpi_uid_slot {
+diff --git a/include/linux/mmc/host.h b/include/linux/mmc/host.h
+index 98e6516..c70206c 100644
+--- a/include/linux/mmc/host.h
++++ b/include/linux/mmc/host.h
+@@ -15,6 +15,7 @@
+ #include <linux/sched.h>
+ #include <linux/device.h>
+ #include <linux/fault-inject.h>
++#include <linux/pm_qos.h>
+ 
+ #include <linux/mmc/core.h>
+ #include <linux/mmc/pm.h>
+@@ -371,6 +372,8 @@ struct mmc_host {
+ 
+ 	unsigned int		slotno;	/* used for sdio acpi binding */
+ 
++	struct pm_qos_request *qos;
++
+ 	unsigned long		private[0] ____cacheline_aligned;
+ };
+ 
+-- 
+2.10.1
+

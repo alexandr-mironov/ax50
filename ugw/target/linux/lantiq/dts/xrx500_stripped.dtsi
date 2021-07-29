@@ -1,0 +1,235 @@
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "lantiq,grx500","lantiq,xrx500"; 
+	
+	aliases {
+		serial0 = &asc0;
+		usb0	= &usb0;
+		usb1	= &usb1;
+		xbar0 	= &xbar0;
+		xbar1 	= &xbar1;
+		xbar2 	= &xbar2;
+		xbar6 	= &xbar6;
+		xbar7 	= &xbar7;
+		usb0_phy = &usb0_phy;
+		usb1_phy = &usb1_phy;
+	};
+
+	cpus {
+		cpu@0 {
+			compatible = "mips,InterAptiv";
+			default-OS = "LINUX";
+		};
+		cpu1: cpu@1 {
+			compatible = "mips,InterAptiv";
+			default-OS = "LINUX";
+		};
+		cpu2: cpu@2 {
+			compatible = "mips,InterAptiv";
+			default-OS = "LINUX";
+		};
+		cpu3: cpu@3 {
+			compatible = "mips,InterAptiv";
+			default-OS = "LINUX";
+		};
+	};
+
+	ssx0@1E000000{ 
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus";
+		reg = <0x1E000000 0x2000000>;
+		ranges = <0x0 0x1E000000 0x02000000>;
+		xbar0: xbar@1F00000 {
+			compatible = "lantiq,ngi-ssx-grx500";
+			reg = <0x1F00000 0x100000>;
+		};
+	
+	};
+
+	ssx1@1c000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus"; 
+		reg = <0x1c000000 0x2000000>;
+		ranges = <0x0 0x1c000000 0x02000000>;
+		xbar1: xbar@1F00000 {
+			compatible = "lantiq,ngi-ssx-grx500";
+			reg = <0x1F00000 0x100000>;
+		};
+	};
+
+	ssx2@1a000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus";
+		reg = <0x1a000000 0x2000000>;
+		ranges = <0x0 0x1a000000 0x02000000>;
+
+		usb0:usb@300000 {
+			compatible = "lantiq,dwc3-core";
+			reg = <0x300000 0x100000>;
+			interrupt-parent = <&gic>;
+			interrupts = <62>;
+			phys = <&usb0_phy>;
+			status = "disabled";
+		};
+
+		usb0_phy:phy@400000 {
+			compatible = "lantiq,dwc3-phy";
+			reg = <0x400000 0x100000>;
+		};
+
+		usb_oc@0 {
+			compatible = "lantiq,usb-oc";
+			interrupt-parent = <&gic>;
+			interrupts = <61>;
+			overcurrent-gpio = <7>;
+			node-name = "pad";
+		};
+
+		usb1:usb@500000 {
+			compatible = "lantiq,dwc3-xrx500","lantiq,dwc3-core";
+			reg = <0x500000 0x100000>;
+			interrupt-parent = <&gic>;
+			interrupts = <91>;
+			phys = <&usb1_phy>;
+			status = "disabled";
+		};
+
+		usb1_phy:phy@600000 {
+			compatible = "lantiq,dwc3-phy";
+			reg = <0x600000 0x100000>;
+		};
+
+		usb_oc@1 {
+			compatible = "lantiq,usb-oc";
+			interrupt-parent = <&gic>;
+			interrupts = <58>;
+			overcurrent-gpio = <2>;
+			node-name = "pad";
+		};
+
+		xbar2: xbar@1F00000 {
+			compatible = "lantiq,ngi-ssx-grx500";
+			reg = <0x1F00000 0x100000>;
+		};
+	};
+
+	ssx3@18000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus";
+		reg = <0x18000000 0xa8000000>;
+		ranges = <0x0 0x18000000 0xa8000000>;
+		
+	};
+
+	ssx4@16000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus";
+		reg = <0x16000000 0x2000000>;
+		ranges = <0x0 0x16000000 0x02000000>;
+
+		cgu0: cgu@200000 {
+			compatible = "lantiq,cgu-grx500", "lantiq,cgu-xrx500";
+			reg = <0x200000 0x100000>;
+		};
+		ebu0: ebu@f00000 {
+			compatible = "lantiq,ebu-grx500", "lantiq,ebu-xrx500"; 
+			reg = <0xf00000 0x100000>,
+				<0x1000000 0x100000>; 
+			reg-names = "ebunand_reg", "hsnand_reg";
+		};
+		asc0: serial@700000 {
+			compatible = "lantiq,asc";
+			reg = <0x700000 0x100000>;
+			interrupt-parent = <&gic>;
+			interrupts = <84 86 87>;
+		};
+
+	};
+
+	ssx6@12000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus";
+		reg = <0x12000000 0x2000000>;
+		ranges = <0x0 0x12000000 0x02000000>;
+
+		gcr@300000 {
+			compatible = "lantiq,gcr-grx500";
+			reg = <0x300000 0x8000>;
+		};
+
+		cpc@310000 {
+			compatible = "lantiq,cpc-grx500";
+			reg = <0x310000 0x6000>;
+		};
+	
+		gic: gic@320000 {
+			#interrupt-cells = <1>;
+			interrupt-controller;
+			compatible = "lantiq,gic-grx500";
+			reg = <0x320000 0x20000>;
+		};
+		
+		gcrcus@3f0000 {
+			compatible = "lantiq,gcrcus-grx500";
+			reg = <0x3f0000 0x200>;
+		};
+
+		xbar6: xbar@1F00000 {
+			compatible = "lantiq,ngi-ssx-grx500";
+			reg = <0x1F00000 0x100000>;
+		};
+	};
+
+	ssx7@a0000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lantiq,ssx", "simple-bus";
+		reg = <0xa0000000 0x20000000>;
+		ranges = <0x0 0xa0000000 0x20000000>;
+		xbar7: xbar@3000000 {
+			compatible = "lantiq,ngi-ssx-grx500";
+			reg = <0x3000000 0x100000>;
+		};
+
+	};	
+	
+
+	cpuclocks {
+		compatible = "lantiq,scaling-frequencies";
+
+		xrx350_cpuclocks: cpuclocks@0 {
+			status = "disabled";
+			lantiq,cpuclocks = <600000000 600000000 600000000 150000000>;
+			lantiq,threshold_dp = <1 1 1 101>;
+			lantiq,poll_period = <11>;
+		}; 
+	
+		xrx550_800_cpuclocks: cpuclocks@1 {
+			status = "disabled";
+			lantiq,cpuclocks = <800000000 800000000 600000000 150000000>;
+			lantiq,threshold_dp = <1 1 1 101>;
+			lantiq,poll_period = <11>;
+		}; 
+	
+		xrx550_1000_cpuclocks: cpuclocks@2 {
+			status = "disabled";
+			lantiq,cpuclocks = <1000000000 666666666 333333333 166666666>;
+			lantiq,threshold_dp = <1 1 1 101>;
+			lantiq,poll_period = <11>;
+		};
+		
+		xrx550_1200_cpuclocks: cpuclocks@3 {
+			status = "disabled";
+			lantiq,cpuclocks = <1200000000 800000000 600000000 150000000>;
+			lantiq,threshold_dp = <1 1 1 101>;
+			lantiq,poll_period = <11>;
+		};
+	}; 
+};

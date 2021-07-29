@@ -1,0 +1,158 @@
+From 0b93447cc2aea6fd0afd6971429cef4006137f49 Mon Sep 17 00:00:00 2001
+From: "Vital Yep, Marco A" <marco.a.vital.yep@intel.com>
+Date: Mon, 15 Aug 2016 10:50:39 -0700
+Subject: [PATCH 462/639] DWC_ETH_QOS: Expose MAC address configuration
+
+Implemented function to allow change the Atom GMAC address
+using standard Linux commands (i.e. ifconfig, ip).
+
+Signed-off-by: Vital Yep, Marco A <marco.a.vital.yep@intel.com>
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_desc.c   |  4 +-
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c    | 46 +++++++++++++++++++---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.h    |  2 +
+ .../net/ethernet/synopsys/DWC_ETH_QOS_yheader.h    |  2 +
+ 4 files changed, 48 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_desc.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_desc.c
+index c0636be..6654097 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_desc.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_desc.c
+@@ -357,7 +357,9 @@ static void DWC_ETH_QOS_wrapper_rx_descriptor_init_single_q(
+ 		    (desc_dma + sizeof(rx_descriptor_t) * i);
+ 		GET_RX_BUF_PTR(qInx, i) = &buffer[i];
+ 		/* allocate skb & assign to each desc */
+-		if (pdata->alloc_rx_buf(pdata, GET_RX_BUF_PTR(qInx, i), GFP_KERNEL))
++		if (pdata->alloc_rx_buf(pdata, GET_RX_BUF_PTR(qInx, i),
++			(pdata->power_state & DWC_ETH_QOS_NETIP_PWRUP)?
++			GFP_ATOMIC : GFP_KERNEL))
+ 			break;
+ 		wmb();
+ 	}
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
+index 3ee8651..e681802 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
+@@ -303,13 +303,15 @@ static gbe_power_state_t DWC_ETH_QOS_stop_dev(
+    if (pdata->power_state & DWC_ETH_QOS_NETIP_PWRUP) {
+       CFG_PRINT("Device waking up from StandBy\n");
+    } else if (netif_running(pdata->dev)) {
+-      CFG_PRINT("Device is not running\n");
++      CFG_PRINT("Stopping device\n");
++      hrtimer_cancel(&pdata->rx_itr_timer);
+       netif_tx_disable(pdata->dev);
+       DWC_ETH_QOS_napi_disable(pdata);
+       /* Stop DMA TX/RX */
+       DWC_ETH_QOS_stop_all_ch_tx_dma(pdata);
+       DWC_ETH_QOS_stop_all_ch_rx_dma(pdata);
+    } else {
++      CFG_PRINT("Device is not running\n");
+       ret = GBE_STOP_STATE;
+    }
+    /* Issue software reset to device */
+@@ -1044,6 +1046,7 @@ static const struct net_device_ops DWC_ETH_QOS_netdev_ops = {
+    .ndo_start_xmit = DWC_ETH_QOS_start_xmit,
+    .ndo_get_stats = DWC_ETH_QOS_get_stats,
+    .ndo_set_rx_mode = DWC_ETH_QOS_set_rx_mode,
++   .ndo_set_mac_address	= DWC_ETH_QOS_set_mac,
+ #ifdef CONFIG_NET_POLL_CONTROLLER
+    .ndo_poll_controller = DWC_ETH_QOS_poll_controller,
+ #endif            /*end of CONFIG_NET_POLL_CONTROLLER */
+@@ -1831,7 +1834,7 @@ static void DWC_ETH_QOS_set_rx_mode(struct net_device *dev)
+    unsigned char hpf_mode = 0;
+    int mode, i;
+ 
+-   DBGPR_FILTER("-->DWC_ETH_QOS_set_rx_mode\n");
++   CFG_PRINT("-->DWC_ETH_QOS_set_rx_mode\n");
+ 
+    spin_lock_irqsave(&pdata->lock, flags);
+ 
+@@ -1887,7 +1890,37 @@ static void DWC_ETH_QOS_set_rx_mode(struct net_device *dev)
+ 
+    spin_unlock_irqrestore(&pdata->lock, flags);
+ 
+-   DBGPR("<--DWC_ETH_QOS_set_rx_mode\n");
++   CFG_PRINT("<--DWC_ETH_QOS_set_rx_mode\n");
++}
++
++static int DWC_ETH_QOS_set_mac(struct net_device *dev, void *p)
++{
++   struct DWC_ETH_QOS_prv_data *pdata = netdev_priv(dev);
++   struct sockaddr *addr = p;
++   gbe_power_state_t state;
++
++   CFG_PRINT("-->DWC_ETH_QOS_set_mac\n");
++
++   if (!is_valid_ether_addr(addr->sa_data)) {
++      ERR_PRINT("Invalid MAC address!\n");
++      return -EADDRNOTAVAIL;
++   }
++
++   /* Stop device before chaginng the MAC address */
++   state = DWC_ETH_QOS_stop_dev(pdata);
++
++   memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
++
++   if (state == GBE_RUN_STATE) {
++      DWC_ETH_QOS_set_rx_mode(dev);
++      DWC_ETH_QOS_start_dev(pdata);
++   } else if (state == GBE_STANDBY_STATE) {
++      /* Save request to apply it when device is powered up */
++      pdata->power_state |= DWC_ETH_QOS_NETIP_MAC_ADDR_REQ;
++   }
++
++   CFG_PRINT("<--DWC_ETH_QOS_set_mac\n");
++   return 0;
+ }
+ 
+ /*!
+@@ -5502,7 +5535,8 @@ int DWC_ETH_QOS_powerup(struct net_device *dev)
+ 
+    /* Configure pending requests (e.g. Split header or MTU changes) */
+    if (pdata->power_state &
+-      (DWC_ETH_QOS_NETIP_SPLHDR_REQ | DWC_ETH_QOS_NETIP_MTU_REQ)) {
++      (DWC_ETH_QOS_NETIP_SPLHDR_REQ | DWC_ETH_QOS_NETIP_MTU_REQ |
++       DWC_ETH_QOS_NETIP_MAC_ADDR_REQ)) {
+       /* Indicate controller is powering up from StandBy */
+       pdata->power_state |= DWC_ETH_QOS_NETIP_PWRUP;
+       DWC_ETH_QOS_stop_dev(pdata);
+@@ -5512,7 +5546,9 @@ int DWC_ETH_QOS_powerup(struct net_device *dev)
+          /* Enable/disable split header for all RX DMA channel */
+          for (qInx = 0; qInx < DWC_ETH_QOS_RX_QUEUE_CNT; qInx++)
+             hw_if->config_split_header_mode(qInx, pdata->rx_split_hdr);
+-         }
++      } else if (pdata->power_state & DWC_ETH_QOS_NETIP_MAC_ADDR_REQ) {
++         DWC_ETH_QOS_set_rx_mode(dev);
++      }
+       /* Attach net device */
+       netif_device_attach(dev);
+       DWC_ETH_QOS_start_dev(pdata);
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.h b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.h
+index 6bb0cd9..24824a7 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.h
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.h
+@@ -39,6 +39,8 @@ static int DWC_ETH_QOS_close(struct net_device *);
+ 
+ static void DWC_ETH_QOS_set_rx_mode(struct net_device *);
+ 
++static int DWC_ETH_QOS_set_mac(struct net_device *dev, void *p);
++
+ static int DWC_ETH_QOS_start_xmit(struct sk_buff *, struct net_device *);
+ 
+ static void DWC_ETH_QOS_tx_interrupt(struct net_device *,
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h
+index 08303dbe..5bdbdae 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h
+@@ -239,6 +239,8 @@
+                                                 // received while device was in StandBy mode
+ #define DWC_ETH_QOS_NETIP_MTU_REQ      (1 << 6) // Indicate a mtu change request was
+                                                 // received while device was in StandBy mode
++#define DWC_ETH_QOS_NETIP_MAC_ADDR_REQ (1 << 7) // Indicate a MAC address change request was
++                                                // received while device was in StandBy mode
+ 
+ #define DWC_ETH_QOS_MAC_ADDR_LEN 6
+ #define DWC_ETH_QOS_ETH_FRAME_LEN (ETH_FRAME_LEN + ETH_FCS_LEN + VLAN_HLEN)
+-- 
+2.10.1
+

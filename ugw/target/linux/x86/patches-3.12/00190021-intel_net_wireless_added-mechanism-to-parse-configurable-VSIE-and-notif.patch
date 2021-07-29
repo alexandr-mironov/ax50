@@ -1,0 +1,225 @@
+From e09b65fd863b0f26adc1a5bf427028d5fa9feeb7 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Thu, 13 Jul 2017 12:41:06 +0300
+Subject: [PATCH] added mechanism to parse configurable VSIE and notify to
+ wpa_supplicant
+
+upon reveived Beacon and Probe Response frames, the mac80211
+search for the configured VSIE filter.
+if the mgmt contains that filter, the mgmt frame will be sent up
+to the wpa_supplicant.
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ include/net/cfg80211.h     |  6 ++++++
+ net/mac80211/ieee80211_i.h |  7 ++++++-
+ net/mac80211/mlme.c        | 21 ++++++++++++++++-----
+ net/mac80211/util.c        | 17 +++++++++++++++++
+ net/wireless/mlme.c        | 23 +++++++++++++++++++++++
+ 5 files changed, 68 insertions(+), 6 deletions(-)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 42521ad..4708844 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -3204,6 +3204,9 @@ struct wireless_dev {
+ 	bool cac_started;
+ 	unsigned long cac_start_time;
+ 
++	u8 *vendor_events_filter;
++	u8 vendor_events_filter_len;
++
+ #ifdef CONFIG_CFG80211_WEXT
+ 	/* wext data */
+ 	struct {
+@@ -4290,6 +4293,9 @@ void cfg80211_conn_failed(struct net_device *dev, const u8 *mac_addr,
+ 			  enum nl80211_connect_failed_reason reason,
+ 			  gfp_t gfp);
+ 
++int cfg80211_rx_vendoer_specific_mgmt(struct wireless_dev *wdev, int freq,
++		      const u8 *buf, size_t len, gfp_t gfp);
++
+ /**
+  * cfg80211_rx_mgmt - notification of received, unprocessed management frame
+  * @wdev: wireless device receiving the frame
+diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
+index e2a9582..4eff1af 100644
+--- a/net/mac80211/ieee80211_i.h
++++ b/net/mac80211/ieee80211_i.h
+@@ -1232,6 +1232,8 @@ struct ieee80211_ra_tid {
+ struct ieee802_11_elems {
+ 	const u8 *ie_start;
+ 	size_t total_len;
++	u8 *vendor_events_filter;
++	u8 vendor_events_filter_len;
+ 
+ 	/* pointers to IEs */
+ 	const u8 *ssid;
+@@ -1265,6 +1267,7 @@ struct ieee802_11_elems {
+ 	const u8 *opmode_notif;
+ 	const struct ieee80211_sec_chan_offs_ie *sec_chan_offs;
+ 	const u8 *vendor_vht;
++	const u8 *vendor_ie_to_notify;
+ 
+ 	/* length of them, respectively */
+ 	u8 ssid_len;
+@@ -1282,6 +1285,7 @@ struct ieee802_11_elems {
+ 	u8 perr_len;
+ 	u8 country_elem_len;
+ 	u8 vendor_vht_len;
++	u8 vendor_ie_to_notify_len;
+ 
+ 	/* whether a parse error occurred while retrieving these elements */
+ 	bool parse_error;
+@@ -1584,12 +1588,13 @@ static inline void ieee80211_tx_skb(struct ieee80211_sub_if_data *sdata,
+ 
+ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+ 			       struct ieee802_11_elems *elems,
++				   u8 *vendor_events_filter, u8 vendor_events_filter_len,
+ 			       u64 filter, u32 crc);
+ static inline void ieee802_11_parse_elems(const u8 *start, size_t len,
+ 					  bool action,
+ 					  struct ieee802_11_elems *elems)
+ {
+-	ieee802_11_parse_elems_crc(start, len, action, elems, 0, 0);
++	ieee802_11_parse_elems_crc(start, len, action, elems, NULL, 0, 0, 0);
+ }
+ 
+ void ieee80211_dynamic_ps_enable_work(struct work_struct *work);
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index fc1a174..d6d4ad2 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -2947,11 +2947,16 @@ static void ieee80211_rx_mgmt_probe_resp(struct ieee80211_sub_if_data *sdata,
+ 	if (baselen > len)
+ 		return;
+ 
+-	ieee802_11_parse_elems(mgmt->u.probe_resp.variable, len - baselen,
+-			       false, &elems);
++	ieee802_11_parse_elems_crc(mgmt->u.probe_resp.variable, len - baselen,
++			       false, &elems, sdata->wdev.vendor_events_filter,
++				   sdata->wdev.vendor_events_filter_len, 0, 0);
+ 
+ 	ieee80211_rx_bss_info(sdata, mgmt, len, rx_status, &elems);
+ 
++	if (elems.vendor_ie_to_notify)
++		cfg80211_rx_vendoer_specific_mgmt(&sdata->wdev, rx_status->freq,
++				(const u8 *)mgmt, len, GFP_ATOMIC);
++
+ 	if (ifmgd->associated &&
+ 	    ether_addr_equal(mgmt->bssid, ifmgd->associated->bssid))
+ 		ieee80211_reset_ap_probe(sdata);
+@@ -3014,6 +3019,14 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
+ 	if (baselen > len)
+ 		return;
+ 
++	ieee802_11_parse_elems_crc(mgmt->u.beacon.variable,
++			len - baselen, false, &elems, sdata->wdev.vendor_events_filter,
++			   sdata->wdev.vendor_events_filter_len, 0, 0);
++
++	if (elems.vendor_ie_to_notify)
++		 cfg80211_rx_vendoer_specific_mgmt(&sdata->wdev, rx_status->freq,
++			(const u8 *)mgmt, len, GFP_ATOMIC);
++
+ 	rcu_read_lock();
+ 	chanctx_conf = rcu_dereference(sdata->vif.chanctx_conf);
+ 	if (!chanctx_conf) {
+@@ -3030,8 +3043,6 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
+ 
+ 	if (ifmgd->assoc_data && ifmgd->assoc_data->need_beacon &&
+ 	    ether_addr_equal(mgmt->bssid, ifmgd->assoc_data->bss->bssid)) {
+-		ieee802_11_parse_elems(mgmt->u.beacon.variable,
+-				       len - baselen, false, &elems);
+ 
+ 		ieee80211_rx_bss_info(sdata, mgmt, len, rx_status, &elems);
+ 		if (elems.tim && !elems.parse_error) {
+@@ -3146,7 +3157,7 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
+ 	ncrc = crc32_be(0, (void *)&mgmt->u.beacon.beacon_int, 4);
+ 	ncrc = ieee802_11_parse_elems_crc(mgmt->u.beacon.variable,
+ 					  len - baselen, false, &elems,
+-					  care_about_ies, ncrc);
++					  NULL, 0, care_about_ies, ncrc);
+ 
+ 	if (local->hw.flags & IEEE80211_HW_PS_NULLFUNC_STACK) {
+ 		bool directed_tim = ieee80211_check_tim(elems.tim,
+diff --git a/net/mac80211/util.c b/net/mac80211/util.c
+index 1ea2af2..9790f23 100644
+--- a/net/mac80211/util.c
++++ b/net/mac80211/util.c
+@@ -819,11 +819,26 @@ static u32 ieee802_11_parse_vendor_specific(const u8 *pos, u8 elen,
+ 		}
+ 	}
+ 
++	if (elen >= 4 && elems->vendor_events_filter && elems->vendor_events_filter_len >= 3) {
++		int i = 0, found = 1;
++		for (i = 0; i < elems->vendor_events_filter_len; i++) {
++			if (pos[i] != elems->vendor_events_filter[i]) {
++				found = 0;
++				break;
++			}
++		}
++		if (found) {
++			elems->vendor_ie_to_notify = pos;
++			elems->vendor_ie_to_notify_len = elen;
++		}
++	}
++
+ 	return crc;
+ }
+ 
+ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+ 			       struct ieee802_11_elems *elems,
++				   u8 *vendor_events_filter, u8 vendor_events_filter_len,
+ 			       u64 filter, u32 crc)
+ {
+ 	size_t left = len;
+@@ -836,6 +851,8 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
+ 	memset(elems, 0, sizeof(*elems));
+ 	elems->ie_start = start;
+ 	elems->total_len = len;
++	elems->vendor_events_filter = vendor_events_filter;
++	elems->vendor_events_filter_len = vendor_events_filter_len;
+ 
+ 	while (left >= 2) {
+ 		u8 id, elen;
+diff --git a/net/wireless/mlme.c b/net/wireless/mlme.c
+index 7c57972..32e7c4d 100644
+--- a/net/wireless/mlme.c
++++ b/net/wireless/mlme.c
+@@ -461,6 +461,12 @@ int cfg80211_mlme_register_mgmt(struct wireless_dev *wdev, u32 snd_portid,
+ 	nreg->frame_type = cpu_to_le16(frame_type);
+ 	list_add(&nreg->list, &wdev->mgmt_registrations);
+ 
++	if (frame_type == IEEE80211_STYPE_PROBE_RESP ||
++		frame_type == IEEE80211_STYPE_BEACON) {
++		wdev->vendor_events_filter = nreg->match;
++		wdev->vendor_events_filter_len = nreg->match_len;
++	}
++
+ 	if (rdev->ops->mgmt_frame_register)
+ 		rdev_mgmt_frame_register(rdev, wdev, frame_type, true);
+ 
+@@ -833,3 +839,20 @@ void cfg80211_cac_event_2(struct net_device *netdev,
+ 	nl80211_radar_notify(rdev, chandef, event, netdev, gfp);
+ }
+ EXPORT_SYMBOL(cfg80211_cac_event_2);
++
++int cfg80211_rx_vendoer_specific_mgmt(struct wireless_dev *wdev, int freq,
++		      const u8 *buf, size_t len, gfp_t gfp)
++{
++	struct wiphy *wiphy = wdev->wiphy;
++	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
++	struct cfg80211_mgmt_registration *reg;
++	int res = 0;
++
++	list_for_each_entry(reg, &wdev->mgmt_registrations, list) {
++		res = nl80211_send_mgmt(rdev, wdev, reg->nlportid, freq, 0, buf, len, 0, gfp);
++		break;
++	}
++
++	return res;
++}
++EXPORT_SYMBOL(cfg80211_rx_vendoer_specific_mgmt);
+-- 
+2.10.1
+

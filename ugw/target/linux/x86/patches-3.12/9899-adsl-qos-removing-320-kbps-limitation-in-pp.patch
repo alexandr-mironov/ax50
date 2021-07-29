@@ -1,0 +1,88 @@
+# HG changeset patch
+# Parent 5f9450407691896f8207d4b5484c616a2d403334
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -394,6 +394,9 @@ typedef struct // former TI_PP_QOS_CLST_
+     Uint32                      credit_per_iteration;                           /* The Max bytes that can be transmitted per iteration. (this field is automatically configured from the line rate and iteration */
+     Uint32                      sum_of_weights;                                 /* The total Weights that is configured to the cluster */
+     Uint8                       remaining_credits;                              /* The remaining credits that the cluster have due to the division of total credits in the queues weights */
++
++	/* Iteration Divider DB parameters */
++	Uint16						it_divider;
+ }
+ AVALANCHE_PP_QOS_CLST_CFG_t;
+ 
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -104,14 +104,33 @@
+ #define PP_QOS_FW_CLST_BLK_BASE_PHY  (0xF3E12200)
+ 
+ #define PP_QOS_FW_DIV_SUM_BASE_PHY   (0xF3E13600)                /* 2 Bytes * 255 entries*/
++#define PP_QOS_FW_IT_DIV_BASE_PHY    (0xF3E13800)
++
+ #define PP_QOS_FW_MAX_SUM_ENTRIES    (255)                       /* The MAX value for sum of weights of the active queues in WFQ */
+ #define PP_QOS_MAX_WFQ_CLUSTERS      (5)                         /* Currently only 1 cluster can be from WFQ type */
+ 
++#define PP_QOS_IT_DIVIDER_DEFAULT_VAL (1)
++#define PP_QOS_IT_DIVIDER_ENABLE_VAL (20)
++
+ /* Rate(in Mbps) * 1M) / iteration per second / 8(bits in byte) */
+-#define PP_QOS_MEGA_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)    ((Uint32)(((Uint64)(x * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
+-#define PP_QOS_KILO_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)    ((Uint32)(((Uint64)(x * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
+-#define PP_QOS_MBIT_TO_KBIT(x)  ((Uint32)(x*1000))
+-#define PP_QOS_PPS_TO_IT_CREDIT_PACKETS(x)               ((Uint16)(x / PP_QOS_ITERATION_PER_SECOND))
++#define PP_QOS_KBIT_RATE_DIV_TO_CREDIT(x, divider)          (((x) * 1000) / (PP_QOS_ITERATION_PER_SECOND/divider) / 8 )
++#define PP_QOS_KILO_BIT_RATE_TO_IT_DIVIDER(x)               (((x) % 1000 == 0) ? PP_QOS_IT_DIVIDER_DEFAULT_VAL : PP_QOS_IT_DIVIDER_ENABLE_VAL)
++#define PP_QOS_MEGA_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)       ((Uint32)(((Uint64)((x) * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
++#define PP_QOS_KILO_BIT_PER_SEC_TO_IT_CREDIT_BYTES_WFQ(x)   ((Uint32)(((Uint64)((x) * 1000 * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
++#define PP_QOS_KILO_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)       (PP_QOS_KBIT_RATE_DIV_TO_CREDIT(x, PP_QOS_KILO_BIT_RATE_TO_IT_DIVIDER(x)))
++#define PP_QOS_MEGA_BIT_PER_SEC_TO_KILO_BIT_PER_SEC(x)      ((x) * 1000)
++#define PP_QOS_PPS_TO_IT_CREDIT_PACKETS(x,divider)          ((Uint16)((x) / (PP_QOS_ITERATION_PER_SECOND/divider)))
++#define PP_QOS_IT_CREDIT_PACKETS_TO_PPS(x,divider)          ((Uint32)((x) * (PP_QOS_ITERATION_PER_SECOND/divider)))
++#define PP_QOS_RATE_LIMIT_IT_DIV_ENABLE                     (32000)
++
++#define PP_QOS_MIN_VAL_FOR_MAX_GLOBAL_CREDIT_BYTS           (MAX_IP_PACKET_SIZE * 2)
++#define PP_QOS_MIN_VAL_FOR_MAX_GLOBAL_CREDIT_PKT            (32)
++
++static inline int floor_x_by_y(int x, int y) {
++	if ( y==0 )
++		return -1;
++	return ((x / y) * y);
++}
+ 
+ /************************************************/
+ /*                 Structures                   */
+@@ -140,7 +159,7 @@ typedef struct
+     Uint32            egress_queue_depth_bytes;   /* Egress queue depth (bytes) */
+     Uint32            ingress_queue_depth_packets;/* Ingress queue depth (packets) */
+     Uint32            ingress_queue_depth_bytes;  /* Ingress queue depth (bytes) */
+-    Uint32            port_rate_limit_Mbps;       /* Rate limit (in Mbps)*/
++    Uint32            port_rate_limit_Kbps;       /* Rate limit (in Mbps)*/
+     Uint32            port_pps_limit;             /* PPS limit */
+     Uint16            queues_weights[AVALANCHE_PP_QOS_CLST_MAX_QCNT]; /* If scheduling mode is WFQ each queue has weight */
+ }
+@@ -153,7 +172,7 @@ typedef struct
+     Uint32            egress_port_queue;          /* Egress queue number */
+     Uint32            egress_queue_depth_packets; /* Egress queue depth (packets) */
+     Uint32            egress_queue_depth_bytes;   /* Egress queue depth (bytes) */
+-    Uint32            port_rate_limit_Mbps;       /* Rate limit (in Mbps)*/
++	Uint32            port_rate_limit_Kbps;       /* Rate limit (in Kbps)*/
+     Uint32            port_pps_limit;             /* PPS limit */
+ }
+ PP_QOS_PORT_SHAPER_t;
+@@ -244,6 +263,13 @@ typedef struct
+ }
+ PP_QOS_FW_CLST_CFG_t;
+ 
++typedef struct 
++{
++    Uint16                      it_counter;
++    Uint16                      it_divider;
++}
++PP_QOS_FW_IT_DIVIDER_t;
++
+ typedef struct
+ {
+     Uint16 egr_q;                    /* The Queue index of the forwarding queue */

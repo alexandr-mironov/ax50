@@ -1,0 +1,148 @@
+From d7e2a7569b8981c02058150d6bf9956684ed15a7 Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <dborkman@redhat.com>
+Date: Wed, 22 Jan 2014 02:29:39 +0100
+Subject: [PATCH 464/639] random32: add prandom_u32_max and convert open coded
+ users
+
+Many functions have open coded a function that returns a random
+number in range [0,N-1]. Under the assumption that we have a PRNG
+such as taus113 with being well distributed in [0, ~0U] space,
+we can implement such a function as uword t = (n*m')>>32, where
+m' is a random number obtained from PRNG, n the right open interval
+border and t our resulting random number, with n,m',t in u32 universe.
+
+Lets go with Joe and simply call it prandom_u32_max(), although
+technically we have an right open interval endpoint, but that we
+have documented. Other users can further be migrated to the new
+prandom_u32_max() function later on; for now, we need to make sure
+to migrate reciprocal_divide() users for the reciprocal_divide()
+follow-up fixup since their function signatures are going to change.
+
+Joint work with Hannes Frederic Sowa.
+
+Cc: Jakub Zawadzki <darkjames-ws@darkjames.pl>
+Cc: Eric Dumazet <eric.dumazet@gmail.com>
+Cc: linux-kernel@vger.kernel.org
+Signed-off-by: Hannes Frederic Sowa <hannes@stressinduktion.org>
+Signed-off-by: Daniel Borkmann <dborkman@redhat.com>
+Signed-off-by: David S. Miller <davem@davemloft.net>
+Signed-off-by: Pawan Gupta <pawan.kumarx.gupta@intel.com>
+---
+ drivers/net/team/team_mode_random.c |  8 +-------
+ include/linux/random.h              | 18 +++++++++++++++++-
+ net/packet/af_packet.c              |  2 +-
+ net/sched/sch_choke.c               |  9 +--------
+ 4 files changed, 20 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/net/team/team_mode_random.c b/drivers/net/team/team_mode_random.c
+index 7f032e2..cd2f692 100644
+--- a/drivers/net/team/team_mode_random.c
++++ b/drivers/net/team/team_mode_random.c
+@@ -13,20 +13,14 @@
+ #include <linux/module.h>
+ #include <linux/init.h>
+ #include <linux/skbuff.h>
+-#include <linux/reciprocal_div.h>
+ #include <linux/if_team.h>
+ 
+-static u32 random_N(unsigned int N)
+-{
+-	return reciprocal_divide(prandom_u32(), N);
+-}
+-
+ static bool rnd_transmit(struct team *team, struct sk_buff *skb)
+ {
+ 	struct team_port *port;
+ 	int port_index;
+ 
+-	port_index = random_N(team->en_port_count);
++	port_index = prandom_u32_max(team->en_port_count);
+ 	port = team_get_port_by_index_rcu(team, port_index);
+ 	if (unlikely(!port))
+ 		goto drop;
+diff --git a/include/linux/random.h b/include/linux/random.h
+index bf9085e..2300406 100644
+--- a/include/linux/random.h
++++ b/include/linux/random.h
+@@ -8,7 +8,6 @@
+ 
+ #include <uapi/linux/random.h>
+ 
+-
+ extern void add_device_randomness(const void *, unsigned int);
+ extern void add_input_randomness(unsigned int type, unsigned int code,
+ 				 unsigned int value);
+@@ -33,6 +32,23 @@ void prandom_seed(u32 seed);
+ u32 prandom_u32_state(struct rnd_state *);
+ void prandom_bytes_state(struct rnd_state *state, void *buf, int nbytes);
+ 
++/**
++ * prandom_u32_max - returns a pseudo-random number in interval [0, ep_ro)
++ * @ep_ro: right open interval endpoint
++ *
++ * Returns a pseudo-random number that is in interval [0, ep_ro). Note
++ * that the result depends on PRNG being well distributed in [0, ~0U]
++ * u32 space. Here we use maximally equidistributed combined Tausworthe
++ * generator, that is, prandom_u32(). This is useful when requesting a
++ * random index of an array containing ep_ro elements, for example.
++ *
++ * Returns: pseudo-random number in interval [0, ep_ro)
++ */
++static inline u32 prandom_u32_max(u32 ep_ro)
++{
++	return (u32)(((u64) prandom_u32() * ep_ro) >> 32);
++}
++
+ /*
+  * Handle minimum values for seeds
+  */
+diff --git a/net/packet/af_packet.c b/net/packet/af_packet.c
+index 370ee2b..fccb4d9 100644
+--- a/net/packet/af_packet.c
++++ b/net/packet/af_packet.c
+@@ -1178,7 +1178,7 @@ static unsigned int fanout_demux_rnd(struct packet_fanout *f,
+ 				     struct sk_buff *skb,
+ 				     unsigned int num)
+ {
+-	return reciprocal_divide(prandom_u32(), num);
++	return prandom_u32_max(num);
+ }
+ 
+ static unsigned int fanout_demux_rollover(struct packet_fanout *f,
+diff --git a/net/sched/sch_choke.c b/net/sched/sch_choke.c
+index ddd73cb..2aee028 100644
+--- a/net/sched/sch_choke.c
++++ b/net/sched/sch_choke.c
+@@ -14,7 +14,6 @@
+ #include <linux/types.h>
+ #include <linux/kernel.h>
+ #include <linux/skbuff.h>
+-#include <linux/reciprocal_div.h>
+ #include <linux/vmalloc.h>
+ #include <net/pkt_sched.h>
+ #include <net/inet_ecn.h>
+@@ -77,12 +76,6 @@ struct choke_sched_data {
+ 	struct sk_buff **tab;
+ };
+ 
+-/* deliver a random number between 0 and N - 1 */
+-static u32 random_N(unsigned int N)
+-{
+-	return reciprocal_divide(prandom_u32(), N);
+-}
+-
+ /* number of elements in queue including holes */
+ static unsigned int choke_len(const struct choke_sched_data *q)
+ {
+@@ -233,7 +226,7 @@ static struct sk_buff *choke_peek_random(const struct choke_sched_data *q,
+ 	int retrys = 3;
+ 
+ 	do {
+-		*pidx = (q->head + random_N(choke_len(q))) & q->tab_mask;
++		*pidx = (q->head + prandom_u32_max(choke_len(q))) & q->tab_mask;
+ 		skb = q->tab[*pidx];
+ 		if (skb)
+ 			return skb;
+-- 
+2.10.1
+

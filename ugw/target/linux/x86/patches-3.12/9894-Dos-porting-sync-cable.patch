@@ -1,0 +1,99 @@
+# HG changeset patch
+# Parent 1b89d01c11543733ff1255b9b66eff10872485ae
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -2006,10 +2006,9 @@ extern AVALANCHE_PP_RET_e    avalanche_p
+ #endif
+ #endif
+ extern AVALANCHE_PP_RET_e    avalanche_pp_version_get( AVALANCHE_PP_VERSION_t * version );
+-extern AVALANCHE_PP_RET_e    avalanche_pp_set_mta_mac_address ( Uint8 * mtaAddress );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_get_db_stats ( AVALANCHE_PP_Misc_Statistics_t * stats_ptr );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_reset_db_stats ( void );
+-extern AVALANCHE_PP_RET_e   avalanche_pp_modify_stats_counters   ( Uint32 session_handle, Uint32 packet_size);
++extern AVALANCHE_PP_RET_e    avalanche_pp_modify_stats_counters   ( Uint32 session_handle, Uint32 packet_size);
+ 
+ extern Bool                  avalanche_pp_state_is_active( void );
+ extern Bool                  avalanche_pp_state_is_psm( void );
+@@ -2442,7 +2441,6 @@ extern int avalanche_pp_set_ack_suppress
+ typedef     Uint8     avalanche_pp_ackSupp_ioctl_param_t;
+ typedef     Uint8     avalanche_pp_psm_ioctl_param_t;
+ typedef     Uint32    avalanche_pp_frag_mode_ioctl_param_t;
+-typedef     Uint8     avalanche_pp_mtaMacAddr_ioctl_param_t[6];
+ 
+ #if defined(PUMA6_SOC_TYPE) && PUMA6_SOC_TYPE
+ typedef     struct
+@@ -2483,6 +2481,44 @@ typedef     struct
+ #endif
+ }avalanche_pp_db_address_param_t;
+ 
++typedef enum {
++    ADD_ADDR = 0,
++    RM_ADDR,
++    FLUSH_LIST,
++    RD_VALID_ENTRIES_COUNT,
++    IS_ADDR_EXIST,
++    LOCAL_ADDR_OP_MAX,
++}avalanche_pp_local_addr_op_type_e;
++
++typedef enum {
++    MTA_MAC_ADDR = 0,
++    MTA_RTP_IPV4_ADDR,
++    MTA_MNG_IPV4_ADDR,
++    MTA_RTP_IPV6_ADDR,
++    MTA_MNG_IPV6_ADDR,
++    WAN_MAC_ADDR,
++    GW_MAC_ADDR,
++    LAN0_MAC_ADDR,
++    RND_MAC_ADDR,
++    MULTI_DROP_IPV4_ADDR,
++    MULTI_DROP_IPV6_ADDR,
++    LOCAL_ADDR_TYPE_COUNT
++}avalanche_pp_local_addr_type_e;
++
++typedef struct
++{
++    avalanche_pp_local_addr_op_type_e op_type;
++    avalanche_pp_local_addr_type_e addr_type;
++    union
++    {
++        Uint8  mac_addr[6];
++        Uint32 ipv4;
++        Uint32 ipv6[4];
++        Uint8  all;
++    }u;
++    Uint8 valid_entries_cnt;
++}avalanche_pp_local_dev_addr_ioctl_params_t;
++
+ /***************** Sanity manager api *******************/
+ typedef struct
+ {
+@@ -2560,12 +2596,12 @@ typedef struct
+ #define PP_DRIVER_SET_QOS_QUEUE_ITERATION_CREDIT    _IOWR (PP_DRIVER_MODULE_ID, 7, avalanche_pp_Qos_ioctl_params_t)
+ #define PP_DRIVER_SET_QOS_QUEUE_CONGESTION          _IOWR (PP_DRIVER_MODULE_ID, 8, avalanche_pp_Qos_ioctl_params_t)
+ #define PP_DRIVER_SET_FRAG_MODE                     _IOWR (PP_DRIVER_MODULE_ID, 9, avalanche_pp_frag_mode_ioctl_param_t)
+-#define PP_DRIVER_SET_MTA_ADDR                      _IOWR (PP_DRIVER_MODULE_ID, 10, avalanche_pp_mtaMacAddr_ioctl_param_t)
++#define PP_DRIVER_SET_LOCAL_DEV_ADDR                _IOWR (PP_DRIVER_MODULE_ID, 10, avalanche_pp_local_dev_addr_ioctl_params_t)
+ #define PP_DRIVER_KERNEL_POST_INIT                  _IO   (PP_DRIVER_MODULE_ID, 11)
+ #define PP_DRIVER_SET_ACK_SUPP                      _IOWR (PP_DRIVER_MODULE_ID, 12, avalanche_pp_ackSupp_ioctl_param_t)
+ #define PP_DRIVER_GET_DB_PARAMS                     _IOWR (PP_DRIVER_MODULE_ID, 13, avalanche_pp_db_address_param_t)
+ #define PP_DRIVER_GET_SESSION_STATS                 _IOWR (PP_DRIVER_MODULE_ID, 14, AVALANCHE_PP_EXTENDED_SESSION_STATS_t)
+-
++#define PP_DRIVER_SHOW_LOCAL_DEV_ADDR               _IOWR (PP_DRIVER_MODULE_ID, 15, avalanche_pp_local_dev_addr_ioctl_params_t)
+ #endif //   _AVALANCHE_PP_H
+ 
+ 
+diff --git a/include/linux/avalanche/puma7/puma7_pp.h b/include/linux/avalanche/puma7/puma7_pp.h
+--- a/include/linux/avalanche/puma7/puma7_pp.h
++++ b/include/linux/avalanche/puma7/puma7_pp.h
+@@ -315,8 +315,7 @@ typedef enum {
+ #define AVALANCHE_PP_CLASSIFIER_2_1_PARAM_RGN_BASE      (IO_ADDRESS(0xF30A0004))
+ #define AVALANCHE_PP_CLASSIFIER_2_2_PARAM_RGN_BASE      (IO_ADDRESS(0xF30A0004))
+ #define AVALANCHE_PP_CLASSIFIER_2_3_PARAM_RGN_BASE      (IO_ADDRESS(0xF30A0004))
+-#define AVALANCHE_PP_MTA_TURN_OFF_HIGH_PRIORITY_QUEUE   (IO_ADDRESS(0xF30A0186)) /* If this byte is not 0 PP will turn off high priority queue. */
+-
++#define AVALANCHE_PP_MTA_TURN_OFF_HIGH_PRIORITY_QUEUE   (IO_ADDRESS(0xF30A0406)) /* If this byte is not 0 PP will turn off high priority queue. */
+ #define AVALANCHE_PP_MODIFIER_0_IRAM_RGN_BASE           (IO_ADDRESS(0xF3100000))
+ #define AVALANCHE_PP_MODIFIER_0_DBG_RGN_BASE            (IO_ADDRESS(0xF3102000))
+ #define AVALANCHE_PP_MODIFIER_0_CTRL_RGN_BASE           (IO_ADDRESS(0xF3103000))

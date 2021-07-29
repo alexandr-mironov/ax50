@@ -1,0 +1,205 @@
+From 0e8681d34716d5c35b6ba42b587ea91ebca1d6e6 Mon Sep 17 00:00:00 2001
+From: Dan Williams <dan.j.williams@intel.com>
+Date: Tue, 17 Jun 2014 16:16:32 -0700
+Subject: [PATCH 454/639] usb: fix hub-port pm_runtime_enable() vs runtime pm
+ transitions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Commit 9262c19d14c4 "usb: disable port power control if not supported in
+wHubCharacteristics" gated enabling runtime pm for usb_port devices on
+whether the parent hub supports power control, which causes a
+regression.  The port must still be allowed to carry out runtime pm
+callbacks and receive a -EAGAIN or -EBUSY result.  Otherwise the
+usb_port device will transition to the pm error state and trigger the
+same for the child usb_device.
+
+Prior to the offending commit usb_hub_create_port_device() arranged for
+runtime pm to be disabled is dev_pm_qos_expose_flags() failed.  Instead,
+force the default state of PM_QOS_FLAG_NO_POWER_OFF flag to be set prior
+to enabling runtime pm.  If that policy can not be set then fail
+registration.
+
+Report: http://marc.info/?l=linux-usb&m=140290586301336&w=2
+Fixes: 9262c19d14c4 ("usb: disable port power control if not supported in wHubCharacteristics")
+Reported-by: Bjørn Mork <bjorn@mork.no>
+Reported-by: Alan Stern <stern@rowland.harvard.edu>
+Signed-off-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+(cherry picked from commit e3d105055525d9ea9f8e9cb0db8237df3df1bb9f)
+
+Conflicts:
+
+	drivers/usb/core/hub.c
+	drivers/usb/core/hub.h
+	drivers/usb/core/port.c
+
+Resolved conflicts between 3.12.17 (puma7) and  upstream kernel by considering
+upstream changes. Also removed two function call which is depending on other
+commit. These two function call (mutex_unlock(&usb_port_peer_mutex) and
+find_and_link_peer(hub, port1)) is not required to fix this USB issue.
+
+Change-Id: If3e3bf960679f0e52603ddc20fb9a27b2f5f9979
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/usb/core/hub.c  | 24 ++++++++++++++++--
+ drivers/usb/core/hub.h  |  2 ++
+ drivers/usb/core/port.c | 65 ++++++++++++++++++++++++++++++++++---------------
+ 3 files changed, 70 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+index 8b2011c..26a88f6 100644
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -1611,8 +1611,28 @@ static int hub_configure(struct usb_hub *hub,
+ 		if (ret < 0) {
+ 			dev_err(hub->intfdev,
+ 				"couldn't create port%d device.\n", i + 1);
+-			hdev->maxchild = i;
+-			goto fail_keep_maxchild;
++			break;
++		}
++	}
++	hdev->maxchild = i;
++	for (i = 0; i < hdev->maxchild; i++) {
++		struct usb_port *port_dev = hub->ports[i];
++
++		pm_runtime_put(&port_dev->dev);
++	}
++
++	if (ret < 0)
++		goto fail;
++
++	/* Update the HCD's internal representation of this hub before khubd
++	 * starts getting port status changes for devices under the hub.
++	 */
++	if (hcd->driver->update_hub_device) {
++		ret = hcd->driver->update_hub_device(hcd, hdev,
++				&hub->tt, GFP_KERNEL);
++		if (ret < 0) {
++			message = "can't update HCD hub info";
++			goto fail;
+ 		}
+ 	}
+ 
+diff --git a/drivers/usb/core/hub.h b/drivers/usb/core/hub.h
+index 05580b4..e5f2527 100644
+--- a/drivers/usb/core/hub.h
++++ b/drivers/usb/core/hub.h
+@@ -81,6 +81,7 @@ struct usb_hub {
+  * @child: usb device attatched to the port
+  * @dev: generic device interface
+  * @port_owner: port's owner
++ * @req: default pm qos request for hubs without port power control
+  * @connect_type: port's connect type
+  * @portnum: port index num based one
+  * @power_is_on: port's power state
+@@ -90,6 +91,7 @@ struct usb_port {
+ 	struct usb_device *child;
+ 	struct device dev;
+ 	struct dev_state *port_owner;
++	struct dev_pm_qos_request *req;
+ 	enum usb_port_connect_type connect_type;
+ 	u8 portnum;
+ 	unsigned power_is_on:1;
+diff --git a/drivers/usb/core/port.c b/drivers/usb/core/port.c
+index 3a7dd99..64c1c0f 100644
+--- a/drivers/usb/core/port.c
++++ b/drivers/usb/core/port.c
+@@ -66,6 +66,7 @@ static void usb_port_device_release(struct device *dev)
+ {
+ 	struct usb_port *port_dev = to_usb_port(dev);
+ 
++	kfree(port_dev->req);
+ 	kfree(port_dev);
+ }
+ 
+@@ -152,9 +153,13 @@ int usb_hub_create_port_device(struct usb_hub *hub, int port1)
+ 	int retval;
+ 
+ 	port_dev = kzalloc(sizeof(*port_dev), GFP_KERNEL);
+-	if (!port_dev) {
+-		retval = -ENOMEM;
+-		goto exit;
++	if (!port_dev)
++		return -ENOMEM;
++
++	port_dev->req = kzalloc(sizeof(*(port_dev->req)), GFP_KERNEL);
++	if (!port_dev->req) {
++		kfree(port_dev);
++		return -ENOMEM;
+ 	}
+ 
+ 	hub->ports[port1 - 1] = port_dev;
+@@ -166,29 +171,51 @@ int usb_hub_create_port_device(struct usb_hub *hub, int port1)
+ 	dev_set_name(&port_dev->dev, "port%d", port1);
+ 
+ 	retval = device_register(&port_dev->dev);
+-	if (retval)
+-		goto error_register;
++	if (retval) {
++		put_device(&port_dev->dev);
++		return retval;
++	}
++
++	/* Set default policy of port-poweroff disabled. */
++	retval = dev_pm_qos_add_request(&port_dev->dev, port_dev->req,
++			DEV_PM_QOS_FLAGS, PM_QOS_FLAG_NO_POWER_OFF);
++	if (retval < 0) {
++		device_unregister(&port_dev->dev);
++		return retval;
++	}
+ 
++	/*
++	 * Enable runtime pm and hold a refernce that hub_configure()
++	 * will drop once the PM_QOS_NO_POWER_OFF flag state has been set
++	 * and the hub has been fully registered (hdev->maxchild set).
++	 */
+ 	pm_runtime_set_active(&port_dev->dev);
++	pm_runtime_get_noresume(&port_dev->dev);
++	pm_runtime_enable(&port_dev->dev);
++	device_enable_async_suspend(&port_dev->dev);
+ 
+ 	/*
+-	 * Do not enable port runtime pm if the hub does not support
+-	 * power switching.  Also, userspace must have final say of
+-	 * whether a port is permitted to power-off.  Do not enable
+-	 * runtime pm if we fail to expose pm_qos_no_power_off.
++	 * Keep hidden the ability to enable port-poweroff if the hub
++	 * does not support power switching.
+ 	 */
+-	if (hub_is_port_power_switchable(hub)
+-			&& dev_pm_qos_expose_flags(&port_dev->dev,
+-			PM_QOS_FLAG_NO_POWER_OFF) == 0)
+-		pm_runtime_enable(&port_dev->dev);
++	if (!hub_is_port_power_switchable(hub))
++		return 0;
++
++	/* Attempt to let userspace take over the policy. */
++	retval = dev_pm_qos_expose_flags(&port_dev->dev,
++			PM_QOS_FLAG_NO_POWER_OFF);
++	if (retval < 0) {
++		dev_warn(&port_dev->dev, "failed to expose pm_qos_no_poweroff\n");
++		return 0;
++	}
+ 
+-	device_enable_async_suspend(&port_dev->dev);
++	/* Userspace owns the policy, drop the kernel 'no_poweroff' request. */
++	retval = dev_pm_qos_remove_request(port_dev->req);
++	if (retval >= 0) {
++		kfree(port_dev->req);
++		port_dev->req = NULL;
++	}
+ 	return 0;
+-
+-error_register:
+-	put_device(&port_dev->dev);
+-exit:
+-	return retval;
+ }
+ 
+ void usb_hub_remove_port_device(struct usb_hub *hub,
+-- 
+2.10.1
+

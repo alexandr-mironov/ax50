@@ -1,0 +1,132 @@
+From 6940c213138ceecf7017ff04e58b4a86bceb308e Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 21 Nov 2017 16:43:01 -0700
+Subject: [PATCH] netip_subsystem: Check sgmii device status
+
+PUMARTSYS-6018
+NetIP susbsystem should check if the sgmii device is enabled or not in
+BIOS before mentioning in configure message that its corresponding
+service is available on atom. The check can be done by looking for the
+acpi children devices present under NetIP.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_defs.h |  1 +
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c  | 44 +++++++++++++++++++++++++
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c   |  6 ++--
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.h   |  7 ++++
+ 4 files changed, 56 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_defs.h b/arch/x86/NetIP_SubSystem/netip_subsystem_defs.h
+index 034351e210e7..6b6d506d6ab7 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_defs.h
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_defs.h
+@@ -65,6 +65,7 @@ struct net_subsystem_drv_data {
+    struct task_struct * handshake_thread; /* Thread that exchange messages with netip during boot */
+    acpi_handle acpi_h;
+    netss_msg_info_t netip_msg;
++   uint32_t bios_enabled_xgmiis;
+ 
+ 
+ }__attribute__((aligned(4)));
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index 599dcfb75129..35c191ed292e 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -562,6 +562,48 @@ static irqreturn_t net_subsystem_isr(int irq, void *dev_id)
+     return ret;
+ }
+ 
++void netss_get_child_dev_info(void)
++{
++    struct acpi_device *acpi_dev, *child;
++    struct acpi_device_info *info;
++    acpi_status ret;
++    int uid = -1;
++
++    pnetss_drv_data->bios_enabled_xgmiis = 0;
++    ret =  acpi_bus_get_device(pnetss_drv_data->acpi_h, &acpi_dev);
++    if (ACPI_FAILURE(ret))
++    {
++        printk("Failed to acpi dev\n");
++        return;
++    }
++    list_for_each_entry(child, &acpi_dev->children, node) {
++
++       ret = acpi_get_object_info(child->handle, &info);
++       if (ACPI_SUCCESS(ret))
++       {
++           if (info->hardware_id.string != NULL) {
++              if (0 == strncmp(info->hardware_id.string, "INT351B", 7)) {
++                 if (info->unique_id.string != NULL) {
++                    ret = kstrtoint(info->unique_id.string, 0, &uid);
++                    if (!ret && child->status.present && child->status.enabled) {
++                       pnetss_drv_data->bios_enabled_xgmiis |= (1 << uid);
++                    }
++                 } else {
++                    printk(KERN_ERR "%s unique id string is NULL\n", info->hardware_id.string);
++                 }
++              }
++           }
++       }
++       else
++       {
++           printk(KERN_ERR "Failed to acpi dev info\n");
++       }
++    }
++
++    printk(KERN_INFO "BIOS enabled xgmiis = %08X\n", pnetss_drv_data->bios_enabled_xgmiis);
++    return;
++}
++
+ /*
+  * driver entry point
+  */
+@@ -671,6 +713,8 @@ static int netss_probe(struct pci_dev *pdev,
+    /* initilize ATOM_INTC IO memory map */
+    avalanche_intc_init();
+    printk("docsis_chan_cfg = %08x\n", docsis_chan_cfg);
++
++   netss_get_child_dev_info();
+    return 0;
+ 
+ free_iomem:
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index b5ea5368c75e..9b25e50f41be 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -643,11 +643,13 @@ static void netss_send_configure_msg (void)
+ 
+    /**Get the service ID connected at sgmii0 */
+    service_id = get_service_id(NETSS_BRD_INTRFC_SGMII0);
+-   if (sgmii0_on_atom && service_id)
++   if ((pnetss_drv_data->bios_enabled_xgmiis & (1 << NETSS_SGMII0_UID)) &&
++        sgmii0_on_atom && service_id)
+       *msg++ = service_id;
+    /**Get the service ID connected at sgmii1 */
+    service_id = get_service_id(NETSS_BRD_INTRFC_SGMII1);
+-   if (sgmii1_on_atom && service_id)
++   if ((pnetss_drv_data->bios_enabled_xgmiis & (1 << NETSS_SGMII1_UID)) &&
++        sgmii1_on_atom && service_id)
+       *msg++ = service_id;
+    /**Get the service ID connected at rgmii2 */
+    service_id = get_service_id(NETSS_BRD_INTRFC_RGMII2);
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h
+index cff9f6dfa8a0..d58ca28368bf 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h
+@@ -151,4 +151,11 @@ struct netss_service_request_stats
+    char *old_state;
+ };
+ 
++enum netss_xgmii_dev_uid
++{
++   NETSS_SGMII0_UID = 0,
++   NETSS_SGMII1_UID = 1,
++   NETSS_RGMII2_UID = 2,
++   NETSS_RGMII3_UID = 3
++};
+ #endif
+-- 
+2.11.0
+

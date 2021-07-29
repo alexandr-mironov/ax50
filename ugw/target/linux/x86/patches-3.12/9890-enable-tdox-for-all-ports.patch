@@ -1,0 +1,256 @@
+# HG changeset patch
+# Parent 9b6d3c6ef774bd225786d0fdd585d5527be6bda6
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1050,62 +1050,6 @@ static inline __u8 __bit_field8_set(__u8
+ 
+ 
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-/**
+- * struct pp_psi_t Packet processor protocol specific
+- * information saved in the session record.
+- * @psi 32bit big endian bit field:
+- * [31-24] - service flow index (sf_index)
+- * [23-16] - reserved (res1)
+- * [15]    - don't encrypt flag
+- * [14-13] - fw internal bits
+- * [12]    - tdox candidate flag
+- * [11]    - high priority flag
+- * [10]    - tdox ignore timestamp flag
+- * [9]     - tdox enabled flag
+- * [0-8]   - tdox_id
+- * @note ALWAYS use the pp_psi_get_* or
+- *  	 pp_psi_set_* macros
+- */
+-struct pp_psi_t {
+-	__be32	psi;
+-};
+-/* for backward compatible */
+-typedef struct pp_psi_t AVALANCHE_PP_PSI_t;
+-
+-/* AVALANCHE_PP_PSI_t misc bit fields gets */
+-#define pp_psi_get_tdox_id(pp_psi)				(__bit_field32_get(be32_to_cpu(pp_psi.psi),  0, 9)) /* tdox_id bits 0-8         */
+-#define pp_psi_get_tdox_enabled(pp_psi)			(__bit_field32_get(be32_to_cpu(pp_psi.psi),  9, 1)) /* tdox enabled bit 9       */
+-#define pp_psi_get_tdox_ignore_ts(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 10, 1)) /* tdox_ignore_ts bit 10    */
+-#define pp_psi_get_high_priority(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 11, 1)) /* high_priority bit 11     */
+-#define pp_psi_get_tdox_candidate(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 12, 1)) /* tdox_candidate bit 12    */
+-#define pp_psi_get_tdox_signature(pp_psi)       (__bit_field32_get(be32_to_cpu(pp_psi.psi), 13, 1)) /* tdox_signature bit 13    */
+-#define pp_psi_get_res2(pp_psi)                 (__bit_field32_get(be32_to_cpu(pp_psi.psi), 14, 1)) /* reserved bit 14          */
+-#define pp_psi_get_do_not_encrypt(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 15, 1)) /* do_not_encrypt bit 15    */
+-#define pp_psi_get_res1(pp_psi)					(__bit_field32_get(be32_to_cpu(pp_psi.psi), 16, 8)) /* reserved bits 16-23      */
+-#define pp_psi_get_sf_index(pp_psi)				(__bit_field32_get(be32_to_cpu(pp_psi.psi), 24, 8)) /* sf index bits 24-31      */
+-
+-/* AVALANCHE_PP_PSI_t misc bit fields sets */
+-#define pp_psi_set_tdox_id(pp_psi, val)			((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val,  0, 9))) /* tdox_id bits 0-8         */
+-#define pp_psi_set_tdox_enabled(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val,  9, 1))) /* tdox enabled bit 9       */
+-#define pp_psi_set_tdox_ignore_ts(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 10, 1))) /* tdox_ignore_ts bit 10    */
+-#define pp_psi_set_high_priority(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 11, 1))) /* high_priority bit 11     */
+-#define pp_psi_set_tdox_candidate(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 12, 1))) /* tdox_candidate bit 12    */
+-#define pp_psi_set_tdox_signature(pp_psi, val)  ((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 13, 1))) /* tdox_signature bit 13    */
+-#define pp_psi_set_res2(pp_psi, val)            ((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 14, 1))) /* reserved bit 14          */
+-#define pp_psi_set_do_not_encrypt(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 15, 1))) /* do_not_encrypt bit 15    */
+-#define pp_psi_set_res1(pp_psi, val)			((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 16, 8))) /* reserved bits 16-23      */
+-#define pp_psi_set_sf_index(pp_psi, val)		((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 24, 8))) /* sf index bits 24-31      */
+-#else
+-typedef struct
+-{
+-    Uint8                               sf_index;
+-    Uint8                               phs;
+-    Uint8                               tcp_flags;
+-    Uint8                               tdox_id;
+-}
+-AVALANCHE_PP_PSI_t;
+-#endif
+-
+ #ifdef CONFIG_WIFI_PROXY
+ /**
+  * @class wifi traffic class
+@@ -1120,6 +1064,72 @@ struct wifi_proxy_psi_t {
+ };
+ #endif
+ 
++/**
++ * struct pp_psi_t Packet processor protocol specific
++ * information saved in the session record.
++ * @us_psi protocol specific info for turbo DOX and
++ * upstream fw, 32bit big endian bit field:
++ * [31-24] - service flow index (sf_index)
++ * [23-16] - reserved (res1)
++ * [15]    - don't encrypt flag
++ * [14-13] - fw internal bits
++ * [12]    - tdox candidate flag
++ * [11]    - high priority flag
++ * [10]    - tdox ignore timestamp flag
++ * [9]     - tdox enabled flag
++ * [0-8]   - tdox_id
++ * @wifi_psi - protocol specific info for wifi ports
++ * @note ALWAYS use the pp_psi_get_* or
++ *  	 pp_psi_set_* macros
++ */
++struct pp_psi_t {
++    __be32  us_psi;
++#ifdef CONFIG_WIFI_PROXY
++    union {
++        struct wifi_proxy_psi_t psi;
++        __be32 wifi_psi_word;
++    } wifi_psi;
++#endif
++};
++
++/* for backward compatible */
++typedef struct pp_psi_t AVALANCHE_PP_PSI_t;
++
++/* pp_psi_t us_psi bit fields gets */
++#define pp_psi_get_tdox_id(pp_psi)                      (__bit_field32_get(be32_to_cpu(pp_psi.us_psi),  0, 9))                                     /* tdox_id bits 0-8         */
++#define pp_psi_get_tdox_enabled(pp_psi)                 (__bit_field32_get(be32_to_cpu(pp_psi.us_psi),  9, 1))                                     /* tdox enabled bit 9       */
++#define pp_psi_get_tdox_ignore_ts(pp_psi)               (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 10, 1))                                     /* tdox_ignore_ts bit 10    */
++#define pp_psi_get_high_priority(pp_psi)                (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 11, 1))                                     /* high_priority bit 11     */
++#define pp_psi_get_tdox_candidate(pp_psi)               (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 12, 1))                                     /* tdox_candidate bit 12    */
++#define pp_psi_get_tdox_signature(pp_psi)               (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 13, 1))                                     /* tdox_signature bit 13    */
++#define pp_psi_get_res2(pp_psi)                         (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 14, 1))                                     /* reserved bit 14          */
++#define pp_psi_get_do_not_encrypt(pp_psi)               (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 15, 1))                                     /* do_not_encrypt bit 15    */
++#define pp_psi_get_res1(pp_psi)                         (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 16, 8))                                     /* reserved bits 16-23      */
++#define pp_psi_get_sf_index(pp_psi)                     (__bit_field32_get(be32_to_cpu(pp_psi.us_psi), 24, 8))                                     /* sf index bits 24-31      */
++
++/* pp_psi_t us_psi bit fields sets */
++#define pp_psi_set_tdox_id(pp_psi, val)                 ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val,  0, 9))) /* tdox_id bits 0-8         */
++#define pp_psi_set_tdox_enabled(pp_psi, val)            ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val,  9, 1))) /* tdox enabled bit 9       */
++#define pp_psi_set_tdox_ignore_ts(pp_psi, val)          ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 10, 1))) /* tdox_ignore_ts bit 10    */
++#define pp_psi_set_high_priority(pp_psi, val)           ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 11, 1))) /* high_priority bit 11     */
++#define pp_psi_set_tdox_candidate(pp_psi, val)          ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 12, 1))) /* tdox_candidate bit 12    */
++#define pp_psi_set_tdox_signature(pp_psi, val)          ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 13, 1))) /* tdox_signature bit 13    */
++#define pp_psi_set_res2(pp_psi, val)                    ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 14, 1))) /* reserved bit 14          */
++#define pp_psi_set_do_not_encrypt(pp_psi, val)          ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 15, 1))) /* do_not_encrypt bit 15    */
++#define pp_psi_set_res1(pp_psi, val)                    ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 16, 8))) /* reserved bits 16-23      */
++#define pp_psi_set_sf_index(pp_psi, val)                ((pp_psi.us_psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.us_psi), val, 24, 8))) /* sf index bits 24-31      */
++
++#else
++typedef struct
++{
++    Uint8                               sf_index;
++    Uint8                               phs;
++    Uint8                               tcp_flags;
++    Uint8                               tdox_id;
++}
++AVALANCHE_PP_PSI_t;
++#endif
++
+ #ifndef CONFIG_WIFI_MESH_TUNNEL
+ 
+ #define AVALANCHE_PP_EGRESS_DROP_SESS    0x01
+@@ -1182,35 +1192,20 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_DOCSIS                 0x08
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv4                             0x10
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv6                             0x20
+-                                #define AVALANCHE_PP_EGRESS_WIFI_PID                            0x40
+-                                #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x80
+-                                #define AVALANCHE_PP_EGRESS_MULTICAST                           0x100
+-                                #define AVALANCHE_PP_EGRESS_ICMP                                0x200
+-                                #define AVALANCHE_PP_EGRESS_ENABLE_FRAG_BP                      0x400
+-                                #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_NO_ACK             0x800
+-                                #define AVALANCHE_PP_EGRESS_DO_TCP_CTRL                         0x1000
+-                                #define AVALANCHE_PP_EGRESS_MULTI_DROP_SESSION                  0x2000
++                                #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x40
++                                #define AVALANCHE_PP_EGRESS_MULTICAST                           0x80
++                                #define AVALANCHE_PP_EGRESS_ICMP                                0x100
++                                #define AVALANCHE_PP_EGRESS_ENABLE_FRAG_BP                      0x200
++                                #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_NO_ACK             0x400
++                                #define AVALANCHE_PP_EGRESS_DO_TCP_CTRL                         0x800
++                                #define AVALANCHE_PP_EGRESS_MULTI_DROP_SESSION                  0x1000
++								#define AVALANCHE_PP_EGRESS_PSI_VALID                           0x2000
+                                 #define AVALANCHE_PP_EGRESS_WH_UDP                              0x4000
+     Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+ 
+-	/**
+-	 * All structures in this union MUST be saved in big endian
+-	 * layout, meaning, to read or write from or to one of the
+-	 * struct members you MUST use: be16_to_cpu, be32_to_cpu,
+-	 * cpu_to_be16 and cpu_to_be32.
+-	 * Also, DO NO USE bit fields!!!
+-	 */
+-    union
+-    {
+-#ifdef CONFIG_WIFI_PROXY
+-        struct wifi_proxy_psi_t wifi_psi;
+-#endif
+-        AVALANCHE_PP_PSI_t      us_fields;
+-        Uint32                  psi_word;
+-    }
+-    psi;
++    struct pp_psi_t             pp_psi;
+ 
+     Uint16                      eth_type;
+     Uint8                       wrapHeaderOffLayer3;
+@@ -1722,10 +1717,10 @@ typedef struct
+     Uint32      NoSessionCounter;
+     Uint32      NoSessionFragCounter;
+     Uint32      MinimumSessionCounter;
+-    Uint32      UsDocsisTcpSessionCounter;
++    Uint32      TcpTdoxSessionCounter;
+     Uint32      TunnelEncapSessionCounter;
+     Uint32      TunnelDecapSessionCounter;
+-    Uint32      TunnelEncapUsDocsisTcpSessionCounter;
++    Uint32      TunnelTcpTdoxSessionCounter;
+ }AVALANCHE_HOP_LIST_STATS_t;
+ 
+ #define AVALANCHE_PP_US_SERVICE_FLOW_COUNTERS 16
+@@ -1827,9 +1822,8 @@ typedef enum
+ }
+ PP_LIST_ID_e;
+ 
+-typedef AVALANCHE_PP_RET_e   (* AVALANCHE_EXEC_HOOK_FN_t) ( AVALANCHE_PP_SESSION_INFO_t *  ptr_session, Ptr     data );
+-
+-
++typedef AVALANCHE_PP_RET_e   (* AVALANCHE_EXEC_HOOK_FN_t)      ( AVALANCHE_PP_SESSION_INFO_t *  ptr_session, Ptr     data );
++typedef AVALANCHE_PP_RET_e   (* AVALANCHE_VPID_EXEC_HOOK_FN_t) (Uint8 vpid_handle, PP_LIST_ID_e list_id, AVALANCHE_EXEC_HOOK_FN_t handler, Ptr data);
+ 
+ /* PID and VPID Management API */
+ #if PUMA7_OR_NEWER_SOC_TYPE
+@@ -1878,10 +1872,12 @@ extern AVALANCHE_PP_RET_e    avalanche_p
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_set_timeout   ( Uint8     timeoutSeconds);
+ extern AVALANCHE_PP_RET_e    avalanche_pp_flush_sessions        ( Uint8     vpid_handle, PP_LIST_ID_e   list_id );
+ 
+-extern AVALANCHE_PP_RET_e   avalanche_pp_session_list_execute      ( Uint8     vpid_handle, PP_LIST_ID_e   list_id,    AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
+-extern AVALANCHE_PP_RET_e   avalanche_pp_flush_sessions_per_mac    ( Uint8     mac[6]);
+-extern AVALANCHE_PP_RET_e   avalanche_pp_session_pre_action_bind   ( Uint8     vpid_handle,                            AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
+-extern AVALANCHE_PP_RET_e   avalanche_pp_session_post_action_bind  ( Uint8     vpid_handle,                            AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
++extern AVALANCHE_PP_RET_e   pp_vpid_list_execute                 ( AVALANCHE_VPID_EXEC_HOOK_FN_t vpid_hook, PP_LIST_ID_e list_id, AVALANCHE_EXEC_HOOK_FN_t sess_hook, Ptr data );
++extern AVALANCHE_PP_RET_e   pp_session_list_execute_lock         ( Uint8     vpid_handle, PP_LIST_ID_e   list_id,    AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
++extern AVALANCHE_PP_RET_e   pp_session_list_execute              ( Uint8     vpid_handle, PP_LIST_ID_e   list_id,    AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
++extern AVALANCHE_PP_RET_e   avalanche_pp_flush_sessions_per_mac  ( Uint8     mac[6]);
++extern AVALANCHE_PP_RET_e   avalanche_pp_session_pre_action_bind ( Uint8     vpid_handle,                            AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
++extern AVALANCHE_PP_RET_e   avalanche_pp_session_post_action_bind( Uint8     vpid_handle,                            AVALANCHE_EXEC_HOOK_FN_t   handler, Ptr  data );
+ 
+ #ifdef CONFIG_WIFI_MESH_TUNNEL
+ extern AVALANCHE_PP_RET_e    avalanche_pp_sessions_delete_by_addr ( Uint8 mask, Uint8* srcMacAdr, Uint8* dstMacAdr, Uint8* rxMacAdr, Uint8* txMacAdr, Uint32* num_deleted_sessions);
+@@ -1965,6 +1961,9 @@ extern AVALANCHE_PP_RET_e avalanche_pp_s
+ #endif
+ 
+ /* MISC APIs */
++extern Bool pp_pid_is_tdox_en     (u32 pid);
++extern u32  pp_pid_tdox_enable_set(u32 pid, Bool enable);
++
+ #define AVALANCHE_PP_LUT_HISTOGRAM_SIZE             8
+ #define AVALANCHE_PP_LUT1_HISTOGRAM_RESOLUTION      (AVALANCHE_PP_MAX_LUT1_KEYS / AVALANCHE_PP_LUT_HISTOGRAM_SIZE)
+ #define AVALANCHE_PP_LUT2_HISTOGRAM_RESOLUTION      (AVALANCHE_PP_MAX_ACCELERATED_SESSIONS / AVALANCHE_PP_LUT_HISTOGRAM_SIZE)
+@@ -1996,15 +1995,12 @@ AVALANCHE_PP_Misc_Statistics_t;
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ extern AVALANCHE_PP_RET_e    avalanche_pp_event_init(void);
+ #endif
+-extern AVALANCHE_PP_RET_e    avalanche_pp_event_poll_timer_init( void );
+-
+ 
+ #ifndef CONFIG_WIFI_MESH_TUNNEL
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_set( Uint32 session_handle, Bool     enable );
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_get( Uint32 session_handle, Bool *   enable, Bool * qualified );
+-extern AVALANCHE_PP_RET_e    avalanche_pp_get_tdox_candidate_session( Uint32* session_handle);
+-extern AVALANCHE_PP_RET_e    avalanche_pp_configure_tdox_params( Uint16 avgPktSize,  Uint16 evalPPS, Uint16 evalTime);
++extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_get    ( Uint32 session_handle, Bool *   enable, Bool * qualified );
++extern AVALANCHE_PP_RET_e    avalanche_pp_configure_tdox_params          ( Uint16 avgPktSize,  Uint16 evalPPS, Uint16 evalTime);
+ #else
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_get( Uint32 session_handle, Bool *   enable );
+ #endif

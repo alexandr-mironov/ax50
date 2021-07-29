@@ -1,0 +1,120 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/acs.c hostapd-2.6/src/ap/acs.c
+--- hostapd-2.6-orig/src/ap/acs.c	2017-06-06 13:46:42.964668601 +0300
++++ hostapd-2.6/src/ap/acs.c	2017-06-06 16:11:43.347309237 +0300
+@@ -2232,9 +2232,6 @@ int acs_do_switch_channel(struct hostapd
+     return -1;
+   }
+ 
+-  /* Check if active CAC */
+-  if (iface->cac_started) return 0;
+-
+   wpa_printf(MSG_DEBUG, "try switch to a new channel %d, params freq %d sec %d vht_chwidth %d seg0 %d seg1 %d block_tx %d", iface->conf->channel,
+     acs_chan_to_freq(iface->conf->channel),
+     iface->conf->secondary_channel,
+@@ -2243,6 +2240,10 @@ int acs_do_switch_channel(struct hostapd
+     iface->conf->vht_oper_centr_freq_seg1_idx,
+     block_tx);
+ 
++  /* Check if active CAC */
++  if (iface->cac_started)
++    return hostapd_setup_interface_complete(iface, 0);
++
+   /* check CAC required */
+   for (i = 0; i < mode->num_channels; i++) {
+     struct hostapd_channel_data *channel;
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/dfs.c hostapd-2.6/src/ap/dfs.c
+--- hostapd-2.6-orig/src/ap/dfs.c	2017-06-06 13:46:42.962668641 +0300
++++ hostapd-2.6/src/ap/dfs.c	2017-06-06 14:02:45.639658986 +0300
+@@ -922,8 +922,7 @@ int hostapd_dfs_start_channel_switch_cac
+ 	u8 vht_oper_centr_freq_seg0_idx = 0;
+ 	u8 vht_oper_centr_freq_seg1_idx = 0;
+ 	int skip_radar = 0;
+-	int err = 1, i;
+-	int failsafe = 0;
++	int err = 1;
+ 	struct csa_settings settings;
+ 
+     memset(&settings, 0, sizeof(settings));
+@@ -943,8 +942,7 @@ int hostapd_dfs_start_channel_switch_cac
+ 	  if (!channel) {
+ 	    wpa_printf(MSG_ERROR, "Invalid/no failsafe frequency specified %d\n",
+ 	      iface->failsafe.freq);
+-	  } else
+-	  failsafe = 1;
++	  }
+ 	}
+ 
+   if (!channel)
+@@ -964,62 +962,18 @@ int hostapd_dfs_start_channel_switch_cac
+ 		"freq=%d chan=%d sec_chan=%d", channel->freq,
+ 		channel->chan, secondary_channel);
+ 
+-	if (!failsafe) {
+-    iface->freq = channel->freq;
+-    iface->conf->channel = channel->chan;
+-    iface->conf->secondary_channel = secondary_channel;
+-    iface->conf->vht_oper_centr_freq_seg0_idx =
+-      vht_oper_centr_freq_seg0_idx;
+-    iface->conf->vht_oper_centr_freq_seg1_idx =
+-      vht_oper_centr_freq_seg1_idx;
+-	}
+-	err = 0;
++	iface->freq = channel->freq;
++	iface->conf->channel = channel->chan;
++	iface->conf->secondary_channel = secondary_channel;
++	iface->conf->vht_oper_centr_freq_seg0_idx =
++		vht_oper_centr_freq_seg0_idx;
++	iface->conf->vht_oper_centr_freq_seg1_idx =
++		vht_oper_centr_freq_seg1_idx;
+ 
++	err = 0;
+ 	iface->chan_switch_reason = HAPD_CHAN_SWITCH_RADAR_DETECTED;
+-  /* check CAC required */
+-  if ((channel->flag & HOSTAPD_CHAN_RADAR) &&
+-      ((channel->flag & HOSTAPD_CHAN_DFS_MASK) != HOSTAPD_CHAN_DFS_AVAILABLE))
+-    hostapd_setup_interface_complete(iface, err);
+-  else {
+-    settings.cs_count = 5;
+-    settings.block_tx = 1;
+-    if (!failsafe) {
+-      err = hostapd_set_freq_params(&settings.freq_params,
+-                  iface->conf->hw_mode,
+-                  channel->freq,
+-                  channel->chan,
+-                  iface->conf->ieee80211n,
+-                  iface->conf->ieee80211ac,
+-                  secondary_channel,
+-                  iface->conf->vht_oper_chwidth,
+-                  vht_oper_centr_freq_seg0_idx,
+-                  vht_oper_centr_freq_seg1_idx,
+-                  iface->current_mode->vht_capab);
+-
+-      if (err) {
+-        wpa_printf(MSG_ERROR, "DFS failed to calculate CSA freq params");
+-        hostapd_disable_iface(iface);
+-        return err;
+-      }
+-    }
+-    if (failsafe && iface->failsafe.tx_ant > 0) {
+-      err = hostapd_drv_set_antenna(iface->bss[0],
+-        iface->failsafe.tx_ant,
+-        iface->failsafe.rx_ant);
+-      if (err < 0) {
+-        wpa_printf(MSG_ERROR, "hostapd_dfs_start_channel_switch_cac: setting "
+-          "antenna failed: %s", strerror(errno));
+-      }
+-    }
+-    for (i = 0; i < iface->num_bss; i++) {
+-      err = hostapd_switch_channel(iface->bss[i], &settings);
+-      if (err) {
+-        /* FIX: What do we do if CSA fails in the middle of
+-         * submitting multi-BSS CSA requests? */
+-        return err;
+-      }
+-    }
+-  }
++	hostapd_setup_interface_complete(iface, err);
++
+ 	return err;
+ }
+ 

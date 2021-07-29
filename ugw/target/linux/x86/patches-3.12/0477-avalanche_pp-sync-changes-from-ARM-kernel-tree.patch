@@ -1,0 +1,200 @@
+From 392d7bb277f70e51e05105993c43cd9d378d83c5 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 15 Sep 2016 19:56:00 +0300
+Subject: [PATCH 477/639] avalanche_pp: sync changes from ARM kernel tree
+
+Synchronize latest changes from ARM kernel tree for Packet Processor.
+Includes the following commits:
+
+commit 052012fafc4f40264035287d53ae5a04a09bbdd9
+Merge: a20c468 d4802dd
+Author: Bitton, Ofir1 <ofir1.bitton@intel.com>
+Date:   Thu Sep 15 13:21:05 2016 +0200
+
+    Merge pull request #29 in SW_ARM/arm-intelce-kernel from feature/syncArmAtom to D3.1_GW-SDK7.0_int
+
+    * commit 'd4802dd69838ff1a158ddcbfb9c4eb1d68451324':
+      Remove not necassery ifdefs
+
+commit d4802dd69838ff1a158ddcbfb9c4eb1d68451324
+Author: ofirbitt <ofir1.bitton@intel.com>
+Date:   Thu Sep 15 14:20:24 2016 +0300
+
+    Remove not necassery ifdefs
+
+commit a20c46875961687ec49e62365b6886f9faad462e
+Merge: 49e47cc 15051a4
+Author: Guetta, Nir <nir.guetta@intel.com>
+Date:   Thu Sep 15 13:16:39 2016 +0200
+
+    Merge pull request #28 in SW_ARM/arm-intelce-kernel from Feature/DOCSISSW_767_L2VPN_OAM_for_P7 to D3.1_GW-SDK7.0_int
+
+    * commit '15051a47537ecb323dfc102d916b1b80b0b41e8a':
+      Feature/DOCSISSW_767_L2VPN_OAM_for_P7
+
+commit 15051a47537ecb323dfc102d916b1b80b0b41e8a
+Author: nguetta1 <nir.guetta@intel.com>
+Date:   Wed Sep 14 12:39:30 2016 +0300
+
+    Feature/DOCSISSW_767_L2VPN_OAM_for_P7
+
+commit 666f8784c21dfc8ab659c509695122612cc41219
+Merge: d8fa648 315178f
+Author: Gerber, Eli <eli.gerber@intel.com>
+Date:   Tue Sep 6 16:25:36 2016 +0200
+
+    Merge pull request #21 in SW_ARM/arm-intelce-kernel from feature/ppSanityTestTool to D3.1_GW-SDK7.0_int
+
+    * commit '315178f298a50438f9ffa47012799ab2f42ca76d':
+      ARMBUILDSW-273 Fixes after CR1
+      ARMBUILDSW-273 Phase II - Auto test
+
+commit 315178f298a50438f9ffa47012799ab2f42ca76d
+Author: egerber <eli.gerber@intel.com>
+Date:   Wed Aug 31 18:08:50 2016 +0300
+
+    ARMBUILDSW-273 Fixes after CR1
+
+commit 8df662217e98d2cdfb2597888a7d785454bc6d3d
+Author: egerber <eli.gerber@intel.com>
+Date:   Sun Aug 21 12:18:36 2016 +0300
+
+    ARMBUILDSW-273 Phase II - Auto test
+
+commit d8fa648e1443df4c8697ab2358f6f2073a7bc5d8
+Merge: 052292a 8605bb2
+Author: Shapira, Tal <tal.shapira@intel.com>
+Date:   Tue Aug 30 10:14:21 2016 +0200
+
+    Merge pull request #18 in SW_ARM/arm-intelce-kernel from Feature_ECR_1363861_IPSEC_ByPass to D3.1_GW-SDK7.0_int
+
+    * commit '8605bb25154fc979f5213a5448a96f532fc04c42':
+      ARMBUILDSW-Feature_ECR_1363861_IPSEC_ByPass
+
+commit 8605bb25154fc979f5213a5448a96f532fc04c42
+Author: tshapira <tal.shapira@intel.com>
+Date:   Mon Aug 29 14:16:20 2016 +0300
+
+    ARMBUILDSW-Feature_ECR_1363861_IPSEC_ByPass
+---
+ .../linux/avalanche/generic/avalanche_pdsp_api.h   |  6 ++--
+ include/linux/avalanche/generic/avalanche_pp_api.h | 33 +++++++++++++---------
+ .../linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h    |  4 +--
+ 3 files changed, 24 insertions(+), 19 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index e4e1715..b047b67 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -146,9 +146,9 @@ typedef enum
+     PDSP_ACCUMULATOR_ENABLE_CH_RATE_LIMIT   = 0x85,
+     PDSP_ACCUMULATOR_ENABLE_RATE_LIMIT      = 0x86,
+ 
+-    // Recycler  commands
+-    PDSP_RECYCLER_SANITY_START_CMD          = 0x83,
+-    PDSP_RECYCLER_SANITY_STOP_CMD           = 0x84,
++    // Recycler  commands (For Sanity tests)
++    PDSP_RECYCLER_SANITY_START_CMD   = 0x83,
++    PDSP_RECYCLER_SANITY_STOP_CMD    = 0x84,
+ 
+     // Session Cache Commands
+     PDSP_SESSION_CACHE_SESSION_CMD  = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 13ef624d..2389397 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -786,11 +786,18 @@ typedef enum
+ 
+ typedef enum
+ {
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE             = 1,
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE          = 2,
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_PPPoE           = 3,
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_6rd             = 4,
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_L2TPv3          = 5
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE                = 1,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE             = 2,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_PPPoE              = 3,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_6rd                = 4,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_L2TPv3             = 5,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_ESP          = 6,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE_IPSEC_ESP      = 7,             /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_ESP */
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE_IPSEC_ESP   = 8,             /* PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_ESP */
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH           = 9,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE_IPSEC_AH       = 10,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH */
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE_IPSEC_AH    = 11,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH */
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_NOT_VALID          = 16
+ }PP_LOOKUP_FIELD_TUNNEL_TYPE_e;
+ 
+ typedef enum
+@@ -988,6 +995,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv4                             0x10
+                                 #define AVALANCHE_PP_EGRESS_WH_IPv6                             0x20
+                                 #define AVALANCHE_PP_EGRESS_WIFI_PID                            0x40
++                                #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x80
+     Uint16                      reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+@@ -1634,6 +1642,7 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_wifi_mesh_get_vpid_packet_header_size
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_create        ( AVALANCHE_PP_SESSION_INFO_t *  ptr_session, void * pkt_ptr );
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats, Bool deleteFromFW );
++extern AVALANCHE_PP_RET_e   avalanche_pp_override_egress_queue  ( Uint32 session_handle,     Uint8 override_qMgr,                               Uint16 override_qNum);
+ #else
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats );
+ #endif
+@@ -1706,12 +1715,12 @@ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_cluster_setup      ( Uint8     clst
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_cluster_enable     ( Uint8     clst_indx );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_cluster_disable    ( Uint8     clst_indx );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_get_queue_stats    ( Uint32    qos_qnum,   AVALANCHE_PP_QOS_QUEUE_STATS_t*     stats );
+-
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_set_cluster_max_global_credit  ( Bool creditTypeBytes, Uint8 cluster_id,   Uint32 max_global_credit );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_set_queue_max_credit           ( Bool creditTypeBytes, Uint8 queue_id,     Uint32 max_credit );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_set_queue_iteration_credit     ( Bool creditTypeBytes, Uint8 queue_id,     Uint32 it_credit  );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_qos_set_queue_congestion           ( Bool creditTypeBytes, Uint8 queue_id,     Uint32 it_credit  );
+ #endif
++
+ /* Power Saving Mode (PSM) API. */
+ extern AVALANCHE_PP_RET_e    avalanche_pp_psm                       ( Uint8     onOff );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_hw_init                   ( void );
+@@ -2221,18 +2230,14 @@ typedef struct
+     Uint8* pktDataEgressDevName;
+     Uint8* pktDataIngressP;
+     Uint8* pktDataEgressP;
+-    Uint16 pktDataIngressSize;
+-    Uint16 pktDataEgressSize;
++    Uint32 pktDataIngressSize;
++    Uint32 pktDataEgressSize;
++    Uint32 sessionHandleRet;
+ }
+-session_info_t;
+-
+-#ifdef CONFIG_PP_SANITY_TESTS
++sanity_session_info_t;
+ 
+ #define SANITY_PROC_NAME "sanity"
+ 
+-#endif
+-
+-
+ /************** Power management info ****************/
+ 
+ #define MAX_MONITORED_OBJECTS_NUM 16
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+index 5f220a9..8f88ba9 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+@@ -356,8 +356,8 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_US_PREPROCESSING_BE12_HIGH_Q_NUM)
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_US_PREPROCESSING_BE13_HIGH_Q_NUM)                       /* PAL_CPPI_PP_QMGR_G1_Q293 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_US_PREPROCESSING_BE14_HIGH_Q_NUM)                       /* PAL_CPPI_PP_QMGR_G1_Q294 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_US_PREPROCESSING_BE15_HIGH_Q_NUM)                       /* PAL_CPPI_PP_QMGR_G1_Q295 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q296)                                                   /* PAL_CPPI_PP_QMGR_G1_Q296 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q297)                                                   /* PAL_CPPI_PP_QMGR_G1_Q297 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SANITY_TESTS_EGRESS_Q0)                                 /* PAL_CPPI_PP_QMGR_G1_Q296 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_SANITY_TESTS_EGRESS_Q1)                                 /* PAL_CPPI_PP_QMGR_G1_Q297 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q298)                                                   /* PAL_CPPI_PP_QMGR_G1_Q298 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q299)                                                   /* PAL_CPPI_PP_QMGR_G1_Q299 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_Q300)                                                   /* PAL_CPPI_PP_QMGR_G1_Q300 */\
+-- 
+2.10.1
+

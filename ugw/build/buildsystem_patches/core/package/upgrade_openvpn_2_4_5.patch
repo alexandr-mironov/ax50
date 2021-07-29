@@ -1,0 +1,1215 @@
+--- a/package/network/services/openvpn/Config-mbedtls.in	1970-01-01 05:30:00.000000000 +0530
++++ b/package/network/services/openvpn/Config-mbedtls.in	2018-04-13 12:27:18.050338243 +0530
+@@ -0,0 +1,70 @@
++if PACKAGE_openvpn-mbedtls
++
++config OPENVPN_mbedtls_ENABLE_LZO
++	bool "Enable LZO compression support"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_LZ4
++	bool "Enable LZ4 compression support"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_X509_ALT_USERNAME
++	bool "Enable the --x509-username-field feature"
++	default n
++
++config OPENVPN_mbedtls_ENABLE_SERVER
++	bool "Enable server support (otherwise only client mode is support)"
++	default y
++
++#config OPENVPN_mbedtls_ENABLE_EUREPHIA
++#	bool "Enable support for the eurephia plug-in"
++#	default n
++
++config OPENVPN_mbedtls_ENABLE_MANAGEMENT
++	bool "Enable management server support"
++	default n
++
++#config OPENVPN_mbedtls_ENABLE_PKCS11
++#	bool "Enable pkcs11 support"
++#	default n
++
++config OPENVPN_mbedtls_ENABLE_HTTP
++	bool "Enable HTTP proxy support"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_SOCKS
++	bool "Enable SOCKS proxy support"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_FRAGMENT
++	bool "Enable internal fragmentation support (--fragment)"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_MULTIHOME
++	bool "Enable multi-homed UDP server support (--multihome)"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_PORT_SHARE
++	bool "Enable TCP server port-share support (--port-share)"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_DEF_AUTH
++	bool "Enable deferred authentication"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_PF
++	bool "Enable internal packet filter"
++	default y
++
++config OPENVPN_mbedtls_ENABLE_IPROUTE2
++	bool "Enable support for iproute2"
++	default n
++
++config OPENVPN_mbedtls_ENABLE_SMALL
++	bool "Enable size optimization"
++	default y
++	help
++	  enable smaller executable size (disable OCC, usage
++	  message, and verb 4 parm list)
++
++endif
+--- a/package/network/services/openvpn/Config-nossl.in	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/Config-nossl.in	2018-04-13 12:27:18.050338243 +0530
+@@ -4,6 +4,10 @@
+ 	bool "Enable LZO compression support"
+ 	default y
+ 
++config OPENVPN_nossl_ENABLE_LZ4
++	bool "Enable LZ4 compression support"
++	default y
++
+ config OPENVPN_nossl_ENABLE_SERVER
+ 	bool "Enable server support (otherwise only client mode is support)"
+ 	default y
+--- a/package/network/services/openvpn/Config-openssl.in	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/Config-openssl.in	2018-04-13 12:27:18.050338243 +0530
+@@ -4,6 +4,10 @@
+ 	bool "Enable LZO compression support"
+ 	default y
+ 
++config OPENVPN_openssl_ENABLE_LZ4
++	bool "Enable LZ4 compression support"
++	default y
++
+ config OPENVPN_openssl_ENABLE_X509_ALT_USERNAME
+ 	bool "Enable the --x509-username-field feature"
+ 	default n
+--- a/package/network/services/openvpn/Config-polarssl.in	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/Config-polarssl.in	1970-01-01 05:30:00.000000000 +0530
+@@ -1,66 +0,0 @@
+-if PACKAGE_openvpn-polarssl
+-
+-config OPENVPN_polarssl_ENABLE_LZO
+-	bool "Enable LZO compression support"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_X509_ALT_USERNAME
+-	bool "Enable the --x509-username-field feature"
+-	default n
+-
+-config OPENVPN_polarssl_ENABLE_SERVER
+-	bool "Enable server support (otherwise only client mode is support)"
+-	default y
+-
+-#config OPENVPN_polarssl_ENABLE_EUREPHIA
+-#	bool "Enable support for the eurephia plug-in"
+-#	default n
+-
+-config OPENVPN_polarssl_ENABLE_MANAGEMENT
+-	bool "Enable management server support"
+-	default n
+-
+-#config OPENVPN_polarssl_ENABLE_PKCS11
+-#	bool "Enable pkcs11 support"
+-#	default n
+-
+-config OPENVPN_polarssl_ENABLE_HTTP
+-	bool "Enable HTTP proxy support"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_SOCKS
+-	bool "Enable SOCKS proxy support"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_FRAGMENT
+-	bool "Enable internal fragmentation support (--fragment)"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_MULTIHOME
+-	bool "Enable multi-homed UDP server support (--multihome)"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_PORT_SHARE
+-	bool "Enable TCP server port-share support (--port-share)"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_DEF_AUTH
+-	bool "Enable deferred authentication"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_PF
+-	bool "Enable internal packet filter"
+-	default y
+-
+-config OPENVPN_polarssl_ENABLE_IPROUTE2
+-	bool "Enable support for iproute2"
+-	default n
+-
+-config OPENVPN_polarssl_ENABLE_SMALL
+-	bool "Enable size optimization"
+-	default y
+-	help
+-	  enable smaller executable size (disable OCC, usage
+-	  message, and verb 4 parm list)
+-
+-endif
+--- a/package/network/services/openvpn/files/openvpn.config	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/files/openvpn.config	2018-04-13 12:27:18.054338208 +0530
+@@ -241,7 +241,11 @@
+ 	# Enable compression on the VPN link.
+ 	# If you enable it here, you must also
+ 	# enable it in the client config file.
+-	option comp_lzo yes
++	# LZ4 requires OpenVPN 2.4+ client and server
++#	option compress lz4
++	# LZO is compatible with most OpenVPN versions
++	# (set "compress lzo" on 2.4+ clients, and "comp-lzo yes" on older clients)
++	option compress lzo
+ 
+ 	# The maximum number of concurrently connected
+ 	# clients we want to allow.
+@@ -391,7 +395,10 @@
+ 	# Enable compression on the VPN link.
+ 	# Don't enable this unless it is also
+ 	# enabled in the server config file.
+-	option comp_lzo yes
++	# LZ4 requires OpenVPN 2.4+ on server and client
++#	option compress lz4
++	# LZO is compatible with most OpenVPN versions
++	option compress lzo
+ 
+ 	# Set log file verbosity.
+ 	option verb 3
+--- a/package/network/services/openvpn/files/openvpn.init	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/files/openvpn.init	2018-04-13 12:27:18.054338208 +0530
+@@ -42,7 +42,8 @@
+ 		config_get v "$s" "$p"
+ 		IFS="$LIST_SEP"
+ 		for v in $v; do
+-			[ -n "$v" ] && append_param "$s" "$p" && echo " $v" >> "/var/etc/openvpn-$s.conf"
++			[ -n "$v" ] && [ "$p" != "push" ] && append_param "$s" "$p" && echo " $v" >> "/var/etc/openvpn-$s.conf"
++			[ -n "$v" ] && [ "$p" == "push" ] && append_param "$s" "$p" && echo " \"$v\"" >> "/var/etc/openvpn-$s.conf"
+ 		done
+ 		unset IFS
+ 	done
+@@ -59,7 +60,7 @@
+ 	local dir="$2"
+ 	local conf="$3"
+ 
+-	procd_open_instance
++	procd_open_instance "$name"
+ 	procd_set_param command "$PROG"	\
+ 		--syslog "openvpn($name)" \
+ 		--status "/var/run/openvpn.$name.status" \
+@@ -67,6 +68,9 @@
+ 		--config "$conf"
+ 	procd_set_param file "$dir/$conf"
+ 	procd_set_param respawn
++	procd_append_param respawn 3600
++	procd_append_param respawn 5
++	procd_append_param respawn -1
+ 	procd_close_instance
+ }
+ 
+@@ -92,63 +96,56 @@
+ 	[ ! -d "/var/etc" ] && mkdir -p "/var/etc"
+ 	[ -f "/var/etc/openvpn-$s.conf" ] && rm "/var/etc/openvpn-$s.conf"
+ 
+-	# append flags
+-	append_bools "$s" \
+-		auth_nocache auth_user_pass_optional bind ccd_exclusive client client_cert_not_required \
+-		client_to_client comp_noadapt disable \
+-		disable_occ down_pre duplicate_cn fast_io float http_proxy_retry \
+-		ifconfig_noexec ifconfig_nowarn ifconfig_pool_linear management_forget_disconnect management_hold \
+-		management_query_passwords management_signal mktun mlock mtu_test multihome mute_replay_warnings \
+-		nobind no_iv no_name_remapping no_replay opt_verify passtos persist_key persist_local_ip \
+-		persist_remote_ip persist_tun ping_timer_rem pull push_reset \
+-		remote_random rmtun route_noexec route_nopull single_session socks_proxy_retry \
+-		suppress_timestamps tcp_nodelay test_crypto tls_client tls_exit tls_server \
+-		tun_ipv6 up_delay up_restart username_as_common_name
+-
+-	# append params
+-	append_params "$s" \
+-		cd askpass auth auth_retry auth_user_pass auth_user_pass_verify bcast_buffers ca cert \
+-		chroot cipher client_config_dir client_connect client_disconnect comp_lzo connect_freq \
+-		connect_retry connect_timeout connect_retry_max crl_verify dev dev_node dev_type dh \
+-		echo engine explicit_exit_notify fragment group hand_window hash_size \
+-		http_proxy http_proxy_option http_proxy_timeout ifconfig ifconfig_pool \
+-		ifconfig_pool_persist ifconfig_push inactive ipchange iroute keepalive \
+-		key key_method keysize learn_address link_mtu lladdr local log log_append \
+-		lport management management_log_cache max_clients \
+-		max_routes_per_client mode mssfix mtu_disc mute nice ns_cert_type ping \
+-		ping_exit ping_restart pkcs12 plugin port port_share prng proto rcvbuf \
+-		redirect_gateway remap_usr1 remote remote_cert_eku remote_cert_ku remote_cert_tls \
+-		reneg_bytes reneg_pkts reneg_sec \
+-		replay_persist replay_window resolv_retry route route_delay route_gateway \
+-		route_metric route_up rport script_security secret server server_bridge setenv shaper sndbuf \
+-		socks_proxy status status_version syslog tcp_queue_limit tls_auth \
+-		tls_cipher tls_remote tls_timeout tls_verify tmp_dir topology tran_window \
+-		tun_mtu tun_mtu_extra txqueuelen user verb down push up \
+-		ifconfig_ipv6 route_ipv6 server_ipv6 ifconfig_ipv6_pool ifconfig_ipv6_push iroute_ipv6
++	append_bools "$s" $OPENVPN_BOOLS
++	append_params "$s" $OPENVPN_PARAMS
+ 
+ 	openvpn_add_instance "$s" "/var/etc" "openvpn-$s.conf"
+ }
+ 
+ start_service() {
++	local instance="$1"
++	local instance_found=0
++
++	config_cb() {
++		local type="$1"
++		local name="$2"
++		if [ "$type" = "openvpn" ]; then
++			if [ -n "$instance" -a "$instance" = "$name" ]; then
++				instance_found=1
++			fi
++		fi
++	}
++
++	. /usr/share/openvpn/openvpn.options
+ 	config_load 'openvpn'
+-	config_foreach start_instance 'openvpn'
+ 
+-	local path name
+-	for path in /etc/openvpn/*.conf; do
+-		if [ -f "$path" ]; then
+-			name="${path##*/}"; name="${name%.conf}"
+-
+-			# don't start configs again that are already started by uci
+-			if echo "$UCI_STARTED" | grep -qxF "$path"; then
+-				continue
+-
+-			# don't start configs which are set to disabled in uci
+-			elif echo "$UCI_DISABLED" | grep -qxF "$path"; then
+-				logger -t openvpn "$name.conf is disabled in /etc/config/openvpn"
+-				continue
++	if [ -n "$instance" ]; then
++		[ "$instance_found" -gt 0 ] || return
++		start_instance "$instance"
++	else
++		config_foreach start_instance 'openvpn'
++
++		local path name
++		for path in /etc/openvpn/*.conf; do
++			if [ -f "$path" ]; then
++				name="${path##*/}"; name="${name%.conf}"
++
++				# don't start configs again that are already started by uci
++				if echo "$UCI_STARTED" | grep -qxF "$path"; then
++					continue
++
++				# don't start configs which are set to disabled in uci
++				elif echo "$UCI_DISABLED" | grep -qxF "$path"; then
++					logger -t openvpn "$name.conf is disabled in /etc/config/openvpn"
++					continue
++				fi
++
++				openvpn_add_instance "$name" "${path%/*}" "$path"
+ 			fi
++		done
++	fi
++}
+ 
+-			openvpn_add_instance "$name" "${path%/*}" "$path"
+-		fi
+-	done
++service_triggers() {
++	procd_add_reload_trigger openvpn
+ }
+--- a/package/network/services/openvpn/files/openvpn.options	1970-01-01 05:30:00.000000000 +0530
++++ b/package/network/services/openvpn/files/openvpn.options	2018-04-13 12:27:18.054338208 +0530
+@@ -0,0 +1,192 @@
++OPENVPN_PARAMS='
++askpass
++auth
++auth_retry
++auth_user_pass
++auth_user_pass_verify
++bcast_buffers
++ca
++capath
++cd
++cert
++chroot
++cipher
++client_config_dir
++client_connect
++client_disconnect
++compress
++connect_freq
++connect_retry
++connect_retry_max
++connect_timeout
++crl_verify
++dev
++dev_node
++dev_type
++dh
++down
++ecdh_curve
++echo
++engine
++explicit_exit_notify
++extra_certs
++fragment
++group
++hand_window
++hash_size
++http_proxy
++http_proxy_option
++http_proxy_timeout
++ifconfig
++ifconfig_ipv6
++ifconfig_ipv6_pool
++ifconfig_ipv6_push
++ifconfig_pool
++ifconfig_pool_persist
++ifconfig_push
++inactive
++ipchange
++iroute
++iroute_ipv6
++keepalive
++key
++key_direction
++key_method
++keysize
++learn_address
++link_mtu
++lladdr
++local
++log
++log_append
++lport
++management
++management_log_cache
++max_clients
++max_routes_per_client
++mode
++mssfix
++mtu_disc
++mute
++ncp_ciphers
++nice
++ns_cert_type
++ping
++ping_exit
++ping_restart
++pkcs12
++plugin
++port
++port_share
++prng
++proto
++pull_filter
++push
++rcvbuf
++redirect_gateway
++remap_usr1
++remote
++remote_cert_eku
++remote_cert_ku
++remote_cert_tls
++reneg_bytes
++reneg_pkts
++reneg_sec
++replay_persist
++replay_window
++resolv_retry
++route
++route_delay
++route_gateway
++route_ipv6
++route_metric
++route_pre_down
++route_up
++rport
++script_security
++secret
++server
++server_bridge
++server_ipv6
++setenv
++shaper
++sndbuf
++socks_proxy
++status
++status_version
++syslog
++tcp_queue_limit
++tls_auth
++tls_cipher
++tls_crypt
++tls_timeout
++tls_verify
++tls_version_min
++tmp_dir
++topology
++tran_window
++tun_mtu
++tun_mtu_extra
++txqueuelen
++up
++user
++verb
++verify_client_cert
++verify_x509_name
++x509_username_field
++'
++
++OPENVPN_BOOLS='
++allow_recursive_routing
++auth_nocache
++auth_user_pass_optional
++bind
++ccd_exclusive
++client
++client_to_client
++comp_noadapt
++disable
++disable_occ
++down_pre
++duplicate_cn
++fast_io
++float
++http_proxy_retry
++ifconfig_noexec
++ifconfig_nowarn
++management_forget_disconnect
++management_hold
++management_query_passwords
++management_signal
++mktun
++mlock
++mtu_test
++multihome
++mute_replay_warnings
++ncp_disable
++nobind
++opt_verify
++passtos
++persist_key
++persist_local_ip
++persist_remote_ip
++persist_tun
++ping_timer_rem
++pull
++push_reset
++remote_random
++rmtun
++route_noexec
++route_nopull
++single_session
++socks_proxy_retry
++suppress_timestamps
++tcp_nodelay
++test_crypto
++tls_client
++tls_exit
++tls_server
++up_delay
++up_restart
++username_as_common_name
++'
+--- a/package/network/services/openvpn/Makefile	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/Makefile	2018-04-13 12:27:18.050338243 +0530
+@@ -9,19 +9,22 @@
+ 
+ PKG_NAME:=openvpn
+ 
+-PKG_VERSION:=2.3.6
+-PKG_RELEASE:=5
++PKG_VERSION:=2.4.5
++PKG_RELEASE:=3
+ 
+-PKG_SOURCE_URL:=http://swupdate.openvpn.net/community/releases
+-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+-PKG_MD5SUM:=6ca03fe0fd093e0d01601abee808835c
++PKG_SOURCE_URL:=\
++	https://swupdate.openvpn.net/community/releases/
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
++PKG_HASH:=43c0a363a332350f620d1cd93bb431e082bedbc93d4fb872f758650d53c1d29e
+ 
+ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
++PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+ 
+ PKG_INSTALL:=1
+ PKG_FIXUP:=autoreconf
+ PKG_BUILD_PARALLEL:=1
+ PKG_LICENSE:=GPL-2.0
++PKG_CPE_ID:=cpe:/a:openvpn:openvpn
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+@@ -34,11 +37,15 @@
+   MENU:=1
+   DEPENDS:=+kmod-tun +OPENVPN_$(1)_ENABLE_LZO:liblzo +OPENVPN_$(1)_ENABLE_IPROUTE2:ip $(3)
+   VARIANT:=$(1)
+-  MAINTAINER:=Mirko Vogt <mirko@openwrt.org>
++ifeq ($(1),nossl)
++  PROVIDES:=openvpn
++else
++  PROVIDES:=openvpn openvpn-crypto
++endif
+ endef
+ 
+-Package/openvpn-openssl=$(call Package/openvpn/Default,openssl,OpenSSL,+libopenssl)
+-Package/openvpn-polarssl=$(call Package/openvpn/Default,polarssl,PolarSSL,+libpolarssl)
++Package/openvpn-openssl=$(call Package/openvpn/Default,openssl,OpenSSL,+PACKAGE_openvpn-openssl:libopenssl)
++Package/openvpn-mbedtls=$(call Package/openvpn/Default,mbedtls,mbedTLS,+PACKAGE_openvpn-mbedtls:libmbedtls)
+ Package/openvpn-nossl=$(call Package/openvpn/Default,nossl,plaintext (no SSL))
+ 
+ define Package/openvpn/config/Default
+@@ -46,11 +53,11 @@
+ endef
+ 
+ Package/openvpn-openssl/config=$(call Package/openvpn/config/Default,openssl)
+-Package/openvpn-polarssl/config=$(call Package/openvpn/config/Default,polarssl)
++Package/openvpn-mbedtls/config=$(call Package/openvpn/config/Default,mbedtls)
+ Package/openvpn-nossl/config=$(call Package/openvpn/config/Default,nossl)
+ 
+-ifeq ($(BUILD_VARIANT),polarssl)
+-CONFIG_OPENVPN_POLARSSL:=y
++ifeq ($(BUILD_VARIANT),mbedtls)
++CONFIG_OPENVPN_MBEDTLS:=y
+ endif
+ ifeq ($(BUILD_VARIANT),openssl)
+ CONFIG_OPENVPN_OPENSSL:=y
+@@ -62,9 +69,12 @@
+ CONFIGURE_VARS += \
+ 	IFCONFIG=/sbin/ifconfig \
+ 	ROUTE=/sbin/route \
+-	IPROUTE=/usr/sbin/ip \
++	IPROUTE=/sbin/ip \
+ 	NETSTAT=/sbin/netstat
+ 
++TARGET_CFLAGS += -ffunction-sections -fdata-sections
++TARGET_LDFLAGS += -Wl,--gc-sections
++
+ define Build/Configure
+ 	$(call Build/Configure/Default, \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_SMALL),--enable-small) \
+@@ -72,15 +82,14 @@
+ 		--disable-systemd \
+ 		--disable-plugins \
+ 		--disable-debug \
+-		--disable-eurephia \
+ 		--disable-pkcs11 \
+-		--enable-password-save \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_LZO),--enable,--disable)-lzo \
++		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_LZ4),--enable,--disable)-lz4 \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_X509_ALT_USERNAME),enable,disable-x509-alt-username)-ssl \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_SERVER),--enable,--disable)-server \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_MANAGEMENT),--enable,--disable)-management \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_SOCKS),--enable,--disable)-socks \
+-		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_HTTP),--enable,--disable)-http \
++		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_HTTP),--enable,--disable)-http-proxy \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_FRAGMENT),--enable,--disable)-fragment \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_MULTIHOME),--enable,--disable)-multihome \
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_IPROUTE2),--enable,--disable)-iproute2 \
+@@ -88,7 +97,7 @@
+ 		$(if $(CONFIG_OPENVPN_$(BUILD_VARIANT)_ENABLE_PF),--enable,--disable)-pf \
+ 		$(if $(CONFIG_OPENVPN_NOSSL),--disable-ssl --disable-crypto,--enable-ssl --enable-crypto) \
+ 		$(if $(CONFIG_OPENVPN_OPENSSL),--with-crypto-library=openssl) \
+-		$(if $(CONFIG_OPENVPN_POLARSSL),--with-crypto-library=polarssl) \
++		$(if $(CONFIG_OPENVPN_MBEDTLS),--with-crypto-library=mbedtls) \
+ 	)
+ endef
+ 
+@@ -99,6 +108,7 @@
+ define Package/openvpn-$(BUILD_VARIANT)/install
+ 	$(INSTALL_DIR) \
+ 		$(1)/usr/sbin \
++		$(1)/usr/share/openvpn \
+ 		$(1)/etc/init.d \
+ 		$(1)/etc/config \
+ 		$(1)/etc/openvpn \
+@@ -111,6 +121,9 @@
+ 	$(INSTALL_BIN) \
+ 		files/openvpn.init \
+ 		$(1)/etc/init.d/openvpn
++	$(INSTALL_DATA) \
++		files/openvpn.options \
++		$(1)/usr/share/openvpn/openvpn.options
+ 
+ 	$(INSTALL_CONF) files/openvpn.config \
+ 		$(1)/etc/config/openvpn
+@@ -121,5 +134,5 @@
+ endef
+ 
+ $(eval $(call BuildPackage,openvpn-openssl))
+-$(eval $(call BuildPackage,openvpn-polarssl))
++$(eval $(call BuildPackage,openvpn-mbedtls))
+ $(eval $(call BuildPackage,openvpn-nossl))
+--- a/package/network/services/openvpn/patches/001-backport_cipher_none_fix.patch	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/patches/001-backport_cipher_none_fix.patch	1970-01-01 05:30:00.000000000 +0530
+@@ -1,57 +0,0 @@
+-commit 98156e90e1e83133a6a6a020db8e7333ada6156b
+-Author: Steffan Karger <steffan@karger.me>
+-Date:   Tue Dec 2 21:42:00 2014 +0100
+-
+-    Really fix '--cipher none' regression
+-    
+-    ... by not incorrectly hinting to the compiler the function argument of
+-    cipher_kt_mode_{cbc,ofb_cfb}() is nonnull, since that no longer is the
+-    case.
+-    
+-    Verified the fix on Debian Wheezy, one of the platforms the reporter in
+-    trac #473 mentions with a compiler that would optimize out the required
+-    checks.
+-    
+-    Also add a testcase for --cipher none to t_lpback, to prevent further
+-    regressions.
+-    
+-    Signed-off-by: Steffan Karger <steffan@karger.me>
+-    Acked-by: Gert Doering <gert@greenie.muc.de>
+-    Message-Id: <1417552920-31770-1-git-send-email-steffan@karger.me>
+-    URL: http://article.gmane.org/gmane.network.openvpn.devel/9300
+-    Signed-off-by: Gert Doering <gert@greenie.muc.de>
+-
+---- a/src/openvpn/crypto_backend.h
+-+++ b/src/openvpn/crypto_backend.h
+-@@ -237,8 +237,7 @@ int cipher_kt_mode (const cipher_kt_t *c
+-  *
+-  * @return		true iff the cipher is a CBC mode cipher.
+-  */
+--bool cipher_kt_mode_cbc(const cipher_kt_t *cipher)
+--  __attribute__((nonnull));
+-+bool cipher_kt_mode_cbc(const cipher_kt_t *cipher);
+- 
+- /**
+-  * Check if the supplied cipher is a supported OFB or CFB mode cipher.
+-@@ -247,8 +246,7 @@ bool cipher_kt_mode_cbc(const cipher_kt_
+-  *
+-  * @return		true iff the cipher is a OFB or CFB mode cipher.
+-  */
+--bool cipher_kt_mode_ofb_cfb(const cipher_kt_t *cipher)
+--  __attribute__((nonnull));
+-+bool cipher_kt_mode_ofb_cfb(const cipher_kt_t *cipher);
+- 
+- 
+- /**
+---- a/tests/t_lpback.sh
+-+++ b/tests/t_lpback.sh
+-@@ -35,6 +35,9 @@ CIPHERS=$(${top_builddir}/src/openvpn/op
+- # GD, 2014-07-06 do not test RC5-* either (fails on NetBSD w/o libcrypto_rc5)
+- CIPHERS=$(echo "$CIPHERS" | egrep -v '^(DES-EDE3-CFB1|DES-CFB1|RC5-)' )
+- 
+-+# Also test cipher 'none'
+-+CIPHERS=${CIPHERS}$(printf "\nnone")
+-+
+- "${top_builddir}/src/openvpn/openvpn" --genkey --secret key.$$
+- set +e
+- 
+--- a/package/network/services/openvpn/patches/001-reproducible-remove_DATE.patch	1970-01-01 05:30:00.000000000 +0530
++++ b/package/network/services/openvpn/patches/001-reproducible-remove_DATE.patch	2018-04-13 12:27:18.054338208 +0530
+@@ -0,0 +1,10 @@
++--- a/src/openvpn/options.c
+++++ b/src/openvpn/options.c
++@@ -106,7 +106,6 @@ const char title_string[] =
++ #ifdef HAVE_AEAD_CIPHER_MODES
++     " [AEAD]"
++ #endif
++-    " built on " __DATE__
++ ;
++ 
++ #ifndef ENABLE_SMALL
+--- a/package/network/services/openvpn/patches/100-mbedtls-disable-runtime-version-check.patch	1970-01-01 05:30:00.000000000 +0530
++++ b/package/network/services/openvpn/patches/100-mbedtls-disable-runtime-version-check.patch	2018-04-13 12:27:18.054338208 +0530
+@@ -0,0 +1,11 @@
++--- a/src/openvpn/ssl_mbedtls.c
+++++ b/src/openvpn/ssl_mbedtls.c
++@@ -1394,7 +1394,7 @@ const char *
++ get_ssl_library_version(void)
++ {
++     static char mbedtls_version[30];
++-    unsigned int pv = mbedtls_version_get_number();
+++    unsigned int pv = MBEDTLS_VERSION_NUMBER;
++     sprintf( mbedtls_version, "mbed TLS %d.%d.%d",
++              (pv>>24)&0xff, (pv>>16)&0xff, (pv>>8)&0xff );
++     return mbedtls_version;
+--- a/package/network/services/openvpn/patches/100-polarssl_compat.h	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/patches/100-polarssl_compat.h	1970-01-01 05:30:00.000000000 +0530
+@@ -1,257 +0,0 @@
+---- a/src/openvpn/ssl_polarssl.h
+-+++ b/src/openvpn/ssl_polarssl.h
+-@@ -38,6 +38,8 @@
+- #include <polarssl/pkcs11.h>
+- #endif
+- 
+-+#include <polarssl/compat-1.2.h>
+-+
+- typedef struct _buffer_entry buffer_entry;
+- 
+- struct _buffer_entry {
+---- a/src/openvpn/ssl_polarssl.c
+-+++ b/src/openvpn/ssl_polarssl.c
+-@@ -46,7 +46,7 @@
+- #include "manage.h"
+- #include "ssl_common.h"
+- 
+--#include <polarssl/sha2.h>
+-+#include <polarssl/sha256.h>
+- #include <polarssl/havege.h>
+- 
+- #include "ssl_verify_polarssl.h"
+-@@ -212,13 +212,13 @@ tls_ctx_load_dh_params (struct tls_root_
+- {
+-   if (!strcmp (dh_file, INLINE_FILE_TAG) && dh_inline)
+-     {
+--      if (0 != x509parse_dhm(ctx->dhm_ctx, (const unsigned char *) dh_inline,
+-+      if (0 != dhm_parse_dhm(ctx->dhm_ctx, (const unsigned char *) dh_inline,
+- 	  strlen(dh_inline)))
+- 	msg (M_FATAL, "Cannot read inline DH parameters");
+-   }
+- else
+-   {
+--    if (0 != x509parse_dhmfile(ctx->dhm_ctx, dh_file))
+-+    if (0 != dhm_parse_dhmfile(ctx->dhm_ctx, dh_file))
+-       msg (M_FATAL, "Cannot read DH parameters from file %s", dh_file);
+-   }
+- 
+-@@ -253,13 +253,13 @@ tls_ctx_load_cert_file (struct tls_root_
+- 
+-   if (!strcmp (cert_file, INLINE_FILE_TAG) && cert_inline)
+-     {
+--      if (0 != x509parse_crt(ctx->crt_chain,
+-+      if (0 != x509_crt_parse(ctx->crt_chain,
+- 	  (const unsigned char *) cert_inline, strlen(cert_inline)))
+-         msg (M_FATAL, "Cannot load inline certificate file");
+-     }
+-   else
+-     {
+--      if (0 != x509parse_crtfile(ctx->crt_chain, cert_file))
+-+      if (0 != x509_crt_parse_file(ctx->crt_chain, cert_file))
+- 	msg (M_FATAL, "Cannot load certificate file %s", cert_file);
+-     }
+- }
+-@@ -277,7 +277,7 @@ tls_ctx_load_priv_file (struct tls_root_
+-       status = x509parse_key(ctx->priv_key,
+- 	  (const unsigned char *) priv_key_inline, strlen(priv_key_inline),
+- 	  NULL, 0);
+--      if (POLARSSL_ERR_X509_PASSWORD_REQUIRED == status)
+-+      if (POLARSSL_ERR_PK_PASSWORD_REQUIRED == status)
+- 	{
+- 	  char passbuf[512] = {0};
+- 	  pem_password_callback(passbuf, 512, 0, NULL);
+-@@ -289,7 +289,7 @@ tls_ctx_load_priv_file (struct tls_root_
+-   else
+-     {
+-       status = x509parse_keyfile(ctx->priv_key, priv_key_file, NULL);
+--      if (POLARSSL_ERR_X509_PASSWORD_REQUIRED == status)
+-+      if (POLARSSL_ERR_PK_PASSWORD_REQUIRED == status)
+- 	{
+- 	  char passbuf[512] = {0};
+- 	  pem_password_callback(passbuf, 512, 0, NULL);
+-@@ -480,14 +480,14 @@ void tls_ctx_load_ca (struct tls_root_ct
+- 
+-   if (ca_file && !strcmp (ca_file, INLINE_FILE_TAG) && ca_inline)
+-     {
+--      if (0 != x509parse_crt(ctx->ca_chain, (const unsigned char *) ca_inline,
+-+      if (0 != x509_crt_parse(ctx->ca_chain, (const unsigned char *) ca_inline,
+- 	  strlen(ca_inline)))
+- 	msg (M_FATAL, "Cannot load inline CA certificates");
+-     }
+-   else
+-     {
+-       /* Load CA file for verifying peer supplied certificate */
+--      if (0 != x509parse_crtfile(ctx->ca_chain, ca_file))
+-+      if (0 != x509_crt_parse_file(ctx->ca_chain, ca_file))
+- 	msg (M_FATAL, "Cannot load CA certificate file %s", ca_file);
+-     }
+- }
+-@@ -501,14 +501,14 @@ tls_ctx_load_extra_certs (struct tls_roo
+- 
+-   if (!strcmp (extra_certs_file, INLINE_FILE_TAG) && extra_certs_inline)
+-     {
+--      if (0 != x509parse_crt(ctx->crt_chain,
+-+      if (0 != x509_crt_parse(ctx->crt_chain,
+- 	  (const unsigned char *) extra_certs_inline,
+- 	  strlen(extra_certs_inline)))
+-         msg (M_FATAL, "Cannot load inline extra-certs file");
+-     }
+-   else
+-     {
+--      if (0 != x509parse_crtfile(ctx->crt_chain, extra_certs_file))
+-+      if (0 != x509_crt_parse_file(ctx->crt_chain, extra_certs_file))
+- 	msg (M_FATAL, "Cannot load extra-certs file: %s", extra_certs_file);
+-     }
+- }
+-@@ -724,7 +724,7 @@ void key_state_ssl_init(struct key_state
+- 	   external_key_len );
+-       else
+- #endif
+--	ssl_set_own_cert( ks_ssl->ctx, ssl_ctx->crt_chain, ssl_ctx->priv_key );
+-+	ssl_set_own_cert_rsa( ks_ssl->ctx, ssl_ctx->crt_chain, ssl_ctx->priv_key );
+- 
+-       /* Initialise SSL verification */
+- #if P2MP_SERVER
+-@@ -1068,7 +1068,7 @@ print_details (struct key_state_ssl * ks
+-   cert = ssl_get_peer_cert(ks_ssl->ctx);
+-   if (cert != NULL)
+-     {
+--      openvpn_snprintf (s2, sizeof (s2), ", " counter_format " bit RSA", (counter_type) cert->rsa.len * 8);
+-+      openvpn_snprintf (s2, sizeof (s2), ", " counter_format " bit RSA", (counter_type) pk_rsa(cert->pk)->len * 8);
+-     }
+- 
+-   msg (D_HANDSHAKE, "%s%s", s1, s2);
+---- a/src/openvpn/crypto_polarssl.c
+-+++ b/src/openvpn/crypto_polarssl.c
+-@@ -487,7 +487,12 @@ cipher_ctx_get_cipher_kt (const cipher_c
+- 
+- int cipher_ctx_reset (cipher_context_t *ctx, uint8_t *iv_buf)
+- {
+--  return 0 == cipher_reset(ctx, iv_buf);
+-+  int retval = cipher_reset(ctx);
+-+
+-+  if (0 == retval)
+-+    cipher_set_iv(ctx, iv_buf, ctx->cipher_info->iv_size);
+-+
+-+  return 0 == retval;
+- }
+- 
+- int cipher_ctx_update (cipher_context_t *ctx, uint8_t *dst, int *dst_len,
+---- a/src/openvpn/ssl_verify_polarssl.h
+-+++ b/src/openvpn/ssl_verify_polarssl.h
+-@@ -34,6 +34,7 @@
+- #include "misc.h"
+- #include "manage.h"
+- #include <polarssl/x509.h>
+-+#include <polarssl/compat-1.2.h>
+- 
+- #ifndef __OPENVPN_X509_CERT_T_DECLARED
+- #define __OPENVPN_X509_CERT_T_DECLARED
+---- a/src/openvpn/ssl_verify_polarssl.c
+-+++ b/src/openvpn/ssl_verify_polarssl.c
+-@@ -40,6 +40,7 @@
+- #include "ssl_verify.h"
+- #include <polarssl/error.h>
+- #include <polarssl/bignum.h>
+-+#include <polarssl/oid.h>
+- #include <polarssl/sha1.h>
+- 
+- #define MAX_SUBJECT_LENGTH 256
+-@@ -102,7 +103,7 @@ x509_get_username (char *cn, int cn_len,
+-   /* Find common name */
+-   while( name != NULL )
+-   {
+--      if( memcmp( name->oid.p, OID_CN, OID_SIZE(OID_CN) ) == 0)
+-+      if( memcmp( name->oid.p, OID_AT_CN, OID_SIZE(OID_AT_CN) ) == 0)
+- 	break;
+- 
+-       name = name->next;
+-@@ -224,60 +225,18 @@ x509_setenv (struct env_set *es, int cer
+-   while( name != NULL )
+-     {
+-       char name_expand[64+8];
+-+      const char *shortname;
+- 
+--      if( name->oid.len == 2 && memcmp( name->oid.p, OID_X520, 2 ) == 0 )
+-+      if( 0 == oid_get_attr_short_name(&name->oid, &shortname) )
+- 	{
+--	  switch( name->oid.p[2] )
+--	    {
+--	    case X520_COMMON_NAME:
+--		openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_CN",
+--		    cert_depth); break;
+--
+--	    case X520_COUNTRY:
+--		openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_C",
+--		    cert_depth); break;
+--
+--	    case X520_LOCALITY:
+--		openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_L",
+--		    cert_depth); break;
+--
+--	    case X520_STATE:
+--		openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_ST",
+--		    cert_depth); break;
+--
+--	    case X520_ORGANIZATION:
+--		openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_O",
+--		    cert_depth); break;
+--
+--	    case X520_ORG_UNIT:
+--		openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_OU",
+--		    cert_depth); break;
+--
+--	    default:
+--		openvpn_snprintf (name_expand, sizeof(name_expand),
+--		    "X509_%d_0x%02X", cert_depth, name->oid.p[2]);
+--		break;
+--	    }
+-+	  openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_%s",
+-+	      cert_depth, shortname);
+-+	}
+-+      else
+-+	{
+-+	  openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_\?\?",
+-+	      cert_depth);
+- 	}
+--	else if( name->oid.len == 8 && memcmp( name->oid.p, OID_PKCS9, 8 ) == 0 )
+--	  {
+--	    switch( name->oid.p[8] )
+--	      {
+--		case PKCS9_EMAIL:
+--		  openvpn_snprintf (name_expand, sizeof(name_expand),
+--		      "X509_%d_emailAddress", cert_depth); break;
+--
+--		default:
+--		  openvpn_snprintf (name_expand, sizeof(name_expand),
+--		      "X509_%d_0x%02X", cert_depth, name->oid.p[8]);
+--		  break;
+--	      }
+--	  }
+--	else
+--	  {
+--	    openvpn_snprintf (name_expand, sizeof(name_expand), "X509_%d_\?\?",
+--		cert_depth);
+--	  }
+- 
+- 	for( i = 0; i < name->val.len; i++ )
+- 	{
+---- a/configure.ac
+-+++ b/configure.ac
+-@@ -819,13 +819,13 @@ if test "${with_crypto_library}" = "pola
+- #include <polarssl/version.h>
+- 			]],
+- 			[[
+--#if POLARSSL_VERSION_NUMBER < 0x01020A00 || POLARSSL_VERSION_NUMBER >= 0x01030000
+-+#if POLARSSL_VERSION_NUMBER < 0x01030000
+- #error invalid version
+- #endif
+- 			]]
+- 		)],
+- 		[AC_MSG_RESULT([ok])],
+--		[AC_MSG_ERROR([PolarSSL 1.2.x required and must be 1.2.10 or later])]
+-+		[AC_MSG_ERROR([PolarSSL 1.3.x required])]
+- 	)
+- 
+- 	polarssl_with_pkcs11="no"
+--- a/package/network/services/openvpn/patches/110-musl_compat.patch	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/patches/110-musl_compat.patch	1970-01-01 05:30:00.000000000 +0530
+@@ -1,13 +0,0 @@
+---- a/src/openvpn/syshead.h
+-+++ b/src/openvpn/syshead.h
+-@@ -214,10 +214,6 @@
+- 
+- #ifdef TARGET_LINUX
+- 
+--#if defined(HAVE_NETINET_IF_ETHER_H)
+--#include <netinet/if_ether.h>
+--#endif
+--
+- #ifdef HAVE_LINUX_IF_TUN_H
+- #include <linux/if_tun.h>
+- #endif
+--- a/package/network/services/openvpn/patches/120-polarssl-disable-record-splitting.patch	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/patches/120-polarssl-disable-record-splitting.patch	1970-01-01 05:30:00.000000000 +0530
+@@ -1,16 +0,0 @@
+-Index: openvpn-2.3.6/src/openvpn/ssl_polarssl.c
+-===================================================================
+---- openvpn-2.3.6.orig/src/openvpn/ssl_polarssl.c
+-+++ openvpn-2.3.6/src/openvpn/ssl_polarssl.c
+-@@ -707,6 +707,11 @@ void key_state_ssl_init(struct key_state
+-       if (ssl_ctx->allowed_ciphers)
+- 	ssl_set_ciphersuites (ks_ssl->ctx, ssl_ctx->allowed_ciphers);
+- 
+-+      /* Disable record splitting (breaks current ssl handling) */
+-+#if defined(POLARSSL_SSL_CBC_RECORD_SPLITTING)
+-+      ssl_set_cbc_record_splitting (ks_ssl->ctx, SSL_CBC_RECORD_SPLITTING_DISABLED);
+-+#endif /* POLARSSL_SSL_CBC_RECORD_SPLITTING */
+-+
+-       /* Initialise authentication information */
+-       if (is_server)
+- 	ssl_set_dh_param_ctx (ks_ssl->ctx, ssl_ctx->dhm_ctx );
+--- a/package/network/services/openvpn/patches/130-polarssl-disable-runtime-version-check.patch	2018-03-07 17:06:05.006991881 +0530
++++ b/package/network/services/openvpn/patches/130-polarssl-disable-runtime-version-check.patch	1970-01-01 05:30:00.000000000 +0530
+@@ -1,11 +0,0 @@
+---- a/src/openvpn/ssl_polarssl.c
+-+++ b/src/openvpn/ssl_polarssl.c
+-@@ -1119,7 +1119,7 @@ const char *
+- get_ssl_library_version(void)
+- {
+-     static char polar_version[30];
+--    unsigned int pv = version_get_number();
+-+    unsigned int pv = POLARSSL_VERSION_NUMBER;
+-     sprintf( polar_version, "PolarSSL %d.%d.%d",
+- 		(pv>>24)&0xff, (pv>>16)&0xff, (pv>>8)&0xff );
+-     return polar_version;
+--- a/package/network/services/openvpn/patches/210-build_always_use_internal_lz4.patch	1970-01-01 05:30:00.000000000 +0530
++++ b/package/network/services/openvpn/patches/210-build_always_use_internal_lz4.patch	2018-04-13 12:27:18.054338208 +0530
+@@ -0,0 +1,74 @@
++--- a/configure.ac
+++++ b/configure.ac
++@@ -1077,68 +1077,15 @@ dnl
++ AC_ARG_VAR([LZ4_CFLAGS], [C compiler flags for lz4])
++ AC_ARG_VAR([LZ4_LIBS], [linker flags for lz4])
++ if test "$enable_lz4" = "yes" && test "$enable_comp_stub" = "no"; then
++-    if test -z "${LZ4_CFLAGS}" -a -z "${LZ4_LIBS}"; then
++-	# if the user did not explicitly specify flags, try to autodetect
++-	PKG_CHECK_MODULES([LZ4],
++-			  [liblz4 >= 1.7.1 liblz4 < 100],
++-			  [have_lz4="yes"],
++-			  [LZ4_LIBS="-llz4"] # If this fails, we will do another test next.
++-					     # We also add set LZ4_LIBS otherwise the
++-					     # linker will not know about the lz4 library
++-	)
++-    fi
++
++     saved_CFLAGS="${CFLAGS}"
++     saved_LIBS="${LIBS}"
++     CFLAGS="${CFLAGS} ${LZ4_CFLAGS}"
++     LIBS="${LIBS} ${LZ4_LIBS}"
++
++-    # If pkgconfig check failed or LZ4_CFLAGS/LZ4_LIBS env vars
++-    # are used, check the version directly in the LZ4 include file
++-    if test "${have_lz4}" != "yes"; then
++-	AC_CHECK_HEADERS([lz4.h],
++-			 [have_lz4h="yes"],
++-			 [])
++-
++-	if test "${have_lz4h}" = "yes" ; then
++-	    AC_MSG_CHECKING([additionally if system LZ4 version >= 1.7.1])
++-	    AC_COMPILE_IFELSE(
++-		[AC_LANG_PROGRAM([[
++-#include <lz4.h>
++-				 ]],
++-				 [[
++-/* Version encoding: MMNNPP (Major miNor Patch) - see lz4.h for details */
++-#if LZ4_VERSION_NUMBER < 10701L
++-#error LZ4 is too old
++-#endif
++-				 ]]
++-				)],
++-		[
++-		    AC_MSG_RESULT([ok])
++-		    have_lz4="yes"
++-		],
++-		[AC_MSG_RESULT([system LZ4 library is too old])]
++-	    )
++-	fi
++-    fi
++-
++-    # Double check we have a few needed functions
++-    if test "${have_lz4}" = "yes" ; then
++-	AC_CHECK_LIB([lz4],
++-		     [LZ4_compress_default],
++-		     [],
++-		     [have_lz4="no"])
++-	AC_CHECK_LIB([lz4],
++-		     [LZ4_decompress_safe],
++-		     [],
++-		     [have_lz4="no"])
++-    fi
++-
++-    if test "${have_lz4}" != "yes" ; then
++-	AC_MSG_RESULT([		usable LZ4 library or header not found, using version in src/compat/compat-lz4.*])
++-	AC_DEFINE([NEED_COMPAT_LZ4], [1], [use copy of LZ4 source in compat/])
++-	LZ4_LIBS=""
++-    fi
+++    AC_MSG_RESULT([		usable LZ4 library or header not found, using version in src/compat/compat-lz4.*])
+++    AC_DEFINE([NEED_COMPAT_LZ4], [1], [use copy of LZ4 source in compat/])
+++    LZ4_LIBS=""
++     OPTIONAL_LZ4_CFLAGS="${LZ4_CFLAGS}"
++     OPTIONAL_LZ4_LIBS="${LZ4_LIBS}"
++     AC_DEFINE(ENABLE_LZ4, [1], [Enable LZ4 compression library])
+--- a/package/network/services/openvpn/patches/220-disable_des.patch	1970-01-01 05:30:00.000000000 +0530
++++ b/package/network/services/openvpn/patches/220-disable_des.patch	2018-04-13 12:27:18.054338208 +0530
+@@ -0,0 +1,81 @@
++--- a/src/openvpn/syshead.h
+++++ b/src/openvpn/syshead.h
++@@ -597,11 +597,11 @@ socket_defined(const socket_descriptor_t
++ /*
++  * Should we include NTLM proxy functionality
++  */
++-#if defined(ENABLE_CRYPTO)
++-#define NTLM 1
++-#else
+++//#if defined(ENABLE_CRYPTO)
+++//#define NTLM 1
+++//#else
++ #define NTLM 0
++-#endif
+++//#endif
++ 
++ /*
++  * Should we include proxy digest auth functionality
++--- a/src/openvpn/crypto_mbedtls.c
+++++ b/src/openvpn/crypto_mbedtls.c
++@@ -319,6 +319,7 @@ int
++ key_des_num_cblocks(const mbedtls_cipher_info_t *kt)
++ {
++     int ret = 0;
+++#ifdef MBEDTLS_DES_C
++     if (kt->type == MBEDTLS_CIPHER_DES_CBC)
++     {
++         ret = 1;
++@@ -331,6 +332,7 @@ key_des_num_cblocks(const mbedtls_cipher
++     {
++         ret = 3;
++     }
+++#endif
++ 
++     dmsg(D_CRYPTO_DEBUG, "CRYPTO INFO: n_DES_cblocks=%d", ret);
++     return ret;
++@@ -339,6 +341,7 @@ key_des_num_cblocks(const mbedtls_cipher
++ bool
++ key_des_check(uint8_t *key, int key_len, int ndc)
++ {
+++#ifdef MBEDTLS_DES_C
++     int i;
++     struct buffer b;
++ 
++@@ -367,11 +370,15 @@ key_des_check(uint8_t *key, int key_len,
++ 
++ err:
++     return false;
+++#else
+++    return true;
+++#endif
++ }
++ 
++ void
++ key_des_fixup(uint8_t *key, int key_len, int ndc)
++ {
+++#ifdef MBEDTLS_DES_C
++     int i;
++     struct buffer b;
++ 
++@@ -386,6 +393,7 @@ key_des_fixup(uint8_t *key, int key_len,
++         }
++         mbedtls_des_key_set_parity(key);
++     }
+++#endif
++ }
++ 
++ /*
++@@ -710,10 +718,12 @@ cipher_des_encrypt_ecb(const unsigned ch
++                        unsigned char *src,
++                        unsigned char *dst)
++ {
+++#ifdef MBEDTLS_DES_C
++     mbedtls_des_context ctx;
++ 
++     ASSERT(mbed_ok(mbedtls_des_setkey_enc(&ctx, key)));
++     ASSERT(mbed_ok(mbedtls_des_crypt_ecb(&ctx, src, dst)));
+++#endif
++ }
++ 
++ 

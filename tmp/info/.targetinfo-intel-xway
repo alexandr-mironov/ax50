@@ -1,0 +1,562 @@
+Source-Makefile: target/linux/intel-xway/Makefile
+Target: intel-xway
+Target-Board: intel-xway
+Target-Name: Intel GPON/XWAY/SVIP
+Target-Path: /home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40
+Target-Arch: 
+Target-Arch-Packages: intel-xway
+Target-Features: dt gpio jffs2 pci squashfs
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely
+CPU-Type: 
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: 
+Default-Subtarget: danube
+Target-Description:
+	Build firmware images for Intel XWAY/GPON/SVIP SoCs
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools dnsmasq iptables ip6tables ppp ppp-mod-pppoe kmod-nf-nathelper firewall odhcpd odhcp6c 
+Target: intel-xway/falcon
+Target-Board: intel-xway
+Target-Name: Falcon
+Target-Path: ugw/target/linux/intel-xway
+Target-Arch: mips
+Target-Arch-Packages: intel-xway
+Target-Features: dt gpio jffs2 pci squashfs
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2
+CPU-Type: mips32
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: mips
+Target-Description:
+	Lantiq Falcon
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools kmod-ifxos gpon-base-files kmod-leds-gpio kmod-ledtrig-heartbeat kmod-input-core kmod-input-gpio-keys kmod-button-hotplug kmod-gpon-optic-drv gpon-optic-drv kmod-gpon-onu-drv gpon-onu-drv gpon-pe-firmware gpon-omci-api gpon-omci-onu gpon-luci  
+Target-Profile: Generic
+Target-Profile-Name: Generic - all boards
+Target-Profile-Packages: kmod-dm9000-nfs kmod-i2c-core kmod-i2c-lantiq kmod-eeprom-at24 kmod-spi-bitbang kmod-spi-gpio kmod-eeprom-at25 gpon-dti-agent 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY98000
+Target-Profile-Name: EASY98000
+Target-Profile-Packages: kmod-dm9000-nfs kmod-i2c-core kmod-i2c-lantiq kmod-eeprom-at24 kmod-spi-bitbang kmod-spi-gpio kmod-eeprom-at25 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq EASY98000 evalkit
+@@
+
+Target-Profile: EASY98020
+Target-Profile-Name: EASY98020
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq EASY98020 evalkit
+@@
+
+Target-Profile: EASY98020V18
+Target-Profile-Name: EASY98020V18
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq EASY98020 V1.8 evalkit
+@@
+
+Target-Profile: MDU
+Target-Profile-Name: MDU
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq MDU platform
+@@
+
+Target-Profile: SFP
+Target-Profile-Name: SFP
+Target-Profile-Packages: gpon-sfp-i2c-drv gpon-sfp-i2c-drv-linux kmod-gpon-sfp-i2c-drv 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq SFP platform
+@@
+
+Target-Profile: EASY98000NOR
+Target-Profile-Name: Lantiq Falcon - EASY98000NOR
+Target-Profile-Packages: kmod-dm9000 kmod-i2c-core kmod-i2c-algo-bit kmod-i2c-gpio kmod-eeprom-at24 kmod-spi-bitbang kmod-spi-gpio kmod-eeprom-at25 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY98000NAND
+Target-Profile-Name: Lantiq Falcon - EASY98000NAND
+Target-Profile-Packages: kmod-dm9000 kmod-i2c-core kmod-i2c-algo-bit kmod-i2c-gpio kmod-eeprom-at24 kmod-spi-bitbang kmod-spi-gpio kmod-eeprom-at25 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY98000SFLASH
+Target-Profile-Name: Lantiq Falcon - EASY98000SFLASH
+Target-Profile-Packages: kmod-dm9000 kmod-i2c-core kmod-i2c-algo-bit kmod-i2c-gpio kmod-eeprom-at24 kmod-spi-bitbang kmod-spi-gpio kmod-eeprom-at25 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target: intel-xway/xrx200
+Target-Board: intel-xway
+Target-Name: Lantiq xRX200
+Target-Path: ugw/target/linux/intel-xway
+Target-Arch: mips
+Target-Arch-Packages: intel-xway
+Target-Features: atm dt gpio jffs2 pci pcie squashfs usb
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc
+CPU-Type: mips32
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: mips
+Target-Description:
+	Lantiq xRX200
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools LTQBASE kmod-pppoa ppp-mod-pppoa linux-atm atm-tools br2684ctl kmod-ltq-dsl-vr9 ltq-dsl-app swconfig kmod-lantiq_ppa_xrx200 kmod-vpe kmod-lantiq-vpe ppp-mod-pppol2tp dnsmasq iptables ip6tables ppp ppp-mod-pppoe kmod-nf-nathelper firewall odhcpd odhcp6c 
+Target-Profile: FRITZ3370
+Target-Profile-Name: FRITZ3370 - Ftizbox
+Target-Profile-Packages: kmod-leds-gpio button-hotplug kmod-usb-ifxhcd 
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY80920NOR
+Target-Profile-Name: EASY80920 VRX288 Family Board, NOR Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY80920SPI
+Target-Profile-Name: EASY80920 VRX288 Family Board, SPI Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY80920NAND
+Target-Profile-Name: EASY80920 VRX288 Family Board, NAND Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY4210NAND
+Target-Profile-Name: EASY4210 GRX288 Family Board, NAND Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY220
+Target-Profile-Name: EASY220 Reference Board, SPI Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY220W2
+Target-Profile-Name: EASY220 Reference Board, NAND Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: easy220_v2
+Target-Profile-Name: EASY220 Reference Board V2, NAND Flash
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target: intel-xway/xrx300
+Target-Board: intel-xway
+Target-Name: Lantiq xRX300
+Target-Path: ugw/target/linux/intel-xway
+Target-Arch: mips
+Target-Arch-Packages: intel-xway
+Target-Features: atm dt gpio jffs2 pci pcie squashfs usb
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc
+CPU-Type: mips32
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: mips
+Target-Description:
+	Lantiq xRX300
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools LTQBASE kmod-pppoa ppp-mod-pppoa linux-atm atm-tools br2684ctl kmod-ltq-dsl-vr9 ltq-dsl-app swconfig kmod-lantiq_ppa_xrx300 kmod-vpe kmod-lantiq-vpe dnsmasq iptables ip6tables ppp ppp-mod-pppoe kmod-nf-nathelper firewall odhcpd odhcp6c 
+Target-Profile: EASY388
+Target-Profile-Name: EASY388 Family Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY388_ina219
+Target-Profile-Name: EASY388 Family Board with Power Monitoring INA219
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY388_VRX318
+Target-Profile-Name: EASY388 Family Board with VRX318 Addon
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY362
+Target-Profile-Name: EASY362 Family Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY382
+Target-Profile-Name: EASY382 Family Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY388_BOND
+Target-Profile-Name: EASY388 BOND Reference Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target: intel-xway/xrx330
+Target-Board: intel-xway
+Target-Name: Lantiq xRX330
+Target-Path: ugw/target/linux/intel-xway
+Target-Arch: mips
+Target-Arch-Packages: intel-xway
+Target-Features: atm dt gpio jffs2 pci pcie squashfs usb
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc
+CPU-Type: mips32
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: mips
+Target-Description:
+	Lantiq xRX330
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools LTQBASE kmod-pppoa ppp-mod-pppoa linux-atm atm-tools br2684ctl kmod-ltq-dsl-vr9 ltq-dsl-app swconfig kmod-lantiq_ppa_xrx330 kmod-vpe kmod-lantiq-vpe ppp-mod-pppol2tp dnsmasq iptables ip6tables ppp ppp-mod-pppoe kmod-nf-nathelper firewall odhcpd odhcp6c 
+Target-Profile: EASY389_BOND
+Target-Profile-Name: EASY389 BOND Reference Board (600MHz)
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY330
+Target-Profile-Name: EASY330 Singleline DSL with Power Monitoring INA219
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY300_BOND
+Target-Profile-Name: EASY300 VDSL BOND Board (600MHz)
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY330_GFAST
+Target-Profile-Name: EASY330 G.Fast Board (720MHz)
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY330_BOND
+Target-Profile-Name: EASY330 VDSL BOND Board (720MHz)
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target-Profile: EASY300_AC1200
+Target-Profile-Name: EASY300 AC1200 Board (600MHz)
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+
+@@
+
+Target: intel-xway/xrx500
+Target-Board: intel-xway
+Target-Name: Lantiq xRX500
+Target-Path: ugw/target/linux/intel-xway
+Target-Arch: mips
+Target-Arch-Packages: intel-xway
+Target-Features: atm display dt gpio jffs2 pci rtc squashfs usb
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely -mtune=1004kc
+CPU-Type: mips32
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: mips
+Target-Description:
+	Lantiq xRX500
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools LTQBASE kmod-pppoa ppp-mod-pppoa linux-atm atm-tools br2684ctl swconfig kmod-lantiq_ppa_xrx500 ppp-mod-pppol2tp dnsmasq iptables ip6tables ppp ppp-mod-pppoe kmod-nf-nathelper firewall odhcpd odhcp6c 
+Target-Profile: None
+Target-Profile-Name: Generic Profile
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Basic profile
+@@
+
+Target-Profile: HAPS
+Target-Profile-Name: LANTIQ GRX500 HAPS 
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq GRX500 HAPS Platform
+@@
+
+Target-Profile: grx500_evm
+Target-Profile-Name: LANTIQ GRX500 EVM Boards
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq GRX500 EVM Board
+@@
+
+Target-Profile: easy350_anywan
+Target-Profile-Name: EASY350 ANYWAN 600MHz Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY350 ANYWAN Board
+@@
+
+Target-Profile: easy350_anywan_800m
+Target-Profile-Name: EASY350 ANYWAN 800Mhz Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY350 ANYWAN 800Mhz DT
+@@
+
+Target-Profile: easy350_anywan_ire
+Target-Profile-Name: IRX200 ANYWAN 800Mhz Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        IRX200 ANYWAN 800Mhz DT
+@@
+
+Target-Profile: easy350_anywan_router_800m
+Target-Profile-Name: EASY350 ANYWAN 800Mhz Router Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY350 ANYWAN 800Mhz Router DT
+@@
+
+Target-Profile: easy350_m
+Target-Profile-Name: EASY350-M Board with GPON and G.Fast
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY350-M Board with GPON and G.Fast
+@@
+
+Target-Profile: easy550_anywan_gw
+Target-Profile-Name: EASY550 ANYWAN 1GHz Gateway Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY550 ANYWAN Gateway Board
+@@
+
+Target-Profile: easy350_anywan_mpe
+Target-Profile-Name: EASY350 ANYWAN Board for MPE (600MHz/800MHz)
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY350 ANYWAN Board DT for MPE
+@@
+
+Target-Profile: easy550_anywan_router
+Target-Profile-Name: EASY550 ANYWAN Router Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY550 ANYWAN Router DT
+@@
+
+Target-Profile: easy550v2_anywan_gw
+Target-Profile-Name: EASY550 2000V2 ANYWAN Gateway Board
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+        EASY550 2000V2 ANYWAN Gateway Board
+@@
+
+Target: intel-xway/xrx500_4kec
+Target-Board: intel-xway
+Target-Name: Lantiq xRX500 BOOTCORE
+Target-Path: ugw/target/linux/intel-xway
+Target-Arch: mips
+Target-Arch-Packages: intel-xway
+Target-Features: dt gpio jffs2 pci squashfs
+Target-Depends: 
+Target-Optimization: -Os -pipe -mips32r2 -mno-branch-likely
+CPU-Type: mips32
+Linux-Version: 3.10.104
+Linux-Release: 1
+Linux-Kernel-Arch: mips
+Target-Description:
+	Lantiq xRX500 Boot Core
+@@
+Default-Packages: base-files libc libgcc busybox dropbear mtd uci opkg netifd fstools LTQBASE dnsmasq iptables ip6tables ppp ppp-mod-pppoe kmod-nf-nathelper firewall odhcpd odhcp6c 
+Target-Profile: HAPS_BOOTCORE
+Target-Profile-Name: LANTIQ GRX500 HAPS BOOTCORE
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq GRX500 HAPS BOOTCORE Platform
+@@
+
+Target-Profile: grx500_evm_bootcore
+Target-Profile-Name: LANTIQ GRX500 EVM BOOTCORE
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	Lantiq GRX500 EVM BOOTCORE Reference Platform
+@@
+
+Target-Profile: easy350550_bootcore
+Target-Profile-Name: LANTIQ EASY350/550 ANYWAN BOOTCORE
+Target-Profile-Packages:  
+Target-Profile-Config: 
+
+@@
+Target-Profile-Description:
+	EASY350/550 ANYWAN BOOTCORE
+@@
+
+

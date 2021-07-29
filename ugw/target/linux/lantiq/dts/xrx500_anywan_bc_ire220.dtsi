@@ -1,0 +1,331 @@
+
+/******************************************************************************
+** Board configuration: xRX500 ANYWAN Board
+******************************************************************************/
+/ {
+
+/******************************************************************************
+** Board configuration: Enable buttons on the board.  
+******************************************************************************/
+	ltq_swreset {
+	      compatible = "lantiq,ltq_swreset";
+	      swreset_pin = <&gpio0 1 0>;
+	      swreset_bit = <1>;
+	      status = "ok";
+	};
+    gpio-keys-polled {
+        compatible = "gpio-keys-polled";
+        #address-cells = <1>;
+        #size-cells = <0>;
+        poll-interval = <100>;
+
+        reset {
+            label = "reset";
+            gpios = <&gpio0 1 1>;
+            linux,code = <0x198>;
+        };
+        wps {
+            label = "wps";
+            gpios = <&gpio1 4 1>;
+            linux,code = <0x211>;
+        };
+    };
+	gpio-leds {
+		compatible = "gpio-leds";
+		bh_yellow {
+			label = "bh_yellow";
+			gpios = <&gpio0 2 0>;
+			status = "ok";
+		};
+		bh_green {
+			label = "bh_green";
+			gpios = <&gpio0 3 0>;
+			status = "ok";
+		};
+		5g_yellow {
+			label = "2g_yellow";
+			gpios = <&gpio0 4 0>;
+			status = "ok";
+		};
+		5g_green {
+			label = "2g_green";
+			gpios = <&gpio0 5 0>;
+			status = "ok";
+		};
+		2g_yellow {
+			label = "5g_yellow";
+			gpios = <&gpio0 6 0>;
+			status = "ok";
+		};
+		2g_green {
+			label = "5g_green";
+			gpios = <&gpio0 14 0>;
+			status = "ok";
+		};
+	};
+/*****************************************************************************/
+};
+
+/******************************************************************************
+** Board configuration: Enable Nand flash pinctrl. 
+******************************************************************************/
+&pinctrl_nand {
+    status = "ok";
+}; 
+
+/******************************************************************************
+** Board configuration: Enable spi1 SS.  
+******************************************************************************/
+
+&pinctrl_spi1 {  
+	status = "ok";
+};
+
+/******************************************************************************
+** Board configuration: Enable spi0 configuration.
+******************************************************************************/
+
+&pinctrl_spi0 {
+		status = "disabled";
+};
+
+/* enable this for second uart */
+&asc1 {
+	status = "okay";
+};
+
+/******************************************************************************
+** Board configuration: Enable PCIe board configuration.
+** PCIE sub-system feature configuration, the pcie0/1/2 are defined in Soc level  
+******************************************************************************/
+&pcie0 {
+	status = "ok";
+	lantiq,rst-high-active = <0>; /* 0 - low activ, 1 -- high active */
+	lantiq,rst-interval = <200>; /* in mili-seconds, up to 500 ms*/
+	lantiq,inbound-swap = <1>; /* 0 -- no swap, 1 -- swap */
+	lantiq,outbound-swap = <0>; /* 0 -- no swap, 1 -- swap */
+	lantiq,phy-mode = <5>; /* 0 -36Mhz, 1 - 36MHzSSC, 2 - 25Mhz, 3 - 25MHzSSC, 4 - 100MHz, 5 - 100MHz SSC */
+	reset-gpio = <&gpio1 11 0>; // default value , it can be updated on board. 
+};
+
+&pcie1 {
+	status = "ok";
+	lantiq,rst-high-active = <0>; /* 0 - low activ, 1 -- high active */
+	lantiq,rst-interval = <200>; /* in mili-seconds, up to 500 ms*/
+	lantiq,inbound-swap = <1>; /* 0 -- no swap, 1 -- swap */
+	lantiq,outbound-swap = <0>; /* 0 -- no swap, 1 -- swap */
+	lantiq,phy-mode = <5>; /* 0 -36Mhz, 1 - 36MHzSSC, 2 - 25Mhz, 3 - 25MHzSSC, 4 - 100MHz, 5 - 100MHz SSC */
+	reset-gpio = <&gpio1 29 0>;// default value , it can be updated on board. 
+};
+
+/******************************************************************************
+** Board configuration: Enable USB board configuration.  
+******************************************************************************/
+&usb0{
+	status = "ok";
+	vbus-gpio = <&gpio0 8 0>;
+};
+
+
+/*****************************************************************************/
+
+/******************************************************************************
+** Board configuration: Enable Shift register LED board configuration.  
+******************************************************************************/
+
+
+
+/******************************************************************************
+** Board configuration: Enable Switch MDC/MDIO board setting.   
+******************************************************************************/
+&pinctrl_mdio {
+			status="disable";
+};
+/******************************************************************************
+** Board configuration: Enable CoC power managment board feature  
+******************************************************************************/
+&pinctrl_i2c {
+			status="ok";
+};
+
+&i2c {
+			status = "ok";
+
+	ina219: ina219@40 {
+		compatible = "ti,ina219";
+		reg = <0x40>;
+		shunt-resistor = <10000>;
+		rail-name = "PWR_12V";
+		calibration-factor = <40960000>;
+		};
+
+	dcdc:tps65273@62 {
+		compatible = "ti,tps65273";
+		reg = <0x62>;
+
+		regulators {
+			dcdc2 {
+				regulator-name = "1V15VDD";
+				regulator-always-on;
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <1200000>;
+				vout-slew-rate = <0>; 
+				vout-psm-mode  = <0>;
+				vout-irdrop-offset  = <10000>;
+			};
+		};
+	};
+	tmp102@48 {
+		compatible = "ti,tmp102";
+		reg = <0x48>;
+	};
+};
+/******************************************************************************
+** Board configuration: Enable SSC1 to support standard SPI devices (SPI Flash)  
+******************************************************************************/
+&ssc1 {
+		status="ok";
+		ltq-spinand@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				reg = <0 1>;
+				compatible = "lantiq,generic-spinand";
+				linux,mtd-name = "17c00000.nand-parts";
+				spi-max-frequency = <1000000>;
+
+				partition@0 {
+					label = "uboot";
+					reg = <0x000000 0x100000>;
+				};
+
+				partition@100000 {
+						label = "ubootconfigA";
+						reg = <0x100000 0x40000>;
+				};
+				partition@140000 {
+						label = "ubootconfigB";
+						reg = <0x140000 0x40000>;
+				};
+				partition@180000 {
+						label = "gphyfirmware";
+						reg = <0x180000 0x40000>;
+				};
+				partition@1c0000 {
+						label = "calibration";
+						reg = <0x1c0000 0x100000>;
+				};	
+				
+				partition@2c0000 {
+						label = "Bootcore";
+						reg = <0x2c0000 0x1000000>;
+				};
+				partition@12c0000 {
+						label = "system_sw";
+						reg = <0x12c0000 0x6C00000>;
+				};
+				partition@7Ec0000 {
+					label = "res";
+						reg = <0x7EC0000 0x140000>;
+				};
+			};
+};
+
+/******************************************************************************
+** Board configuration: Configure LAN/WAN interfaces  
+******************************************************************************/
+&eth {
+	status = "ok";
+	lan0: interface@0 {
+		compatible = "lantiq,xrx500-pdi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <1>;
+		ethernet@0 {
+			compatible = "lantiq,xrx500-pdi-port";
+			reg = <1>;
+			phy-mode = "rgmii";
+		};
+	};
+
+	lan1: interface@1 {
+		compatible = "lantiq,xrx500-pdi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <1>;
+
+		ethernet@1 {
+			compatible = "lantiq,xrx500-pdi-port";
+			reg = <2>;
+			interrupt-parent = <&gic>;
+			interrupts = <120>;
+			phy-mode = "rgmii";
+			phy-handle = <&phy2>;
+		};
+	};
+
+	lan2: interface@2 {
+		compatible = "lantiq,xrx500-pdi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <2>;
+
+		ethernet@2 {
+			compatible = "lantiq,xrx500-pdi-port";
+			reg = <3>;
+			interrupt-parent = <&gic>;
+			interrupts = <121>;
+			phy-mode = "rgmii";
+			phy-handle = <&phy3>;
+		};
+	};
+
+	lan3: interface@3 {
+		compatible = "lantiq,xrx500-pdi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <3>;
+
+		ethernet@3 {
+			compatible = "lantiq,xrx500-pdi-port";
+			reg = <4>;
+			interrupt-parent = <&gic>;
+			interrupts = <134>;
+			phy-mode = "rgmii";
+			phy-handle = <&phy4>;
+		};
+	};
+
+	lan4: interface@4 {
+		compatible = "lantiq,xrx500-pdi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <4>;
+
+		ethernet@4 {
+			compatible = "lantiq,xrx500-pdi-port";
+			reg = <5>;
+			interrupt-parent = <&gic>;
+			interrupts = <135>;
+			phy-mode = "rgmii";
+			phy-handle = <&phy5>;
+		};
+	};
+
+	wan: interface@5 {
+		compatible = "lantiq,xrx500-pdi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <5>;
+		lantiq,wan;
+
+		ethernet@5 {
+			compatible = "lantiq,xrx500-pdi-port";
+			reg = <1>;
+			interrupt-parent = <&gic>;
+			interrupts = <119>;
+			phy-mode = "rgmii";
+			phy-handle = <&phy1>;
+		};
+	};
+};
+

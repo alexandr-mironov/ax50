@@ -1,0 +1,142 @@
+From 494ae09c187d903414b7b227a70be9ae5623e46d Mon Sep 17 00:00:00 2001
+From: iemergi <idan.emergi@intel.com>
+Date: Mon, 5 Dec 2016 16:58:53 +0200
+Subject: [PATCH 535/639] PKTPROSSW-156: tDox is not working in RDK-OS PP
+
+If enabling tDox there is no TCP traffic at all
+Fix AVALANCHE_PP_PSI_t struct layout and references in PP
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 107 +++++++++++++++------
+ 1 file changed, 80 insertions(+), 27 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index ecdbd13..31b5274 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -914,36 +914,82 @@ typedef enum
+ AVALANCHE_PP_EGRESS_FIELD_ENABLE_e;
+ 
+ #endif
+-
+-#if PUMA7_OR_NEWER_SOC_TYPE
+-typedef struct
++/**
++ * Get bit field from 32 bits value
++ *
++ * @param value Value to extract the bit field from
++ * @param off bit field's first bit
++ * @param len bit field's length in bits
++ * @return __u32
++ */
++static inline __u32 __bit_field32_get(__u32 val, __u32 off, __u32 len)
+ {
+-#if defined(__BIG_ENDIAN_BITFIELD)
+-    Uint8                               sf_index;
+-    Uint8                               res1;
+-    Uint16                              do_not_encrypt  :   1,
+-                                        fw_internal     :   2,
+-                                        tdox_candidate  :   1,
+-                                        high_priority   :   1,
+-                                        tdox_ignore_ts  :   1,
+-                                        tdox_enabled    :   1,
+-                                        tdox_id         :   9;
+-
+-#elif defined (__LITTLE_ENDIAN_BITFIELD)
+-
+-   Uint16                               tdox_id         :   9,
+-                                        tdox_enabled    :   1,
+-                                        tdox_ignore_ts  :   1,
+-                                        high_priority   :   1,
+-                                        tdox_candidate  :   1,
+-                                        fw_internal     :   2,
+-                                        do_not_encrypt  :   1;
++    __u32 mask;
++    mask = ((0xFFFFFFFF >> (32 - len)) << off);
++    return ((val & mask) >> off);
++}
+ 
+-   Uint8                                res1;
+-   Uint8                                sf_index;
+-#endif
++/**
++ * Set a bit field value into a 32 bits value
++ *
++ * @param value Value to set the bit field
++ * @param bf_val bit field value
++ * @param off bit field's first bit
++ * @param len bit field's length in bits
++ * @return __u32
++ */
++static inline __u32 __bit_field32_set(__u32 var, __u32 val, __u32 off, __u32 len)
++{
++	__u32 mask;
++	mask = ((0xFFFFFFFF >> (32 - len)) << off);
++	var &= ~(mask);
++	return (var | (mask & (val << off)));
+ }
+-AVALANCHE_PP_PSI_t;
++
++#if PUMA7_OR_NEWER_SOC_TYPE
++/**
++ * struct pp_psi_t Packet processor protocol specific
++ * information saved in the session record.
++ * @psi 32bit big endian bit field:
++ * [31-24] - service flow index (sf_index)
++ * [23-16] - reserved (res1)
++ * [15]    - don't encrypt flag
++ * [14-13] - fw internal bits
++ * [12]    - tdox candidate flag
++ * [11]    - high priority flag
++ * [10]    - tdox ignore timestamp flag
++ * [9]     - tdox enabled flag
++ * [0-8]   - tdox_id
++ * @note ALWAYS use the pp_psi_get_* or
++ *  	 pp_psi_set_* macros
++ */
++struct pp_psi_t {
++	__be32	psi;
++};
++/* for backward compatible */
++typedef struct pp_psi_t AVALANCHE_PP_PSI_t;
++
++/* AVALANCHE_PP_PSI_t misc bit fields gets */
++#define pp_psi_get_tdox_id(pp_psi)				(__bit_field32_get(be32_to_cpu(pp_psi.psi),  0, 9)) /* tdox_id bits 0-8         */
++#define pp_psi_get_tdox_enabled(pp_psi)			(__bit_field32_get(be32_to_cpu(pp_psi.psi),  9, 1)) /* tdox enabled bit 9       */
++#define pp_psi_get_tdox_ignore_ts(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 10, 1)) /* tdox_ignore_ts bit 10    */
++#define pp_psi_get_high_priority(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 11, 1)) /* high_priority bit 11     */
++#define pp_psi_get_tdox_candidate(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 12, 1)) /* tdox_candidate bit 12    */
++#define pp_psi_get_fw_internal(pp_psi)			(__bit_field32_get(be32_to_cpu(pp_psi.psi), 13, 2)) /* fw_internal bits 13-14   */
++#define pp_psi_get_do_not_encrypt(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 15, 1)) /* do_not_encrypt bit 15    */
++#define pp_psi_get_res1(pp_psi)					(__bit_field32_get(be32_to_cpu(pp_psi.psi), 16, 8)) /* reserved bits 16-23      */
++#define pp_psi_get_sf_index(pp_psi)				(__bit_field32_get(be32_to_cpu(pp_psi.psi), 24, 8)) /* sf index bits 24-31      */
++
++/* AVALANCHE_PP_PSI_t misc bit fields sets */
++#define pp_psi_set_tdox_id(pp_psi, val)			((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val,  0, 9))) /* tdox_id bits 0-8         */
++#define pp_psi_set_tdox_enabled(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val,  9, 1))) /* tdox enabled bit 9       */
++#define pp_psi_set_tdox_ignore_ts(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 10, 1))) /* tdox_ignore_ts bit 10    */
++#define pp_psi_set_high_priority(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 11, 1))) /* high_priority bit 11     */
++#define pp_psi_set_tdox_candidate(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 12, 1))) /* tdox_candidate bit 12    */
++#define pp_psi_set_fw_internal(pp_psi, val)		((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 13, 2))) /* fw_internal bits 13-14   */
++#define pp_psi_set_do_not_encrypt(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 15, 1))) /* do_not_encrypt bit 15    */
++#define pp_psi_set_res1(pp_psi, val)			((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 16, 8))) /* reserved bits 16-23      */
++#define pp_psi_set_sf_index(pp_psi, val)		((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 24, 8))) /* sf index bits 24-31      */
+ #else
+ typedef struct
+ {
+@@ -1037,6 +1083,13 @@ typedef struct
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+ 
++	/**
++	 * All structures in this union MUST be saved in big endian
++	 * layout, meaning, to read or write from or to one of the
++	 * struct members you MUST use: be16_to_cpu, be32_to_cpu,
++	 * cpu_to_be16 and cpu_to_be32.
++	 * Also, DO NO USE bit fields!!!
++	 */
+     union
+     {
+ #ifdef CONFIG_WIFI_PROXY
+-- 
+2.10.1
+

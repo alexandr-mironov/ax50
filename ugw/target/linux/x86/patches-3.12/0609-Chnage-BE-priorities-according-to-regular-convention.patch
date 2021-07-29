@@ -1,0 +1,101 @@
+From 7338e88be19d755ff8e3efde8da1e2fb89bda1d1 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Tue, 7 Mar 2017 09:59:53 +0200
+Subject: [PATCH 609/639] Chnage BE priorities according to regular convention
+
+---
+ include/linux/avalanche/puma7/puma7_cppi.h         |  2 +-
+ .../linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h    | 64 +++++++++++-----------
+ 2 files changed, 33 insertions(+), 33 deletions(-)
+
+diff --git a/include/linux/avalanche/puma7/puma7_cppi.h b/include/linux/avalanche/puma7/puma7_cppi.h
+index 3938fe4..184a80d 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi.h
++++ b/include/linux/avalanche/puma7/puma7_cppi.h
+@@ -120,7 +120,7 @@ extern Uint8 *PalCppiDsg2qmgrNames[PAL_CPPI_DSG_QMGR_TOTAL_Q_COUNT];
+ #define PAL_CPPI41_SR_DOCSIS_TX_QPDSP_QOS_Q_LAST            PAL_CPPI_PP_QMGR_G1_QOS_US_Q_LAST
+ 
+ #define IS_QOS_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G1, PAL_CPPI_PP_QMGR_G1_QOS_Q_BASE))           && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G1, PAL_CPPI_PP_QMGR_G1_QOS_Q_LAST)) )
+-#define IS_AQM_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_LOW_Q_NUM)) && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_HI_Q_NUM)) )
++#define IS_AQM_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_HI_Q_NUM))  && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_LOW_Q_NUM)) )
+ 
+ #define PAL_CPPI41_SR_DOCSIS_MGMT_RX_FD_HOST_DESC_SIZE      PAL_CPPI_PP_QMGR_GLOBAL_DEFAULT_DESC_SIZE
+ #define PAL_CPPI41_SR_DOCSIS_MGMT_TX_FD_HOST_DESC_SIZE      PAL_CPPI_PP_QMGR_GLOBAL_DEFAULT_DESC_SIZE
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+index a41c41d..63a2f29 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+@@ -266,38 +266,38 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_FCC0_PDSP_Q28)
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_FCC0_PDSP_Q29)                                        /* PAL_CPPI_PP_QMGR_G2_Q203 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_FCC0_PDSP_Q30)                                        /* PAL_CPPI_PP_QMGR_G2_Q204 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_FCC0_PDSP_Q31)                                        /* PAL_CPPI_PP_QMGR_G2_Q205 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q206 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q207 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE1_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q208 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE1_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q209 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE2_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q210 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE2_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q211 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE3_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q212 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE3_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q213 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE4_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q214 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE4_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q215 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE5_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q216 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE5_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q217 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE6_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q218 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE6_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q219 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE7_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q220 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE7_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q221 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE8_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q222 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE8_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q223 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE9_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q224 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE9_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q225 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE10_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q226 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE10_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q227 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE11_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q228 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE11_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q229 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE12_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q230 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE12_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q231 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE13_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q232 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE13_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q233 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE14_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q234 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE14_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q235 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q236 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q237 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q206 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q207 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE1_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q208 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE1_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q209 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE2_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q210 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE2_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q211 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE3_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q212 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE3_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q213 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE4_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q214 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE4_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q215 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE5_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q216 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE5_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q217 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE6_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q218 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE6_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q219 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE7_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q220 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE7_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q221 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE8_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q222 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE8_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q223 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE9_HI_Q_NUM)                                  /* PAL_CPPI_PP_QMGR_G2_Q224 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE9_LOW_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q225 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE10_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q226 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE10_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q227 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE11_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q228 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE11_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q229 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE12_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q230 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE12_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q231 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE13_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q232 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE13_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q233 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE14_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q234 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE14_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q235 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_HI_Q_NUM)                                 /* PAL_CPPI_PP_QMGR_G2_Q236 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_LOW_Q_NUM)                                /* PAL_CPPI_PP_QMGR_G2_Q237 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_PDSP_Q32)                                         /* PAL_CPPI_PP_QMGR_G2_Q238 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_PDSP_Q33)                                         /* PAL_CPPI_PP_QMGR_G2_Q239 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_AQM_PDSP_Q34)                                         /* PAL_CPPI_PP_QMGR_G2_Q240 */\
+-- 
+2.10.1
+

@@ -1,0 +1,95 @@
+From 57a73c0ce39e7130965b4f5e664eba5120ff2ed2 Mon Sep 17 00:00:00 2001
+From: "Brett T. Warden" <brett.t.warden@intel.com>
+Date: Fri, 1 Jul 2016 17:13:27 -0700
+Subject: [PATCH 441/639] Revert "x86: fpu: Enable atomic allocation in
+ fpu_alloc"
+
+This reverts commit c936d0ea93550965cd29d04471cb1e144c3a1ef1.
+
+Although this bug fix is correct, subsequent GFP_ATOMIC allocations are
+failing due to insufficient RAM.
+
+[   51.181388] sh[4133]: mkdir: can't create directory '/rdklogs/logs/': File exists
+[   59.162710] a-mux: port 1(adp0) entered forwarding state
+[   59.802690] a-mux: port 2(a-mux@erouter0) entered forwarding state
+[   61.644741] harvester[4246]: RDK_LOG_DEBUG, Registering Harvester component 'com.cisco.spvtg.ccsp.harvester' with CR ..
+[   61.710249] sh[4264]: killall: CcspWifiSsp: no process killed
+[   65.673629] CcspMtaAgentSsp[4249]: ### LineTable_GetEntryCount 1103  ulCount=1
+[   65.948100] CcspPandMSsp[4238]: CosaDmlRaGetCfg: Utopia_Init error
+[  149.814274] CcspPandMSsp[4238]: CosaDmlUIIPRangeSetValues: Utopia_Init error
+[  150.961096] CcspPandMSsp: page allocation failure: order:0, mode:0x200020
+[  150.968692] CPU: 1 PID: 4240 Comm: CcspPandMSsp Tainted: G           O 3.12.17-yocto-standard-0.0.16262.765123.20 #1
+[  150.980445] Hardware name: Intel Corporation PUMA 7 A2 PLATFORM/TBD, BIOS CGM2.86C.331667.R.1601151336 01/15/2016
+[  150.991915]  00000000 00000000 dfd41abc c1af7b27 00000002 dfd41ae4 c134042b c1d93d40
+[  151.000618]  cfabb4d8 00000000 00200020 00000000 00000001 00200020 00000000 dfd41b94
+[  151.009311]  c1343a30 00200020 00000000 00000000 c1f4b500 00000000 c20a6da0 c20a6e40
+[  151.018018] Call Trace:
+[  151.020757]  [<c1af7b27>] dump_stack+0x4b/0x79
+[  151.025723]  [<c134042b>] warn_alloc_failed+0xbb/0xf0
+[  151.031368]  [<c1343a30>] __alloc_pages_nodemask+0x720/0x900
+[  151.037695]  [<c12abd40>] ? raw_notifier_call_chain+0x20/0x30
+[  151.044119]  [<c1af3ec3>] cache_grow.constprop.55+0xb6/0x2a7
+[  151.050446]  [<c137a877>] kmem_cache_alloc_trace+0x117/0x430
+[  151.056772]  [<c15e64d8>] ? timerqueue_add+0x58/0xb0
+[  151.062321]  [<c1939ded>] ct_tuple_info_worker+0x2d/0x90
+[  151.068257]  [<c12abca7>] notifier_call_chain+0x47/0x90
+[  151.074095]  [<c1292e3f>] ? __internal_add_timer+0xaf/0xc0
+[  151.080225]  [<c12abdd7>] atomic_notifier_call_chain+0x37/0x50
+[  151.086743]  [<c1939b86>] nf_conn_info_event+0x16/0x20
+[  151.092485]  [<c198dd04>] nf_ct_delete+0x164/0x2b0
+[  151.097837]  [<c1293094>] ? lock_timer_base.isra.38+0x24/0x50
+[  151.104258]  [<c1b000f4>] ? _raw_spin_unlock_irqrestore+0x24/0x50
+[  151.111067]  [<c198de64>] death_by_timeout+0x14/0x20
+[  151.116614]  [<c198d645>] __nf_ct_kill_acct+0x95/0xb0
+[  151.122259]  [<c1993cbb>] tcp_packet+0x23b/0x12e0
+[  151.127515]  [<c130308f>] ? rcu_irq_exit+0x5f/0xa0
+[  151.132867]  [<c198d928>] ? ____nf_conntrack_find+0x28/0x100
+[  151.139192]  [<c128d22a>] ? irq_exit+0x6a/0xa0
+[  151.144157]  [<c15ead54>] ? trace_hardirqs_on_thunk+0xc/0x10
+[  151.150481]  [<c198d928>] ? ____nf_conntrack_find+0x28/0x100
+[  151.156806]  [<c128bf4b>] ? local_bh_enable+0x6b/0xd0
+[  151.162450]  [<c198d9d4>] ? ____nf_conntrack_find+0xd4/0x100
+[  151.168774]  [<c198db31>] ? __nf_conntrack_find_get+0xf1/0x120
+[  151.175293]  [<c198ef53>] nf_conntrack_in+0x303/0x880
+[  151.180939]  [<c1342407>] ? drain_pages+0x27/0xb0
+[  151.186195]  [<c1b0007b>] ? _raw_write_lock_irqsave+0x1b/0x40
+[  151.192618]  [<c1a403f4>] ipv4_conntrack_in+0x24/0x30
+[  151.198263]  [<c19884f1>] nf_iterate+0x81/0xb0
+[  151.203227]  [<c19f08a0>] ? inet_del_offload+0x30/0x30
+[  151.208969]  [<c198858c>] nf_hook_slow+0x6c/0x160
+[  151.214223]  [<c19f08a0>] ? inet_del_offload+0x30/0x30
+[  151.219965]  [<c19f1372>] ip_rcv+0x342/0x430
+[  151.224734]  [<c19f08a0>] ? inet_del_offload+0x30/0x30
+[  151.230478]  [<c195e76f>] __netif_receive_skb_core+0x5bf/0x7b0
+[  151.236995]  [<c1b000f4>] ? _raw_spin_unlock_irqrestore+0x24/0x50
+[  151.243805]  [<c195e976>] __netif_receive_skb+0x16/0x60
+[  151.249642]  [<c195f364>] process_backlog+0x84/0x120
+[  151.255189]  [<c195ecf0>] net_rx_action+0x130/0x240
+[  151.260639]  [<c128cf79>] __do_softirq+0xc9/0x230
+[  151.265896]  [<c128ceb0>] ? remote_softirq_receive+0x50/0x50
+[  151.272219]  <IRQ>  [<c128d255>] ? irq_exit+0x95/0xa0
+[  151.277878]  [<c126c495>] ? smp_call_function_single_interrupt+0x35/0x40
+[  151.285368]  [<c1b00a09>] ? call_function_single_interrupt+0x39/0x40
+[  151.292467]  [<c1b00000>] ? _raw_write_unlock_bh+0x30/0x30
+
+Signed-off-by: Brett T. Warden <brett.t.warden@intel.com>
+---
+ arch/x86/include/asm/fpu-internal.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/fpu-internal.h b/arch/x86/include/asm/fpu-internal.h
+index 8a4976c..18cd5ed 100644
+--- a/arch/x86/include/asm/fpu-internal.h
++++ b/arch/x86/include/asm/fpu-internal.h
+@@ -571,7 +571,7 @@ static inline int fpu_alloc(struct fpu *fpu)
+ {
+ 	if (fpu_allocated(fpu))
+ 		return 0;
+-	fpu->state = kmem_cache_alloc(task_xstate_cachep, GFP_ATOMIC);
++	fpu->state = kmem_cache_alloc(task_xstate_cachep, GFP_KERNEL);
+ 	if (!fpu->state)
+ 		return -ENOMEM;
+ 	WARN_ON((unsigned long)fpu->state & 15);
+-- 
+2.10.1
+

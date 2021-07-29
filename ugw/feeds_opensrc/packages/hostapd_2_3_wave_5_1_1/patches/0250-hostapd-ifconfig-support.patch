@@ -1,0 +1,174 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/drv_callbacks.c hostapd-2.6/src/ap/drv_callbacks.c
+--- hostapd-2.6-orig/src/ap/drv_callbacks.c	2017-08-31 09:17:06.678750427 +0300
++++ hostapd-2.6/src/ap/drv_callbacks.c	2017-08-31 09:19:09.242255998 +0300
+@@ -1773,6 +1773,9 @@ void wpa_supplicant_event(void *ctx, enu
+ 			wpa_auth_reconfig_group_keys(hapd->wpa_auth);
+ 			hapd->reenable_beacon = 1;
+ 			ieee802_11_set_beacon(hapd);
++
++			/* Required for FW add VAP bringup sequence */
++			hostapd_tx_queue_params(hapd);
+ 		}
+ 		break;
+ 	case EVENT_INTERFACE_DISABLED:
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/hostapd.c hostapd-2.6/src/ap/hostapd.c
+--- hostapd-2.6-orig/src/ap/hostapd.c	2017-08-31 09:17:06.675750487 +0300
++++ hostapd-2.6/src/ap/hostapd.c	2017-08-31 09:19:09.243255977 +0300
+@@ -1207,9 +1207,9 @@ static int hostapd_setup_bss(struct host
+ }
+ 
+ 
+-static void hostapd_tx_queue_params(struct hostapd_iface *iface)
++void hostapd_tx_queue_params(struct hostapd_data *hapd)
+ {
+-	struct hostapd_data *hapd = iface->bss[0];
++	struct hostapd_iface *iface = hapd->iface;
+ 	int i;
+ 	struct hostapd_tx_queue_params *p;
+ 
+@@ -1931,7 +1931,7 @@ static int hostapd_setup_interface_compl
+ 	}
+ 	hapd = iface->bss[0];
+ 
+-	hostapd_tx_queue_params(iface);
++	hostapd_tx_queue_params(hapd);
+ 
+ 	ap_list_init(iface);
+ 
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/hostapd.h hostapd-2.6/src/ap/hostapd.h
+--- hostapd-2.6-orig/src/ap/hostapd.h	2017-08-31 09:17:06.673750528 +0300
++++ hostapd-2.6/src/ap/hostapd.h	2017-08-31 09:19:09.243255977 +0300
+@@ -580,4 +580,6 @@ void hostapd_ltq_clear_old(struct hostap
+ void hostapd_ltq_update_channel_data(struct hostapd_iface *iface, const u8 *data, size_t data_len);
+ #endif
+ 
++void hostapd_tx_queue_params(struct hostapd_data *hapd);
++
+ #endif /* HOSTAPD_H */
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/drivers/driver_nl80211.c hostapd-2.6/src/drivers/driver_nl80211.c
+--- hostapd-2.6-orig/src/drivers/driver_nl80211.c	2017-08-31 09:17:06.670750591 +0300
++++ hostapd-2.6/src/drivers/driver_nl80211.c	2017-08-31 12:06:16.148322721 +0300
+@@ -934,6 +934,7 @@ nl80211_find_drv(struct nl80211_global *
+ 	return NULL;
+ }
+ 
++#define PROCESS_EVENTS_PER_BSS
+ 
+ static void wpa_driver_nl80211_event_rtm_newlink(void *ctx,
+ 						 struct ifinfomsg *ifi,
+@@ -947,6 +948,7 @@ static void wpa_driver_nl80211_event_rtm
+ 	char namebuf[IFNAMSIZ];
+ 	char ifname[IFNAMSIZ + 1];
+ 	char extra[100], *pos, *end;
++	struct i802_bss *cur_bss;
+ 
+ 	extra[0] = '\0';
+ 	pos = extra;
+@@ -995,6 +997,71 @@ static void wpa_driver_nl80211_event_rtm
+ 	if (!drv)
+ 		goto event_newlink;
+ 
++#ifdef PROCESS_EVENTS_PER_BSS
++	cur_bss = get_bss_ifindex(drv, ifi->ifi_index);
++
++	if (cur_bss) {
++		if (cur_bss->if_enabled && !(ifi->ifi_flags & IFF_UP)) {
++			namebuf[0] = '\0';
++			if (if_indextoname(ifi->ifi_index, namebuf) &&
++			    linux_iface_up(drv->global->ioctl_sock, namebuf) > 0) {
++				wpa_printf(MSG_DEBUG, "nl80211: Ignore interface down "
++					   "event since interface %s is up", namebuf);
++				return;
++			}
++			wpa_printf(MSG_DEBUG, "nl80211: Interface down (%s/%s)",
++				   namebuf, ifname);
++
++			cur_bss->if_enabled = 0;
++			wpa_supplicant_event(cur_bss->ctx,
++					     EVENT_INTERFACE_DISABLED, NULL);
++
++			/*
++			 * Try to get drv again, since it may be removed as
++			 * part of the EVENT_INTERFACE_DISABLED handling for
++			 * dynamic interfaces
++			 */
++			drv = nl80211_find_drv(global, ifi->ifi_index,
++					       buf, len);
++			if (!drv)
++				return;
++		}
++
++		if (!cur_bss->if_enabled && (ifi->ifi_flags & IFF_UP)) {
++			u8 addr[ETH_ALEN];
++
++			if (if_indextoname(ifi->ifi_index, namebuf) &&
++			    linux_iface_up(drv->global->ioctl_sock, namebuf) == 0) {
++				wpa_printf(MSG_DEBUG, "nl80211: Ignore interface up "
++					   "event since interface %s is down",
++					   namebuf);
++				return;
++			}
++
++			if (cur_bss &&
++			    linux_get_ifhwaddr(drv->global->ioctl_sock,
++					       cur_bss->ifname, addr) < 0) {
++				wpa_printf(MSG_DEBUG,
++					   "nl80211: %s: failed to re-read MAC address",
++					   cur_bss->ifname);
++			} else if (cur_bss &&
++				   os_memcmp(addr, cur_bss->addr, ETH_ALEN) != 0) {
++				wpa_printf(MSG_DEBUG,
++					   "nl80211: Own MAC address on ifindex %d (%s) changed from "
++					   MACSTR " to " MACSTR,
++					   ifi->ifi_index, cur_bss->ifname,
++					   MAC2STR(cur_bss->addr),
++					   MAC2STR(addr));
++				os_memcpy(cur_bss->addr, addr, ETH_ALEN);
++			}
++
++			wpa_printf(MSG_DEBUG, "nl80211: Interface up (%s)", ifname);
++			cur_bss->if_enabled = 1;
++			wpa_supplicant_event(cur_bss->ctx, EVENT_INTERFACE_ENABLED,
++					     NULL);
++		}
++	}
++#else
+ 	if (!drv->if_disabled && !(ifi->ifi_flags & IFF_UP)) {
+ 		namebuf[0] = '\0';
+ 		if (if_indextoname(ifi->ifi_index, namebuf) &&
+@@ -1074,6 +1141,7 @@ static void wpa_driver_nl80211_event_rtm
+ 					     NULL);
+ 		}
+ 	}
++#endif /* IF_EVENT_PER_BSS */
+ 
+ 	/*
+ 	 * Some drivers send the association event before the operup event--in
+@@ -2314,6 +2382,8 @@ wpa_driver_nl80211_finish_drv_init(struc
+ 			return ret;
+ 		}
+ 
++		bss->if_enabled = 1;
++
+ 		if (is_p2p_net_interface(nlmode))
+ 			nl80211_disable_11b_rates(bss->drv,
+ 						  bss->drv->ifindex, 1);
+@@ -5347,6 +5417,7 @@ static int wpa_driver_nl80211_set_operst
+ 	wpa_printf(MSG_DEBUG, "nl80211: Set %s operstate %d->%d (%s)",
+ 		   bss->ifname, drv->operstate, state,
+ 		   state ? "UP" : "DORMANT");
++	bss->if_enabled = state;
+ 	drv->operstate = state;
+ 	return netlink_send_oper_ifla(drv->global->netlink, drv->ifindex, -1,
+ 				      state ? IF_OPER_UP : IF_OPER_DORMANT);
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/drivers/driver_nl80211.h hostapd-2.6/src/drivers/driver_nl80211.h
+--- hostapd-2.6-orig/src/drivers/driver_nl80211.h	2017-08-31 09:17:06.670750591 +0300
++++ hostapd-2.6/src/drivers/driver_nl80211.h	2017-08-31 09:19:09.245255936 +0300
+@@ -65,6 +65,7 @@ struct i802_bss {
+ 	unsigned int wdev_id_set:1;
+ 	unsigned int added_if:1;
+ 	unsigned int static_ap:1;
++	unsigned int if_enabled:1;
+ 
+ 	u8 addr[ETH_ALEN];
+ 

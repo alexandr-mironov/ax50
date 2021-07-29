@@ -1,0 +1,59 @@
+From d2f967666efce33897ba63b42ad4e91d2c194724 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 27 Apr 2017 11:03:51 +0300
+Subject: [PATCH 638/639] tDox ack suppression phase I
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h | 2 ++
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 8 +++++---
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index d12b6253..e4cad4c 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -162,6 +162,8 @@ typedef enum
+ 
+     // tDox Commands
+     PDSP_TDOX_CONFIGURE_PARAMS          = 0x83,
++    PDSP_TDOX_SET_SUPPRESSION           = 0x84,
++    PDSP_TDOX_CMD_SET_RECORD            = 0x85,
+ 
+     // Moca Commands
+     PDSP_MOCA_SET_PADDING                = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 1cb9abe..7f084d0 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -118,7 +118,7 @@
+ #define AVALANCHE_PP_MAX_STATIC_ENTRIES                 (32 * 1024)
+ #define AVALANCHE_PP_MAX_LUT_ENTRIES                    (3 * 1024)
+ #define AVALANCHE_PP_MAX_ACCELERATED_SESSIONS           (AVALANCHE_PP_MAX_STATIC_ENTRIES + AVALANCHE_PP_MAX_LUT_ENTRIES)
+-#define AVALANCHE_PP_MAX_ACCELERATED_TDOX_SESSIONS      512
++#define AVALANCHE_PP_MAX_ACCELERATED_TDOX_SESSIONS      500
+ #define VPID_IF_NAME_SIZE                               16
+ 
+ #endif
+@@ -995,7 +995,8 @@ typedef struct pp_psi_t AVALANCHE_PP_PSI_t;
+ #define pp_psi_get_tdox_ignore_ts(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 10, 1)) /* tdox_ignore_ts bit 10    */
+ #define pp_psi_get_high_priority(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 11, 1)) /* high_priority bit 11     */
+ #define pp_psi_get_tdox_candidate(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 12, 1)) /* tdox_candidate bit 12    */
+-#define pp_psi_get_fw_internal(pp_psi)			(__bit_field32_get(be32_to_cpu(pp_psi.psi), 13, 2)) /* fw_internal bits 13-14   */
++#define pp_psi_get_tdox_signature(pp_psi)       (__bit_field32_get(be32_to_cpu(pp_psi.psi), 13, 1)) /* tdox_signature bit 13    */
++#define pp_psi_get_res2(pp_psi)                 (__bit_field32_get(be32_to_cpu(pp_psi.psi), 14, 1)) /* reserved bit 14          */
+ #define pp_psi_get_do_not_encrypt(pp_psi)		(__bit_field32_get(be32_to_cpu(pp_psi.psi), 15, 1)) /* do_not_encrypt bit 15    */
+ #define pp_psi_get_res1(pp_psi)					(__bit_field32_get(be32_to_cpu(pp_psi.psi), 16, 8)) /* reserved bits 16-23      */
+ #define pp_psi_get_sf_index(pp_psi)				(__bit_field32_get(be32_to_cpu(pp_psi.psi), 24, 8)) /* sf index bits 24-31      */
+@@ -1006,7 +1007,8 @@ typedef struct pp_psi_t AVALANCHE_PP_PSI_t;
+ #define pp_psi_set_tdox_ignore_ts(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 10, 1))) /* tdox_ignore_ts bit 10    */
+ #define pp_psi_set_high_priority(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 11, 1))) /* high_priority bit 11     */
+ #define pp_psi_set_tdox_candidate(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 12, 1))) /* tdox_candidate bit 12    */
+-#define pp_psi_set_fw_internal(pp_psi, val)		((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 13, 2))) /* fw_internal bits 13-14   */
++#define pp_psi_set_tdox_signature(pp_psi, val)  ((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 13, 1))) /* tdox_signature bit 13    */
++#define pp_psi_set_res2(pp_psi, val)            ((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 14, 1))) /* reserved bit 14          */
+ #define pp_psi_set_do_not_encrypt(pp_psi, val)	((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 15, 1))) /* do_not_encrypt bit 15    */
+ #define pp_psi_set_res1(pp_psi, val)			((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 16, 8))) /* reserved bits 16-23      */
+ #define pp_psi_set_sf_index(pp_psi, val)		((pp_psi.psi) = cpu_to_be32(__bit_field32_set(be32_to_cpu(pp_psi.psi), val, 24, 8))) /* sf index bits 24-31      */
+-- 
+2.10.1
+

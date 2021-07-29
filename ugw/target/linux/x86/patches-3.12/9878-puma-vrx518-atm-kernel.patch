@@ -1,0 +1,172 @@
+# HG changeset patch
+# Parent 18bf60a0d4d3e36827de1d2a9324a2c66cf68beb
+diff --git a/drivers/net/ppp/ppp_generic.c b/drivers/net/ppp/ppp_generic.c
+--- a/drivers/net/ppp/ppp_generic.c
++++ b/drivers/net/ppp/ppp_generic.c
+@@ -2309,6 +2309,22 @@ char *ppp_dev_name(struct ppp_channel *c
+ 	return name;
+ }
+ 
++/* 
++ * Return the PPP device interface pointer
++ */
++struct net_device *ppp_device(struct ppp_channel *chan)
++{
++	struct channel *pch = chan->ppp;
++	struct net_device *dev = NULL;
++
++	if (pch) {
++		read_lock_bh(&pch->upl);
++		if (pch->ppp && pch->ppp->dev)
++			dev = pch->ppp->dev;
++		read_unlock_bh(&pch->upl);
++	}
++	return dev;
++}
+ 
+ /*
+  * Disconnect a channel from the generic layer.
+@@ -3126,6 +3142,7 @@ EXPORT_SYMBOL(ppp_unregister_channel);
+ EXPORT_SYMBOL(ppp_channel_index);
+ EXPORT_SYMBOL(ppp_unit_number);
+ EXPORT_SYMBOL(ppp_dev_name);
++EXPORT_SYMBOL(ppp_device);
+ EXPORT_SYMBOL(ppp_input);
+ EXPORT_SYMBOL(ppp_input_error);
+ EXPORT_SYMBOL(ppp_output_wakeup);
+diff --git a/include/linux/ppp_channel.h b/include/linux/ppp_channel.h
+--- a/include/linux/ppp_channel.h
++++ b/include/linux/ppp_channel.h
+@@ -75,6 +75,10 @@ extern int ppp_unit_number(struct ppp_ch
+ /* Get the device name associated with a channel, or NULL if none */
+ extern char *ppp_dev_name(struct ppp_channel *);
+ 
++/* Get the device pointer associated with a channel, or NULL if none */
++extern struct net_device *ppp_device(struct ppp_channel *);
++
++
+ #if (defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE))
+ extern int32_t ppa_ppp_get_info(struct net_device *ppp_dev, uint32_t ppp_info_id, void *value);
+ #endif
+diff --git a/net/atm/br2684.c b/net/atm/br2684.c
+--- a/net/atm/br2684.c
++++ b/net/atm/br2684.c
+@@ -291,6 +291,20 @@ static inline struct br2684_vcc *pick_ou
+ 	return list_empty(&brdev->brvccs) ? NULL : list_entry_brvcc(brdev->brvccs.next);	/* 1 vcc/dev right now */
+ }
+ 
++int get_br2684_vcc(struct sk_buff *skb, struct net_device *dev, struct atm_vcc **pvcc)
++{
++	struct br2684_vcc *brvcc;
++	struct br2684_dev *brdev;
++
++	brdev= BRPRIV(dev);
++	brvcc = pick_outgoing_vcc(skb, brdev);
++
++	*pvcc = brvcc->atmvcc;
++
++	return 0;
++}
++EXPORT_SYMBOL(get_br2684_vcc);
++
+ static netdev_tx_t br2684_start_xmit(struct sk_buff *skb,
+ 				     struct net_device *dev)
+ {
+@@ -617,12 +631,16 @@ static int br2684_regvcc(struct atm_vcc 
+ 	barrier();
+ 	atmvcc->push = br2684_push;
+ 	atmvcc->pop = br2684_pop;
++	atmvcc->release_cb = br2684_release_cb;
++	atmvcc->owner = THIS_MODULE;
++
++	if (atm_hook_mpoa_setup) /* IPoA or EoA w/o FCS */
++		atm_hook_mpoa_setup(atmvcc, brdev->payload == p_routed ? 3 : 0,
++			brvcc->encaps == BR2684_ENCAPS_LLC ? 1 : 0, net_dev);
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+-   if ( ppa_hook_mpoa_setup )
+-		ppa_hook_mpoa_setup(atmvcc, brdev->payload == p_routed ? 3 : 0, brvcc->encaps == BR2684_ENCAPS_LLC ? 1 : 0);     //  IPoA or EoA w/o FCS
++	if ( ppa_hook_mpoa_setup )
++			ppa_hook_mpoa_setup(atmvcc, brdev->payload == p_routed ? 3 : 0, brvcc->encaps == BR2684_ENCAPS_LLC ? 1 : 0);	 //  IPoA or EoA w/o FCS
+ #endif
+-   atmvcc->release_cb = br2684_release_cb;
+-	atmvcc->owner = THIS_MODULE;
+ 
+ 	/* initialize netdev carrier state */
+ 	if (atmvcc->dev->signal == ATM_PHY_SIG_LOST)
+@@ -1045,7 +1063,7 @@ module_exit(br2684_exit);
+ MODULE_AUTHOR("Marcell GAL");
+ MODULE_DESCRIPTION("RFC2684 bridged protocols over ATM/AAL5");
+ MODULE_LICENSE("GPL");
+-#if defined(CONFIG_LTQ_PPA_API_MODULE)
++#if IS_ENABLED(CONFIG_LTQ_PPA_API)
+   EXPORT_SYMBOL(ppa_if_is_ipoa);
+   EXPORT_SYMBOL(ppa_if_is_br2684);
+   EXPORT_SYMBOL(ppa_br2684_get_vcc);
+diff --git a/net/atm/common.c b/net/atm/common.c
+--- a/net/atm/common.c
++++ b/net/atm/common.c
+@@ -164,6 +164,9 @@ int ifx_push_oam(struct atm_vcc *atmvcc,
+ EXPORT_SYMBOL(ifx_push_oam);
+ #endif
+ 
++void (*atm_hook_mpoa_setup)(struct atm_vcc *, int, int, struct net_device *) = NULL;
++EXPORT_SYMBOL(atm_hook_mpoa_setup);
++
+ int vcc_create(struct net *net, struct socket *sock, int protocol, int family)
+ {
+ 	struct sock *sk;
+diff --git a/net/atm/common.h b/net/atm/common.h
+--- a/net/atm/common.h
++++ b/net/atm/common.h
+@@ -56,4 +56,7 @@ void atm_dev_release_vccs(struct atm_dev
+ int ifx_push_oam(struct atm_vcc *atmvcc, void *cell);
+ #endif
+ 
++extern void (*atm_hook_mpoa_setup)(struct atm_vcc *, int,
++				int, struct net_device *);
++
+ #endif
+diff --git a/net/atm/mpc.c b/net/atm/mpc.c
+--- a/net/atm/mpc.c
++++ b/net/atm/mpc.c
+@@ -602,6 +602,8 @@ non_ip:
+ 	return mpc->old_ops->ndo_start_xmit(skb, dev);
+ }
+ 
++extern void (*atm_hook_mpoa_setup)(struct atm_vcc *, int, int, struct net_device *);
++
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+ extern void (*ppa_hook_mpoa_setup)(struct atm_vcc *, int, int);
+ #endif
+@@ -648,9 +650,12 @@ static int atm_mpoa_vcc_attach(struct at
+ 
+ 	vcc->proto_data = mpc->dev;
+ 	vcc->push = mpc_push;
++
++	if (atm_hook_mpoa_setup) /* IPoA, LLC */
++		atm_hook_mpoa_setup(vcc, 3, 1, mpc->dev);
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+-    if ( ppa_hook_mpoa_setup )
+-		ppa_hook_mpoa_setup(vcc, 3, 1);	//  IPoA, LLC
++	if (ppa_hook_mpoa_setup) /* IPoA, LLC */
++		ppa_hook_mpoa_setup(vcc, 3, 1);
+ #endif
+ 	return 0;
+ }
+diff --git a/net/atm/pppoatm.c b/net/atm/pppoatm.c
+--- a/net/atm/pppoatm.c
++++ b/net/atm/pppoatm.c
+@@ -438,7 +438,12 @@ static int pppoatm_assign_vcc(struct atm
+     if ( ppa_hook_mpoa_setup )
+         ppa_hook_mpoa_setup(atmvcc, 2, pvcc->encaps == e_llc ? 1 : 0);  //  PPPoA
+ #endif
+-   atmvcc->release_cb = pppoatm_release_cb;
++
++	if (atm_hook_mpoa_setup) /* PPPoA */
++		atm_hook_mpoa_setup(atmvcc, 2, pvcc->encaps == e_llc ? 1 : 0,
++			ppp_device(&pvcc->chan));
++
++	atmvcc->release_cb = pppoatm_release_cb;
+ 	__module_get(THIS_MODULE);
+ 	atmvcc->owner = THIS_MODULE;
+ 

@@ -1,0 +1,112 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/beacon.c hostapd-2.6/src/ap/beacon.c
+--- hostapd-2.6-orig/src/ap/beacon.c	2017-06-05 14:23:38.535984865 +0300
++++ hostapd-2.6/src/ap/beacon.c	2017-06-05 14:51:04.900434751 +0300
+@@ -453,6 +453,7 @@ static u8 * hostapd_gen_probe_resp(struc
+ 
+ 	pos = hostapd_eid_ht_capabilities(hapd, pos);
+ 	pos = hostapd_eid_ht_operation(hapd, pos);
++	pos = hostapd_eid_overlapping_bss_scan_params(hapd, pos);
+ #endif /* CONFIG_IEEE80211N */
+ 
+ 	pos = hostapd_eid_ext_capab(hapd, pos);
+@@ -1116,6 +1117,7 @@ int ieee802_11_build_ap_params(struct ho
+ 
+ 	tailpos = hostapd_eid_ht_capabilities(hapd, tailpos);
+ 	tailpos = hostapd_eid_ht_operation(hapd, tailpos);
++	tailpos = hostapd_eid_overlapping_bss_scan_params(hapd, tailpos);
+ #endif /* CONFIG_IEEE80211N */
+ 
+ 	tailpos = hostapd_eid_ext_capab(hapd, tailpos);
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/ieee802_11.c hostapd-2.6/src/ap/ieee802_11.c
+--- hostapd-2.6-orig/src/ap/ieee802_11.c	2017-06-05 14:23:38.534984884 +0300
++++ hostapd-2.6/src/ap/ieee802_11.c	2017-06-05 14:51:41.125735106 +0300
+@@ -1959,6 +1959,7 @@ static u16 send_assoc_resp(struct hostap
+ 		p = hostapd_eid_ht_capabilities(hapd, p);
+ 	}
+ 	p = hostapd_eid_ht_operation(hapd, p);
++	p = hostapd_eid_overlapping_bss_scan_params(hapd, p);
+ #endif /* CONFIG_IEEE80211N */
+ 
+ #ifdef CONFIG_IEEE80211AC
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/ieee802_11.h hostapd-2.6/src/ap/ieee802_11.h
+--- hostapd-2.6-orig/src/ap/ieee802_11.h	2017-06-05 14:23:38.533984903 +0300
++++ hostapd-2.6/src/ap/ieee802_11.h	2017-06-05 14:52:30.609682186 +0300
+@@ -54,6 +54,7 @@ u8 * hostapd_eid_ht_capabilities(struct 
+ u8 * hostapd_eid_ht_capabilities_assoc_resp(struct hostapd_data *hapd, u8 *eid,
+      struct sta_info *sta);
+ u8 * hostapd_eid_ht_operation(struct hostapd_data *hapd, u8 *eid);
++u8 * hostapd_eid_overlapping_bss_scan_params(struct hostapd_data *hapd, u8 *eid);
+ u8 * hostapd_eid_secondary_channel(struct hostapd_data *hapd, u8 *eid);
+ u8 * hostapd_eid_vht_capabilities(struct hostapd_data *hapd, u8 *eid, u32 nsts);
+ u8 * hostapd_eid_vht_operation(struct hostapd_data *hapd, u8 *eid);
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/ieee802_11_ht.c hostapd-2.6/src/ap/ieee802_11_ht.c
+--- hostapd-2.6-orig/src/ap/ieee802_11_ht.c	2017-06-05 14:23:38.533984903 +0300
++++ hostapd-2.6/src/ap/ieee802_11_ht.c	2017-06-05 15:50:26.452670132 +0300
+@@ -63,35 +63,6 @@ u8 * hostapd_eid_ht_capabilities_assoc_r
+ 
+   pos += sizeof(*cap);
+ 
+-  if (hapd->iconf->obss_interval) {
+-    struct ieee80211_obss_scan_parameters *scan_params;
+-
+-    *pos++ = WLAN_EID_OVERLAPPING_BSS_SCAN_PARAMS;
+-    *pos++ = sizeof(*scan_params);
+-
+-    scan_params = (struct ieee80211_obss_scan_parameters *) pos;
+-    os_memset(scan_params, 0, sizeof(*scan_params));
+-    scan_params->width_trigger_scan_interval =
+-      host_to_le16(hapd->iconf->obss_interval);
+-
+-    /* Fill in default values for remaining parameters
+-    * (IEEE Std 802.11-2012, 8.4.2.61 and MIB defval) */
+-    scan_params->scan_passive_dwell =
+-      host_to_le16(hapd->iconf->scan_passive_dwell);
+-    scan_params->scan_active_dwell =
+-      host_to_le16(hapd->iconf->scan_active_dwell);
+-    scan_params->scan_passive_total_per_channel =
+-      host_to_le16(hapd->iconf->scan_passive_total_per_channel);
+-    scan_params->scan_active_total_per_channel =
+-      host_to_le16(hapd->iconf->scan_active_total_per_channel);
+-    scan_params->channel_transition_delay_factor =
+-      host_to_le16(hapd->iconf->channel_transition_delay_factor);
+-    scan_params->scan_activity_threshold =
+-      host_to_le16(hapd->iconf->scan_activity_threshold);
+-
+-    pos += sizeof(*scan_params);
+-  }
+-
+   return pos;
+ }
+ 
+@@ -120,7 +91,19 @@ u8 * hostapd_eid_ht_capabilities(struct 
+ 	/* TODO: ht_extended_capabilities (now fully disabled) */
+ 	/* TODO: asel_capabilities (now fully disabled) */
+ 
+- 	pos += sizeof(*cap);
++	pos += sizeof(*cap);
++
++	return pos;
++}
++
++
++u8 * hostapd_eid_overlapping_bss_scan_params(struct hostapd_data *hapd, u8 *eid)
++{
++	u8 *pos = eid;
++
++	if (!hapd->iconf->ieee80211n || !hapd->iface->current_mode ||
++	    hapd->conf->disable_11n)
++		return eid;
+ 
+ 	if (hapd->iconf->obss_interval) {
+ 		struct ieee80211_obss_scan_parameters *scan_params;
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/wpa_supplicant/mesh_mpm.c hostapd-2.6/wpa_supplicant/mesh_mpm.c
+--- hostapd-2.6-orig/wpa_supplicant/mesh_mpm.c	2017-06-05 14:23:38.515985251 +0300
++++ hostapd-2.6/wpa_supplicant/mesh_mpm.c	2017-06-05 14:54:02.770441951 +0300
+@@ -341,6 +341,7 @@ static void mesh_mpm_send_plink_action(s
+ 
+ 		pos = hostapd_eid_ht_capabilities(bss, ht_capa_oper);
+ 		pos = hostapd_eid_ht_operation(bss, pos);
++		pos = hostapd_eid_overlapping_bss_scan_params(hapd, pos);
+ 		wpabuf_put_data(buf, ht_capa_oper, pos - ht_capa_oper);
+ 	}
+ #endif /* CONFIG_IEEE80211N */

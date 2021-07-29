@@ -1,0 +1,592 @@
+diff --git a/drivers/platform/x86/puma_acpi.c b/drivers/platform/x86/puma_acpi.c
+index b6f0b80fed5d..fc7aa8b1ee55 100755
+--- a/drivers/platform/x86/puma_acpi.c
++++ b/drivers/platform/x86/puma_acpi.c
+@@ -16,7 +16,7 @@
+  * with this program; if not, write to the Free Software Foundation, Inc.,
+  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+  */
+- 
++
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -33,7 +33,9 @@
+ #include <asm/bitops.h>
+ #include <asm/atomic.h>
+ #include <asm/iosf_mbi.h>
+-#include <acpi/acpi_drivers.h>
++#include <linux/acpi.h>
++#include <linux/pci.h>
++#include "../../pci/pci.h"
+ 
+ /* fifo size in elements (ints) */
+ #define PUMA_ACPI_FIFO_SIZE  32
+@@ -189,7 +191,7 @@
+ #define PUMA_ATOM2PMC_DB_VALUE(busy,ipc_transaction_type,format,ipc_cmd_type,ipc_ext_payload,ipc_cmd,ipc_payload) \
+    ((busy << 31) | (ipc_transaction_type << 29) | (format << 28) | (ipc_cmd_type << 24) | (ipc_ext_payload << 23) | \
+    (ipc_cmd << 16) | (ipc_payload))
+-   
++
+ #define PUMA_SETPS_ACTIVE     PUMA_ATOM2PMC_DB_VALUE(1, 3, 1, 1, 0, 7, 2)
+ #define PUMA_SETPS_LPM        PUMA_ATOM2PMC_DB_VALUE(1, 3, 1, 1, 0, 7, 1)
+ #define PUMA_SETPS_NETIP_ON   PUMA_ATOM2PMC_DB_VALUE(1, 3, 1, 1, 0, 7, 4)
+@@ -215,7 +217,7 @@
+ 
+ #define PUMA_PRINT_STATE(data) \
+    (pr_err("Puma ACPI state %d Netip state %d PMC state %d Platform resource %d notify type %d\n", \
+-      data->current_state, data->netip_state, data->pmc_state, data->acpi_resource_indication, data->notify_state_type)) 
++      data->current_state, data->netip_state, data->pmc_state, data->acpi_resource_indication, data->notify_state_type))
+ 
+ 
+ enum puma_acpi_system_state {
+@@ -251,7 +253,7 @@ enum puma_acpi_led_state {
+ };
+ 
+ /* New memeber to be added after looking at puma_acpi_free_resources() function.
+- * The index order is important as it is used to free the specific resources. 
++ * The index order is important as it is used to free the specific resources.
+  */
+ enum puma_resource_index {
+    PUMA_ACPI_DATA,
+@@ -312,7 +314,7 @@ struct puma_acpi_data {
+    struct regulator *regulator;
+    unsigned int pmic_supported:1;
+    int pmic_type;
+-   int reset_cause; 
++   int reset_cause;
+    int reset_type;
+    int reset_btn_dur;
+    unsigned int bbu_device_mask;
+@@ -323,6 +325,7 @@ struct puma_acpi_data {
+    uint32_t pmc_dev_disabled_config1;
+    unsigned int enabled_devices_mask;
+    unsigned int power_test_mode;
++   unsigned int pcie_port_dev_info[4];
+ };
+ 
+ static unsigned long puma_events;
+@@ -336,7 +339,7 @@ static int puma_acpi_get_data(struct puma_acpi_data *data, acpi_string pathname,
+    struct acpi_buffer buf;
+    union acpi_object out_obj;
+    acpi_status status;
+-   
++
+    buf.pointer = &out_obj;
+    buf.length = sizeof(out_obj);
+ 
+@@ -400,7 +403,7 @@ static ssize_t show_platform_resource(struct device *dev, struct device_attribut
+ 
+    if(puma_acpi_get_data(data, "PPRS", &data->acpi_resource_state_vector)) {
+       pr_err("puma_acpi_get_data PPRS failed!\n");
+-   } 
++   }
+ 
+    return sprintf(buf, "%d :: 0x%x\n", ((data->acpi_resource_indication) ? 0:1), data->acpi_resource_state_vector);
+ }
+@@ -409,7 +412,7 @@ static ssize_t show_device_power_state(struct device *dev, struct device_attribu
+ {
+    unsigned int reg_value0, reg_value1;
+    int ret_value;
+-   
++
+    if((ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE, PUMA_PMC_D3_STS_0, &reg_value0)) < 0) {
+       pr_err("iosf_mbi_read failed %d at line %d!\n",ret_value, __LINE__);
+    } else if((ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE, PUMA_PMC_D3_STS_1, &reg_value1)) < 0) {
+@@ -463,7 +466,7 @@ static acpi_status update_lpm(acpi_handle handle, int xface, int operation, int
+    } else if (operation == PUMA_LPM_GET){
+       *lpm_bbu = out_obj.integer.value;
+    }
+-   
++
+    return 0;
+ }
+ 
+@@ -501,11 +504,11 @@ static ssize_t store_usb_lpm(struct device *dev, struct device_attribute *attr,
+       return -EINVAL;
+    }
+ 
+-   //Update the ACPI data 
++   //Update the ACPI data
+    if(update_lpm(data->acpi_dev->handle, PUMA_LPM_USB, PUMA_LPM_SET, &usb_lpm_bbu) != 0) {
+       return -EIO;
+    }
+-   
++
+    return count;
+ }
+ 
+@@ -542,8 +545,8 @@ static ssize_t store_sata_lpm(struct device *dev, struct device_attribute *attr,
+    } else if(sata_lpm_bbu < 0 || sata_lpm_bbu > 1){
+       return -EINVAL;
+    }
+-      
+-   //Update the ACPI data 
++
++   //Update the ACPI data
+    if(update_lpm(data->acpi_dev->handle, PUMA_LPM_SATA, PUMA_LPM_SET, &sata_lpm_bbu) != 0) {
+       return -EIO;
+    }
+@@ -555,7 +558,7 @@ static int puma_get_soc_dts_te(unsigned int offset, unsigned int *data)
+ {
+    unsigned int reg_value;
+    int ret_value;
+-   
++
+    if((ret_value = iosf_mbi_read(PUMA_PUNIT_PORT, PUMA_PUNIT_READ_OPCODE, offset, &reg_value)) < 0) {
+       pr_err("iosf_mbi_read failed %d at line %d!\n",ret_value, __LINE__);
+    } else {
+@@ -572,7 +575,7 @@ static int puma_set_soc_dts_te(unsigned int offset, unsigned int data)
+ {
+    unsigned int reg_value;
+    int ret_value;
+-   
++
+    if((ret_value = iosf_mbi_read(PUMA_PUNIT_PORT, PUMA_PUNIT_READ_OPCODE, offset, &reg_value)) < 0) {
+       pr_err("iosf_mbi_read failed %d at line %d!\n",ret_value, __LINE__);
+    } if((ret_value = iosf_mbi_write(PUMA_PUNIT_PORT, PUMA_PUNIT_WRITE_OPCODE, offset, (reg_value = reg_value & ~(PUMA_SOC_TE_MASK)))) < 0) {
+@@ -595,7 +598,7 @@ static ssize_t show_soc_dts_te0(struct device *dev, struct device_attribute *att
+ {
+    int ret_value;
+    unsigned int data = 0;
+-   
++
+    ret_value = puma_get_soc_dts_te(PUMA_PUNIT_TE_AUX0, &data);
+ 
+    if(ret_value < 0) {
+@@ -609,7 +612,7 @@ static ssize_t show_soc_dts_te1(struct device *dev, struct device_attribute *att
+ {
+    int ret_value;
+    unsigned int data = 0;
+-   
++
+    ret_value = puma_get_soc_dts_te(PUMA_PUNIT_TE_AUX1, &data);
+ 
+    if(ret_value < 0) {
+@@ -623,7 +626,7 @@ static ssize_t show_soc_dts_te2(struct device *dev, struct device_attribute *att
+ {
+    int ret_value;
+    unsigned int data = 0;
+-   
++
+    ret_value = puma_get_soc_dts_te(PUMA_PUNIT_TE_AUX2, &data);
+ 
+    if(ret_value < 0) {
+@@ -637,7 +640,7 @@ static ssize_t show_soc_dts_te3(struct device *dev, struct device_attribute *att
+ {
+    int ret_value;
+    unsigned int data = 0;
+-   
++
+    ret_value = puma_get_soc_dts_te(PUMA_PUNIT_TE_AUX3, &data);
+ 
+    if(ret_value < 0) {
+@@ -653,8 +656,8 @@ static ssize_t store_soc_dts_te0(struct device *dev, struct device_attribute *at
+ 
+    if(sscanf(buf, "%x", &data) != 1) {
+       return -EINVAL;
+-   } 
+-      
++   }
++
+    if(puma_set_soc_dts_te(PUMA_PUNIT_TE_AUX0, data) < 0) {
+       return -EIO;
+    }
+@@ -668,8 +671,8 @@ static ssize_t store_soc_dts_te1(struct device *dev, struct device_attribute *at
+ 
+    if(sscanf(buf, "%x", &data) != 1) {
+       return -EINVAL;
+-   } 
+-      
++   }
++
+    if(puma_set_soc_dts_te(PUMA_PUNIT_TE_AUX1, data) < 0) {
+       return -EIO;
+    }
+@@ -683,8 +686,8 @@ static ssize_t store_soc_dts_te2(struct device *dev, struct device_attribute *at
+ 
+    if(sscanf(buf, "%x", &data) != 1) {
+       return -EINVAL;
+-   } 
+-      
++   }
++
+    if(puma_set_soc_dts_te(PUMA_PUNIT_TE_AUX2, data) < 0) {
+       return -EIO;
+    }
+@@ -698,8 +701,8 @@ static ssize_t store_soc_dts_te3(struct device *dev, struct device_attribute *at
+ 
+    if(sscanf(buf, "%x", &data) != 1) {
+       return -EINVAL;
+-   } 
+-      
++   }
++
+    if(puma_set_soc_dts_te(PUMA_PUNIT_TE_AUX3, data) < 0) {
+       return -EIO;
+    }
+@@ -852,6 +855,8 @@ static ssize_t show_xgmii_port_mapping(struct device *dev, struct device_attribu
+    return sprintf(buf, "0x%08x\n", port_mapping);
+ }
+ 
++static ssize_t show_pcie_port_dev_info(struct device *dev, struct device_attribute *attr, char *buf);
++
+ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+ {
+    unsigned int dsb_device_mask;
+@@ -876,14 +881,14 @@ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute
+ 
+ int puma_acpi_set_data(struct puma_acpi_data *data, acpi_string pathname, unsigned int in_data){
+    int ret_value;
+-   struct acpi_object_list input;   
++   struct acpi_object_list input;
+    union acpi_object in_params;
+-   
++
+    in_params.type = ACPI_TYPE_INTEGER;
+    in_params.integer.value = in_data;
+    input.count = 1;
+    input.pointer = &in_params;
+-   
++
+    ret_value = acpi_evaluate_object(data->acpi_dev->handle, pathname, &input, NULL);
+    if(ret_value != 0){
+       pr_err("acpi_evaluate_object failed.\n");
+@@ -896,7 +901,7 @@ static ssize_t store_power_test_mode(struct device *dev, struct device_attribute
+    unsigned int power_test_mode;
+    struct acpi_device *acpi = to_acpi_device(dev);
+    struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
+-   
++
+    if (NULL == data) {
+       return -ENXIO;
+    }
+@@ -904,7 +909,7 @@ static ssize_t store_power_test_mode(struct device *dev, struct device_attribute
+    if(sscanf(buf, "%x", &power_test_mode) != 1) {
+       return -EINVAL;
+    }
+-   
++
+    switch(power_test_mode){
+    case PUMA_ACPI_ENTER_ACTIVE_AC:
+       puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_ACTIVE_ON_AC);
+@@ -934,7 +939,7 @@ static ssize_t store_power_test_mode(struct device *dev, struct device_attribute
+       puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_ERP_INACTIVE);
+       break;
+    }
+-   
++
+    data->power_test_mode = power_test_mode;
+ 
+    return count;
+@@ -960,6 +965,10 @@ static DEVICE_ATTR(sb_device_mask, S_IRUGO | S_IWUSR, show_sb_device_mask, store
+ static DEVICE_ATTR(dsb_device_mask, S_IRUGO | S_IWUSR, show_dsb_device_mask, store_dsb_device_mask);
+ static DEVICE_ATTR(power_test_mode, S_IRUGO | S_IWUSR, show_power_test_mode, store_power_test_mode);
+ static DEVICE_ATTR(xgmii_port_mapping, S_IRUGO, show_xgmii_port_mapping, NULL);
++static DEVICE_ATTR(pcie_port0_dev_info, S_IRUGO, show_pcie_port_dev_info, NULL);
++static DEVICE_ATTR(pcie_port1_dev_info, S_IRUGO, show_pcie_port_dev_info, NULL);
++static DEVICE_ATTR(pcie_port2_dev_info, S_IRUGO, show_pcie_port_dev_info, NULL);
++static DEVICE_ATTR(pcie_port3_dev_info, S_IRUGO, show_pcie_port_dev_info, NULL);
+ 
+ static struct attribute_group *puma_acpi_sysfs_entries[] = {
+    &dev_attr_system_state.attr,
+@@ -982,6 +991,10 @@ static struct attribute_group *puma_acpi_sysfs_entries[] = {
+    &dev_attr_dsb_device_mask.attr,
+    &dev_attr_power_test_mode.attr,
+    &dev_attr_xgmii_port_mapping.attr,
++   &dev_attr_pcie_port0_dev_info.attr,
++   &dev_attr_pcie_port1_dev_info.attr,
++   &dev_attr_pcie_port2_dev_info.attr,
++   &dev_attr_pcie_port3_dev_info.attr,
+    NULL,
+ };
+ 
+@@ -990,6 +1003,32 @@ static struct attribute_group puma_acpi_attr_group = {
+    .attrs = puma_acpi_sysfs_entries,
+ };
+ 
++static ssize_t show_pcie_port_dev_info(struct device *dev, struct device_attribute *attr, char *buf)
++{
++   struct acpi_device *acpi = to_acpi_device(dev);
++   struct puma_acpi_data *data = (NULL == acpi) ? NULL : acpi_driver_data(acpi);
++   unsigned int index = 0;
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
++
++   if (attr == &dev_attr_pcie_port0_dev_info){
++      index = 0;
++   }
++   else if (attr == &dev_attr_pcie_port1_dev_info){
++      index = 1;
++   }
++   else if (attr == &dev_attr_pcie_port2_dev_info){
++      index = 2;
++   }
++   else if (attr == &dev_attr_pcie_port3_dev_info){
++      index = 3;
++   }
++
++   return sprintf(buf, "0x%08x\n", data->pcie_port_dev_info[index]);
++}
++
+ static inline int puma_check_condition(int *acpi_event, int *netip_event, int *timer_event)
+ {
+    return ((*acpi_event = test_and_clear_bit(PUMA_ACPI_EVENT, &puma_events)) ||
+@@ -1000,7 +1039,7 @@ static inline int puma_check_condition(int *acpi_event, int *netip_event, int *t
+ static void puma_acpi_notify(struct acpi_device *acpi_dev, unsigned int event)
+ {
+    struct puma_acpi_data *data = acpi_driver_data(acpi_dev);
+-   
++
+    if(!(kfifo_put(&data->notify_fifo, &event))) {
+       pr_err("Puma ACPI notify fifo full!\n");
+    } else {
+@@ -1089,7 +1128,7 @@ int puma_acpi_make_pmc_ipc_channel_operational(void)
+          pr_err("iosf_mbi_read failed %d at line %d!\n",ret_value, __LINE__);
+       } else if((ret_value = iosf_mbi_write(PUMA_PMC_PORT_ID, PUMA_PMC_WRITE_OPCODE, PUMA_ATOM2PMC_CSR, (reg_value | PUMA_PMC_IPC_OPERATIONAL_MASK))) < 0) {
+          pr_err("iosf_mbi_write failed %d at line %d!\n",ret_value, __LINE__);
+-      } 
++      }
+    } else {
+       pr_err("Puma ACPI iosf mbi not available\n");
+       ret_value = -ENODEV;
+@@ -1104,7 +1143,7 @@ int puma_acpi_pmc_ipc(int operation, unsigned int cmd, unsigned int *data)
+    int ret_value = 0;
+    unsigned int condition = 1;
+    unsigned int timeout_count = PUMA_MAX_PMC_IPC_RETRY;
+-   
++
+    if(operation == PUMA_WRITE_PMC_IPC) {
+       if((ret_value = iosf_mbi_write(PUMA_PMC_PORT_ID, PUMA_PMC_WRITE_OPCODE, PUMA_ATOM2PMC_DB, cmd)) < 0) {
+          pr_err("iosf_mbi_write failed %d for cmd %u at line %d!\n", ret_value, cmd, __LINE__);
+@@ -1132,7 +1171,7 @@ int puma_acpi_pmc_ipc(int operation, unsigned int cmd, unsigned int *data)
+          pr_err("iosf_mbi_write failed %d at line %d!\n", ret_value, __LINE__);
+       } else if((ret_value = iosf_mbi_write(PUMA_PMC_PORT_ID, PUMA_PMC_WRITE_OPCODE, PUMA_PMC2ATOM_DBM, (*data & ~PUMA_PMC_IPC_BUSY_MASK))) < 0) {
+          pr_err("iosf_mbi_write failed %d at line %d!\n", ret_value, __LINE__);
+-      } 
++      }
+    } else {
+       pr_err("Invalid operation\n");
+    }
+@@ -1163,7 +1202,7 @@ void puma_acpi_button_release(struct puma_acpi_data *data, unsigned int event)
+             data->current_state = PUMA_ACPI_STATE_DEEP_STANDBY;
+             data->notify_state_type = PUMA_ACPI_NOTIFY_DEEP_STANDBY;
+             data->on_bat_during_standby = false;
+-         } 
++         }
+          break;
+       case PUMA_ACPI_STATE_BBU:
+          if((data->timer_state >= PUMA_ACPI_TIMER_SB_THRS) && (data->timer_state <= PUMA_ACPI_TIMER_SB_LED)) {
+@@ -1174,7 +1213,7 @@ void puma_acpi_button_release(struct puma_acpi_data *data, unsigned int event)
+             data->current_state = PUMA_ACPI_STATE_DEEP_STANDBY;
+             data->notify_state_type = PUMA_ACPI_NOTIFY_DEEP_STANDBY;
+             data->on_bat_during_standby = true;
+-         } 
++         }
+          break;
+       case PUMA_ACPI_STATE_STANDBY:
+          if(data->timer_state >= PUMA_ACPI_TIMER_DSB_THRS) {
+@@ -1201,11 +1240,11 @@ void puma_acpi_button_release(struct puma_acpi_data *data, unsigned int event)
+             data->deepstandby2active = true;
+          }
+          break;
+-      default:                  
++      default:
+          pr_err("Puma ACPI ERROR invalid state %d for event %d\n", data->current_state, event);
+    }
+-   
+-   data->timer_state = PUMA_ACPI_TIMER_NOT_STARTED; 
++
++   data->timer_state = PUMA_ACPI_TIMER_NOT_STARTED;
+ }
+ 
+ /* puma_acpi_pmc2atom_ipc() - PMC has hit the abort condition, print the indicated error message */
+@@ -1214,7 +1253,7 @@ void puma_acpi_pmc2atom_ipc(struct puma_acpi_data *data, unsigned int event)
+    unsigned int out_value;
+ 
+    puma_acpi_pmc_ipc(PUMA_READ_PMC_IPC, 0, &out_value);
+-   if(PUMA_PMC_IPC_GET_CMD(out_value) == PUMA_PMC_ABORT_MSG) { 
++   if(PUMA_PMC_IPC_GET_CMD(out_value) == PUMA_PMC_ABORT_MSG) {
+       switch(out_value & PUMA_PMC_IPC_PAYLOAD_MASK) {
+          case PUMA_PMC_ABORT_CONDITION1:
+             pr_err("Puma ACPI ERROR: PMC exited because ILB interrupt is present and CPU is going to exit C7\n");
+@@ -1225,7 +1264,7 @@ void puma_acpi_pmc2atom_ipc(struct puma_acpi_data *data, unsigned int event)
+          case PUMA_PMC_ABORT_CONDITION3:
+             pr_err("Puma ACPI ERROR: PMC exited because PLLs are still locked\n");
+             break;
+-         default:   
++         default:
+             pr_err("Puma ACPI ERROR invalid event %d msg\n", event);
+       }
+    } else {
+@@ -1248,7 +1287,7 @@ void puma_acpi_event_handler(struct puma_acpi_data *data)
+                data->current_state = PUMA_ACPI_STATE_ACTIVE;
+                data->notify_state_type = PUMA_ACPI_NOTIFY_ACTIVE_ON_AC;
+             } else if ((data->current_state == PUMA_ACPI_STATE_STANDBY) || (data->current_state == PUMA_ACPI_STATE_DEEP_STANDBY)) {
+-               data->on_bat_during_standby = false;   
++               data->on_bat_during_standby = false;
+                acpi_bus_generate_netlink_event(data->acpi_dev->pnp.device_class, dev_name(&data->acpi_dev->dev), PUMA_ACPI_NOTIFY_PWR_STAT_CNG_DURING_SB, false);
+             }
+             break;
+@@ -1257,7 +1296,7 @@ void puma_acpi_event_handler(struct puma_acpi_data *data)
+                data->current_state = PUMA_ACPI_STATE_BBU;
+                data->notify_state_type = PUMA_ACPI_NOTIFY_ACTIVE_ON_BATTERY;
+             } else if ((data->current_state == PUMA_ACPI_STATE_STANDBY) || (data->current_state == PUMA_ACPI_STATE_DEEP_STANDBY)) {
+-               data->on_bat_during_standby = true;  
++               data->on_bat_during_standby = true;
+                acpi_bus_generate_netlink_event(data->acpi_dev->pnp.device_class, dev_name(&data->acpi_dev->dev), PUMA_ACPI_NOTIFY_PWR_STAT_CNG_DURING_SB, true);
+             }
+             break;
+@@ -1267,7 +1306,7 @@ void puma_acpi_event_handler(struct puma_acpi_data *data)
+                pr_err("Puma ACPI invalid state %d for event %d\n", data->current_state, event);
+             }
+             break;
+-         case PUMA_ACPI_NOTIFY_BATTERY_SPIKE:     
++         case PUMA_ACPI_NOTIFY_BATTERY_SPIKE:
+             // check the current status of power
+             if(data->current_state != PUMA_ACPI_STATE_BBU) {
+                pr_err("Puma ACPI invalid state %d for event %d\n", data->current_state, event);
+@@ -1537,7 +1576,7 @@ static inline void puma_acpi_update(struct puma_acpi_data *data, int led_state)
+    }
+ }
+ 
+-/* puma_acpi_update_system() - Change the PMC state based on system, netip and resource state. 
++/* puma_acpi_update_system() - Change the PMC state based on system, netip and resource state.
+  * Also indicate the ACPID about the current state
+  */
+ void puma_acpi_update_system(struct puma_acpi_data *data)
+@@ -1545,9 +1584,9 @@ void puma_acpi_update_system(struct puma_acpi_data *data)
+    unsigned int ipc_data;
+    int ret = 0;
+ 
+-   pr_debug("Puma ACPI state %d Netip state %d PMC state %d Platform resource %d notify type %d before system update\n", 
++   pr_debug("Puma ACPI state %d Netip state %d PMC state %d Platform resource %d notify type %d before system update\n",
+       data->current_state, data->netip_state, data->pmc_state, data->acpi_resource_indication, data->notify_state_type);
+-   
++
+    switch(data->current_state) {
+       case PUMA_ACPI_STATE_ACTIVE:
+          if(data->notify_state_type) {
+@@ -1569,7 +1608,7 @@ void puma_acpi_update_system(struct puma_acpi_data *data)
+                   data->notify_state_type = 0;
+                   data->pmc_state = PUMA_ACPI_STATE_ACTIVE;
+                   data->led_state = LED_ON;
+-                  puma_acpi_power_led(data); 
++                  puma_acpi_power_led(data);
+                } else {
+                   pr_err("puma_acpi_pmc_ipc SETPS ACTIVE failed\n");
+                   PUMA_PRINT_STATE(data);
+@@ -1622,7 +1661,7 @@ void puma_acpi_update_system(struct puma_acpi_data *data)
+       default:
+          pr_err("Puma ACPI Invalid state %d\n", data->current_state);
+    }
+-   pr_debug("Puma ACPI state %d Netip state %d PMC state %d Platform resource %d notify type %d after system update\n", 
++   pr_debug("Puma ACPI state %d Netip state %d PMC state %d Platform resource %d notify type %d after system update\n",
+    data->current_state, data->netip_state, data->pmc_state, data->acpi_resource_indication, data->notify_state_type);
+ }
+ 
+@@ -1637,7 +1676,7 @@ static int puma_acpi_task(void *data)
+ 
+    allow_signal(SIGKILL);
+ 
+-   // update the current state 
++   // update the current state
+    if(acpi_data->current_state == PUMA_ACPI_STATE_BBU) {
+       acpi_bus_generate_netlink_event(acpi_data->acpi_dev->pnp.device_class, dev_name(&acpi_data->acpi_dev->dev), PUMA_ACPI_NOTIFY_ACTIVE_ON_BATTERY, 0);
+    } else {
+@@ -1656,8 +1695,8 @@ static int puma_acpi_task(void *data)
+       if(timer_event) {
+          puma_timer_event_handler(acpi_data);
+       }
+-      
+-      if(acpi_event) { 
++
++      if(acpi_event) {
+          puma_acpi_event_handler(acpi_data);
+       }
+ 
+@@ -1726,6 +1765,46 @@ static int puma_acpi_dev_disabled_status(struct puma_acpi_data *data)
+    return ret_value;
+ }
+ 
++static int get_pcie_port_dev_info(unsigned int *pcie_port_dev_info){
++   int ret = 0;
++   int i;
++   int device_count = 0;
++   unsigned int l;
++   struct pci_bus *port_bus = NULL;
++   struct pci_bus *device_bus = NULL;
++   
++   //All PCIe port are under bus 0
++   port_bus = pci_find_bus(0, 0);
++   if(port_bus == NULL){
++      pr_err("get_pcie_port_dev_info: cannot find bus 0!\n");
++      return -ENODEV;
++   }
++   //There are 4 PCIe ports. First, we need to find out which port is enumerated.
++   //Only the port with device connected will be enumerated.
++   for(i = 0; i < 4; i++){
++      //Set the default mapping to 0xffffffff
++      pcie_port_dev_info[i] = 0xffffffff;
++      
++      //PCIe port's device is "1c", function will be 0~3. If we can read verdor
++      //id, it means the port is enumerated.
++      if(pci_bus_read_dev_vendor_id(port_bus, PCI_DEVFN(0x1c, i), &l, 60 * 1000)){
++         //Increase the device count.
++         device_count++;
++         //The first PCIe device's Bus:Device:Function will be 01:00:00
++         //The second PCIe device's Bus:Device:Function will be 02:00:00
++         device_bus = pci_find_bus(0, device_count);
++         if(device_bus == NULL){
++            pr_err("get_pcie_port_dev_info: cannot find bus %d!\n", device_count);
++            continue;
++         }
++         if(pci_bus_read_dev_vendor_id(device_bus, PCI_DEVFN(0, 0), &l, 60 * 1000)){
++            pcie_port_dev_info[i] = l;
++         }
++      }
++   }
++   return ret;
++}
++
+ static int puma_acpi_add(struct acpi_device *acpi_dev)
+ {
+    struct puma_acpi_data *data;
+@@ -1773,7 +1852,7 @@ static int puma_acpi_add(struct acpi_device *acpi_dev)
+    }
+ 
+    if(puma_acpi_get_data(data, "PPRS", &data->acpi_resource_state_vector)) {
+-      pr_err("puma_acpi_get_data PPRS failed!\n"); 
++      pr_err("puma_acpi_get_data PPRS failed!\n");
+    } else if(data->acpi_resource_state_vector != 0) {
+       data->acpi_resource_indication = PUMA_ACPI_RESOURCE_ON;
+    } else if(data->acpi_resource_state_vector == 0) {
+@@ -1781,7 +1860,7 @@ static int puma_acpi_add(struct acpi_device *acpi_dev)
+    }
+ 
+    /* create debug attributes */
+-   if(ret = sysfs_create_group(&acpi_dev->dev.kobj, &puma_acpi_attr_group)) {
++   if((ret = sysfs_create_group(&acpi_dev->dev.kobj, &puma_acpi_attr_group))) {
+       pr_err("puma sysfs_create_group failed!\n");
+       goto puma_acpi_add_error;
+    } else {
+@@ -1820,11 +1899,16 @@ static int puma_acpi_add(struct acpi_device *acpi_dev)
+       }
+    }
+ 
+-   if(ret = puma_acpi_dev_disabled_status(data)) {
++   if((ret = puma_acpi_dev_disabled_status(data))) {
+       pr_err("Get devices disabled status failed\n");
+       goto puma_acpi_add_error;
+    }
+ 
++   if((ret = get_pcie_port_dev_info(data->pcie_port_dev_info))) {
++      pr_err("Get pcie port device mapping failed\n");
++      goto puma_acpi_add_error;
++   }
++
+    init_waitqueue_head(&puma_wait);
+    init_timer(&data->timer);
+    data->timer_state = PUMA_ACPI_TIMER_NOT_STARTED;

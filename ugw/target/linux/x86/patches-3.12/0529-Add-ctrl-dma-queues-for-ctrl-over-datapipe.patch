@@ -1,0 +1,89 @@
+From 2b7d35588f620c8e329d4f39988f6287a2d58603 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 27 Nov 2016 11:06:22 +0200
+Subject: [PATCH 529/639] Add ctrl dma queues for ctrl over datapipe
+
+---
+ include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h |  8 ++++----
+ include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h |  8 ++++----
+ include/linux/avalanche/puma7/puma7_cppi_prv.h      | 12 ++++++++----
+ 3 files changed, 16 insertions(+), 12 deletions(-)
+
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+index 8f88ba9..d78d323 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+@@ -410,10 +410,10 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_HI_NP2APP_Q_NUM)
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_LOW_NP2APP_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q347 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_HI_APP2NP_Q_NUM)                     /* PAL_CPPI_PP_QMGR_G1_Q348 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_LOW_APP2NP_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G1_Q349 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_HI_TX_CH_20_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q350 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_LOW_TX_CH_20_Q_NUM)                  /* PAL_CPPI_PP_QMGR_G1_Q351 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_HI_TX_CH_21_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q352 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_LOW_TX_CH_21_Q_NUM)                  /* PAL_CPPI_PP_QMGR_G1_Q353 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_CTRL_HI_APP2NP_Q_NUM)                /* PAL_CPPI_PP_QMGR_G1_Q350 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_CTRL_LOW_APP2NP_Q_NUM)               /* PAL_CPPI_PP_QMGR_G1_Q351 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_CTRL_HI_NP2APP_Q_NUM)                /* PAL_CPPI_PP_QMGR_G1_Q352 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_CTRL_LOW_NP2APP_Q_NUM)               /* PAL_CPPI_PP_QMGR_G1_Q353 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_HI_TX_CH_22_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q354 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_LOW_TX_CH_22_Q_NUM)                  /* PAL_CPPI_PP_QMGR_G1_Q355 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G1_CDMA10_INFRA_INPUT_HI_TX_CH_23_Q_NUM)                   /* PAL_CPPI_PP_QMGR_G1_Q356 */\
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+index e099cf7..7c66c55 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+@@ -559,10 +559,10 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_HOST_FD_Q_NUM)
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_HIGH_HOST_FD_Q_NUM)                       /* PAL_CPPI_PP_QMGR_G2_Q496 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_LOW_TX_COMPLETE_Q_NUM)                    /* PAL_CPPI_PP_QMGR_G2_Q497 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_ARM_HOST2PP_HI_TX_COMPLETE_Q_NUM)                     /* PAL_CPPI_PP_QMGR_G2_Q498 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q52)                                           /* PAL_CPPI_PP_QMGR_G2_Q499 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q53)                                           /* PAL_CPPI_PP_QMGR_G2_Q500 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q54)                                           /* PAL_CPPI_PP_QMGR_G2_Q501 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q55)                                           /* PAL_CPPI_PP_QMGR_G2_Q502 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_APP2NP_INFRA_CTRL_PPINFO_HOST_FD_Q_NUM)               /* PAL_CPPI_PP_QMGR_G2_Q499 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_APP2NP_INFRA_CTRL_DATA_HOST_FD_Q_NUM)                 /* PAL_CPPI_PP_QMGR_G2_Q500 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_NP2APP_INFRA_CTRL_PPINFO_HOST_FD_Q_NUM)               /* PAL_CPPI_PP_QMGR_G2_Q501 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_NP2APP_INFRA_CTRL_DATA_HOST_FD_Q_NUM)                 /* PAL_CPPI_PP_QMGR_G2_Q502 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q56)                                           /* PAL_CPPI_PP_QMGR_G2_Q503 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q57)                                           /* PAL_CPPI_PP_QMGR_G2_Q504 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_EMB_FD_Q58)                                           /* PAL_CPPI_PP_QMGR_G2_Q505 */\
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+index 64e6a3c..f3f5b60 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -666,6 +666,10 @@ typedef enum PAL_CPPI_PP_DESC_REGIONs
+ #define PAL_CPPI_PP_APP2NP_HOST_FD_DESC_COUNT                                               256
+ #define PAL_CPPI_PP_APP2NP_INFRA_PPINFO_HOST_FD_DESC_COUNT                                  128
+ #define PAL_CPPI_PP_APP2NP_INFRA_DATA_HOST_FD_DESC_COUNT                                    128
++#define PAL_CPPI_PP_APP2NP_INFRA_HIGH_PPINFO_HOST_FD_DESC_COUNT                             64
++#define PAL_CPPI_PP_APP2NP_INFRA_HIGH_DATA_HOST_FD_DESC_COUNT                               64
++#define PAL_CPPI_PP_NP2APP_INFRA_HIGH_PPINFO_HOST_FD_DESC_COUNT                             64
++#define PAL_CPPI_PP_NP2APP_INFRA_HIGH_DATA_HOST_FD_DESC_COUNT                               64
+ #else
+ #define PAL_CPPI_PP_NP2APP_HOST_FD_DESC_COUNT                                               64
+ #define PAL_CPPI_PP_NP2APP_INFRA_PPINFO_HOST_FD_DESC_COUNT                                  32
+@@ -1261,8 +1265,8 @@ typedef enum PAL_CPPI_PP_DMA10_INFRA_RX_CHANNELS
+     PAL_CPPI_PP_DMA10_VOICE_DSP_INFRA_RX_CH,
+     PAL_CPPI_PP_DMA10_NP2APP_INFRA_RX_CH,
+     PAL_CPPI_PP_DMA10_APP2NP_INFRA_RX_CH,
+-    PAL_CPPI_PP_DMA10_INFRA_RX_CH_20,
+-    PAL_CPPI_PP_DMA10_INFRA_RX_CH_21,
++    PAL_CPPI_PP_DMA10_APP2NP_INFRA_RX_CTRL_CH,
++    PAL_CPPI_PP_DMA10_NP2APP_INFRA_RX_CTRL_CH,
+     PAL_CPPI_PP_DMA10_INFRA_RX_CH_22,
+     PAL_CPPI_PP_DMA10_INFRA_RX_CH_23,
+     PAL_CPPI_PP_DMA10_INFRA_RX_CHANNELS_NUM
+@@ -1290,8 +1294,8 @@ typedef enum PAL_CPPI_PP_DMA10_INFRA_TX_CHANNELS
+     PAL_CPPI_PP_DMA10_VOICE_DSP_INFRA_TX_CH,
+     PAL_CPPI_PP_DMA10_NP2APP_INFRA_TX_CH,
+     PAL_CPPI_PP_DMA10_APP2NP_INFRA_TX_CH,
+-    PAL_CPPI_PP_DMA10_INFRA_TX_CH_20,
+-    PAL_CPPI_PP_DMA10_INFRA_TX_CH_21,
++    PAL_CPPI_PP_DMA10_APP2NP_INFRA_CTRL_TX_CH,
++    PAL_CPPI_PP_DMA10_NP2APP_INFRA_CTRL_TX_CH,
+     PAL_CPPI_PP_DMA10_INFRA_TX_CH_22,
+     PAL_CPPI_PP_DMA10_INFRA_TX_CH_23,
+     PAL_CPPI_PP_DMA10_INFRA_TX_CHANNELS_NUM
+-- 
+2.10.1
+

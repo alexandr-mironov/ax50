@@ -1,0 +1,176 @@
+From 2eb89d78176a7a9614885e33354638161642d9f6 Mon Sep 17 00:00:00 2001
+From: "Michael L. Walker" <michael.l.walker@intel.com>
+Date: Thu, 19 Jan 2017 16:04:05 -0700
+Subject: [PATCH 579/639] net: Disable bridge-netfilter calls by default,
+ enable as needed
+
+Symptom: increased CPU load and fragmentation / reassembly on mux bridge
+RootCause: current linux kernel doesn't provide a way to override the global
+    flag that enables bridge-netfilter hooks, and those hooks should be
+    disabled on mux bridge (and possibly more bridges in the future)
+Resolution: Add kernel procfs entry which allows disabling bridge-netfilter
+    calls on one specific bridge, overriding the kernel global flag
+---
+ net/bridge/br_netfilter.c | 12 ++++++--
+ net/bridge/br_private.h   |  9 ++++++
+ net/bridge/br_sysfs_br.c  | 72 +++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 90 insertions(+), 3 deletions(-)
+ mode change 100644 => 100755 net/bridge/br_netfilter.c
+ mode change 100644 => 100755 net/bridge/br_private.h
+ mode change 100644 => 100755 net/bridge/br_sysfs_br.c
+
+diff --git a/net/bridge/br_netfilter.c b/net/bridge/br_netfilter.c
+old mode 100644
+new mode 100755
+index bc9dc38..bb93389
+--- a/net/bridge/br_netfilter.c
++++ b/net/bridge/br_netfilter.c
+@@ -687,14 +687,18 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
+ 	br = p->br;
+ 
+ 	if (IS_IPV6(skb) || IS_VLAN_IPV6(skb) || IS_PPPOE_IPV6(skb)) {
+-		if (!brnf_call_ip6tables && !br->nf_call_ip6tables)
++		/* If the flag is set for this bridge to disable bridge-netfilter hooks, 
++		   that will override the global flag which enables / disables the hooks */
++		if (br->nf_disable_ip6tables || (!brnf_call_ip6tables && !br->nf_call_ip6tables))
+ 			return NF_ACCEPT;
+ 
+ 		nf_bridge_pull_encap_header_rcsum(skb);
+ 		return br_nf_pre_routing_ipv6(hook, skb, in, out, okfn);
+ 	}
+ 
+-	if (!brnf_call_iptables && !br->nf_call_iptables)
++	/* If the flag is set for this bridge to disable bridge-netfilter hooks, 
++	   that will override the global flag which enables / disables the hooks */
++	if (br->nf_disable_iptables || (!brnf_call_iptables && !br->nf_call_iptables))
+ 		return NF_ACCEPT;
+ 
+ 	if (!IS_IP(skb) && !IS_VLAN_IP(skb) && !IS_PPPOE_IP(skb))
+@@ -832,7 +836,9 @@ static unsigned int br_nf_forward_arp(unsigned int hook, struct sk_buff *skb,
+ 		return NF_ACCEPT;
+ 	br = p->br;
+ 
+-	if (!brnf_call_arptables && !br->nf_call_arptables)
++	/* If the flag is set for this bridge to disable bridge-netfilter hooks, 
++	   that will override the global flag which enables / disables the hooks */
++	if (br->nf_disable_arptables || (!brnf_call_arptables && !br->nf_call_arptables))
+ 		return NF_ACCEPT;
+ 
+ 	if (!IS_ARP(skb)) {
+diff --git a/net/bridge/br_private.h b/net/bridge/br_private.h
+old mode 100644
+new mode 100755
+index 81d82e1..fc14737
+--- a/net/bridge/br_private.h
++++ b/net/bridge/br_private.h
+@@ -249,6 +249,15 @@ struct net_bridge
+ 	bool				nf_call_iptables;
+ 	bool				nf_call_ip6tables;
+ 	bool				nf_call_arptables;
++	/* These non-standard parameters allow disabling the bridge-netfilter hooks 
++	   even if those hooks are enabled globally.  This is to support special bridge
++	   configurations which NEED to bypass the bridge-netfilter hooks, for example 
++	   to avoid fragmented packets being reassembled and re-fragmented, and to 
++	   avoid negative performance impact from unecessarily calling those hooks */
++	bool				nf_disable_iptables;
++	bool				nf_disable_ip6tables;
++	bool				nf_disable_arptables;
++    
+ #endif
+ 	u16				group_fwd_mask;
+ 
+diff --git a/net/bridge/br_sysfs_br.c b/net/bridge/br_sysfs_br.c
+old mode 100644
+new mode 100755
+index 3b9637f..2403175
+--- a/net/bridge/br_sysfs_br.c
++++ b/net/bridge/br_sysfs_br.c
+@@ -715,6 +715,74 @@ static ssize_t store_nf_call_arptables(
+ }
+ static DEVICE_ATTR(nf_call_arptables, S_IRUGO | S_IWUSR,
+ 		   show_nf_call_arptables, store_nf_call_arptables);
++
++static ssize_t show_nf_disable_iptables(
++	struct device *d, struct device_attribute *attr, char *buf)
++{
++	struct net_bridge *br = to_bridge(d);
++	return sprintf(buf, "%u\n", br->nf_disable_iptables);
++}
++
++static int set_nf_disable_iptables(struct net_bridge *br, unsigned long val)
++{
++	br->nf_disable_iptables = val ? true : false;
++	return 0;
++}
++
++static ssize_t store_nf_disable_iptables(
++	struct device *d, struct device_attribute *attr, const char *buf,
++	size_t len)
++{
++	return store_bridge_parm(d, buf, len, set_nf_disable_iptables);
++}
++static DEVICE_ATTR(nf_disable_iptables, S_IRUGO | S_IWUSR,
++		   show_nf_disable_iptables, store_nf_disable_iptables);
++
++static ssize_t show_nf_disable_ip6tables(
++	struct device *d, struct device_attribute *attr, char *buf)
++{
++	struct net_bridge *br = to_bridge(d);
++	return sprintf(buf, "%u\n", br->nf_disable_ip6tables);
++}
++
++static int set_nf_disable_ip6tables(struct net_bridge *br, unsigned long val)
++{
++	br->nf_disable_ip6tables = val ? true : false;
++	return 0;
++}
++
++static ssize_t store_nf_disable_ip6tables(
++	struct device *d, struct device_attribute *attr, const char *buf,
++	size_t len)
++{
++	return store_bridge_parm(d, buf, len, set_nf_disable_ip6tables);
++}
++static DEVICE_ATTR(nf_disable_ip6tables, S_IRUGO | S_IWUSR,
++		   show_nf_disable_ip6tables, store_nf_disable_ip6tables);
++
++static ssize_t show_nf_disable_arptables(
++	struct device *d, struct device_attribute *attr, char *buf)
++{
++	struct net_bridge *br = to_bridge(d);
++	return sprintf(buf, "%u\n", br->nf_disable_arptables);
++}
++
++static int set_nf_disable_arptables(struct net_bridge *br, unsigned long val)
++{
++	br->nf_disable_arptables = val ? true : false;
++	return 0;
++}
++
++static ssize_t store_nf_disable_arptables(
++	struct device *d, struct device_attribute *attr, const char *buf,
++	size_t len)
++{
++	return store_bridge_parm(d, buf, len, set_nf_disable_arptables);
++}
++static DEVICE_ATTR(nf_disable_arptables, S_IRUGO | S_IWUSR,
++		   show_nf_disable_arptables, store_nf_disable_arptables);
++
++
+ #endif
+ #ifdef CONFIG_BRIDGE_VLAN_FILTERING
+ static ssize_t show_vlan_filtering(struct device *d,
+@@ -775,6 +843,10 @@ static struct attribute *bridge_attrs[] = {
+ 	&dev_attr_nf_call_iptables.attr,
+ 	&dev_attr_nf_call_ip6tables.attr,
+ 	&dev_attr_nf_call_arptables.attr,
++	&dev_attr_nf_disable_iptables.attr,
++	&dev_attr_nf_disable_ip6tables.attr,
++	&dev_attr_nf_disable_arptables.attr,
++	
+ #endif
+ #ifdef CONFIG_BRIDGE_VLAN_FILTERING
+ 	&dev_attr_vlan_filtering.attr,
+-- 
+2.10.1
+

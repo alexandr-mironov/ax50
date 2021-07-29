@@ -1,0 +1,143 @@
+From d266ffbfc36fc7d826f9cc3cb2cc4b4137b6e695 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Mon, 3 Oct 2016 17:27:29 -0700
+Subject: [PATCH 496/639] netip_subsystem: deepstandby entry, exit fix
+
+Fixing the endianness while enabling and disabling the netip function
+for deepstandy entry and exit flow.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 82 +++++++++++++++++++--------
+ 1 file changed, 58 insertions(+), 24 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index ab522f8..d8a685a 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -36,11 +36,14 @@
+ #include <linux/netip_subsystem.h>
+ #include <linux/delay.h>
+ #include <linux/timer.h>
++#include <linux/byteorder/generic.h>
+ #include "netip_subsystem_defs.h"
+ #include "netip_subsystem_pm.h"
+ #include "netip_subsystem_sysfs.h"
+ 
+-#define CLK_CTRL_CRU0_OFFSET (0)
++#define NETIP_CRU0_MOD_STATE_OFFSET (0)
++#define NETIP_CRU0_MOD_STATUS_OFFSET (4)
++#define NETIP_CRU0_ENABLE (3)
+ 
+ extern int docsis_chan_cfg;
+ extern int cm_mode;
+@@ -1097,19 +1100,47 @@ int __netss_set_service_level(uint32_t level)
+ 	return ret;
+ }
+ 
+-int netss_turn_off_netip_clock(void)
++/** Enable NetIP when on == true, otherwisedisable */
++static int netss_modify_netip_cru_mod_state(bool on)
+ {
+-   netss_dev_info_t clk_ctrl_mmio;
++   netss_dev_info_t netip_cru_mmio;
+    int ret = 0;
+-   if(netss_device_get_info(NETSS_DEV_CLK_CTRL, &clk_ctrl_mmio)) {
+-      printk(KERN_ALERT "Couldn't get clock Ctrl MMIO info!\n");
+-      ret = -1;
++   int count = 0;
++   if(netss_device_get_info(NETSS_DEV_CLK_CTRL, &netip_cru_mmio)) {
++      printk(KERN_ALERT "Couldn't get NetIP CRU MMIO info!\n");
++      ret = -ENOMEM;
+    } else {
+-      void __iomem *clk_ctrl_base = (void __iomem *)ioremap_nocache(clk_ctrl_mmio.base, clk_ctrl_mmio.size);
+-      uint32_t reg_val = __raw_readl(clk_ctrl_base + CLK_CTRL_CRU0_OFFSET);
+-      reg_val &= ~(0x3);
+-      __raw_writel(reg_val, clk_ctrl_base + CLK_CTRL_CRU0_OFFSET);
+-      iounmap(clk_ctrl_base);
++      void __iomem *netip_cru_base = ioremap_nocache(netip_cru_mmio.base, netip_cru_mmio.size);
++      uint32_t reg_val;
++
++      if (NULL != netip_cru_base) {
++         reg_val = ioread32be(netip_cru_base + NETIP_CRU0_MOD_STATE_OFFSET);
++
++         if (on) {
++            reg_val |= NETIP_CRU0_ENABLE;
++         } else {
++            reg_val &= ~(NETIP_CRU0_ENABLE);
++         }
++         iowrite32be(reg_val, netip_cru_base + NETIP_CRU0_MOD_STATE_OFFSET);
++
++         if (on) {
++            reg_val = ioread32be(netip_cru_base + NETIP_CRU0_MOD_STATUS_OFFSET);
++            while ((reg_val & NETIP_CRU0_ENABLE) != NETIP_CRU0_ENABLE)
++            {
++               msleep(5);
++               reg_val = ioread32be(netip_cru_base + NETIP_CRU0_MOD_STATUS_OFFSET);
++               if (count > 1000) {
++                  ret = -EBUSY;
++                  printk(KERN_WARNING "NetIP clock not enabled in 5 sec cru0 stat= %08X\n", reg_val);
++                  break;
++               }
++               count++;
++            }
++         }
++         iounmap(netip_cru_base);
++      } else {
++         ret = -EFAULT;
++      }
+    }
+    return ret;
+ }
+@@ -1196,15 +1227,8 @@ int netss_runtime_suspend(struct device *dev)
+ 
+    if(!ret)
+    {
+-      /** 2. Turn off NetIP clock */
+-      netss_turn_off_netip_clock();
+-      /** Resume will be like a fresh boot for NETIP, which involues netip properties, configure messages */
+-      /** Reset boot handshake variables */
+-      g_netss_boot_handshake_done = false;
+-      g_netip_services_available = 0;
+-      g_netip_services_init_complete = 0;
+-      g_netip_services_status_ready = 0;
+-      g_netip_services_status_received = 0;
++      /** 2. Disable NetIP */
++      netss_modify_netip_cru_mod_state(false);
+    }
+ 
+    mutex_unlock(&g_netss_sysfs_attributes_info.lock);
+@@ -1215,16 +1239,26 @@ int netss_runtime_suspend(struct device *dev)
+ int netss_runtime_resume(struct device *dev)
+ {
+    struct pci_dev *pdev = to_pci_dev(dev);
+-   uint32_t level;
+-   int ret = -1;
++   int ret;
+ 
++   /** Enable NetIP */
++   ret = netss_modify_netip_cru_mod_state(true);
++   if (ret) {
++      return ret;
++   }
+    mutex_lock(&g_netss_sysfs_attributes_info.lock);
+ 
++   /** Resume will be like a fresh boot for NETIP, which involues netip properties, configure messages */
++   /** Reset boot handshake variables */
++   g_netss_boot_handshake_done = 0;
++   g_netip_services_available = 0;
++   g_netip_services_init_complete = 0;
++   g_netip_services_status_ready = 0;
++   g_netip_services_status_received = 0;
++
+    /**Notify the NetIP power state to all NetSS child drivers */
+    ret = netss_notify_netip_power_state_to_child_drivers(NETSS_NETIP_POWER_STATE_ACTIVE);
+ 
+-   level = g_netss_sysfs_attributes_info.service_level;
+-   netss_send_service_request_msg(level);
+    mutex_unlock(&g_netss_sysfs_attributes_info.lock);
+    return ret;
+ }
+-- 
+2.10.1
+

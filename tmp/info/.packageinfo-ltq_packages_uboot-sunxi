@@ -1,0 +1,282 @@
+Source-Makefile: package/feeds/ltq_packages/uboot-sunxi/Makefile
+Package: uboot-sunxi-A10-OLinuXino-Lime
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: A10-OLinuXino-Lime
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for the A10 OLinuXino LIME
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for the A10 OLinuXino LIME
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-A13-OLinuXino
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: A13-OLinuXino
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for the A13 OlinuXino
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for the A13 OlinuXino
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-A20-OLinuXino-Lime
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: A20-OLinuXino-Lime
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for the A20 OLinuXino LIME
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for the A20 OLinuXino LIME
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-A20-OLinuXino_MICRO
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: A20-OLinuXino_MICRO
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for A20 OLinuXino MICRO
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for A20 OLinuXino MICRO
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Bananapi
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Bananapi
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Bananapi
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Bananapi
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Bananapro
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Bananapro
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Bananapro
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Bananapro
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Cubieboard
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Cubieboard
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Cubieboard
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Cubieboard
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Cubieboard2
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Cubieboard2
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Cubieboard2
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Cubieboard2
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Cubietruck
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Cubietruck
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Cubietruck
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Cubietruck
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Mele_M9
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Mele_M9
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for the Mele M9 (A31)
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for the Mele M9 (A31)
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-OLIMEX_A13_SOM
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: OLIMEX_A13_SOM
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for the Olimex A13 SOM
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for the Olimex A13 SOM
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Linksprite_pcDuino
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Linksprite_pcDuino
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Linksprite pcDuino
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Linksprite pcDuino
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Linksprite_pcDuino3
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Linksprite_pcDuino3
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Linksprite pcDuino3
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Linksprite pcDuino3
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-sunxi-Lamobo_R1
+Version: 2015.01
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_sunxi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: Lamobo_R1
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Lamobo R1
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot for Lamobo R1
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+

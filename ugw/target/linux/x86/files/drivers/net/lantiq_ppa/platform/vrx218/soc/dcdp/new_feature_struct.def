@@ -1,0 +1,192 @@
+//---------------------------------------------
+// Firmware  New Data Structure Definitions after PPA2.6
+//---------------------------------------------
+//  id       ::= [_a-zA-Z][_a-zA-Z0-9]*
+//  newline  ::= \n
+//  dec_num  ::= [0-9]+ 
+//  hex_num  ::= 0[x|X][0-9a-fA-F]+
+//  dw_pos   ::= [dec_num|hex_num]
+//  dw_range ::= dw_pos1 \.\. dw_pos2       ==> dw_pos1 <= dw_pos2
+//  bit_pos  ::= dec_num                    ==> 0 <= dec_num <=31
+//  bit_range::= bit_pos1 : bit_pos2        ==> bit_pos1 >= bit_pos2
+//  field_def::= FIELD id \[ bit_range \] newline
+//  dw_fdef  ::= DW \[ dw_pos \] \{ newline
+//                  field_def +                
+//                \} newline
+//  dw_def   ::= DW  \[ dw_pos \] id? newline
+//  dw_rdef  ::= DW \[ dw_range \] id? newline
+//  ds_def   ::= DS id \{ \newline
+//                  [dw_fdef|dw_def|dw_rdef] + 
+//              \} newline
+//---------------------------------------------
+
+DS NEW_FEATURE_CFG {
+    DW[0] {
+        FIELD time_tick         [31:16]
+        FIELD vrx218_atm        [7:7]
+        FIELD vrx218_en         [6:6]
+        FIELD app4_fast_path_en [5:5]
+        FIELD session_mib_unit  [4:4]
+        FIELD class_en          [3:3]
+        FIELD ssc_mode          [2:2]
+        FIELD asc_mode          [1:1]
+        FIELD psave_en          [0:0]
+    }
+}
+
+DS CAPWAP_CONFIG {
+        DW[0] {
+        FIELD capwap_itf_bmap       [7:0]
+        }
+}
+
+//capwap table configuration   18*5
+DS CAPWAP_TABLE_CONFIG {
+     DW[0] {
+        FIELD us_max_frag_size      [31:16] 
+        FIELD us_dest_lit           [15:8]
+        FIELD qid                   [7:4]   
+        FIELD is_ipv4header         [1:1]
+        FIELD acc_en                [0:0]
+       }
+     DW[1]  rsvd_1
+     DW[2]  rsvd_2   
+     DW[3]  ds_mib
+     DW[4]  us_mib  
+     
+     //   dw[5-17]    : capwap header from DA/SA/type/IP/UDP/capwap_header 
+     DW[5] da_hi
+     DW[6] da_lo_sa_hi
+     DW[7] sa_lo
+     
+     DW[8] {
+            FIELD eth_type  [31:16]
+            FIELD version   [15:12]
+            FIELD head_len  [11:8]            
+            FIELD tos       [7:0]
+            }
+             
+     DW[9] {
+            FIELD  total_len [31:16]
+            FIELD  identifier [15:0]
+            }
+            
+     DW[10]  {     
+            FIELD  ip_flags      [31:29]
+            FIELD  ip_frag_off   [28:16]
+            FIELD  ttl        [15:8]
+            FIELD  protocol   [7:0]
+            }
+            
+     DW[11] {
+            FIELD  ip_checksum   [31:16]
+            FIELD  sa_ip      [15:0]
+            }
+     
+     DW[12] sa_ip_da_ip
+     
+     DW[13] {
+            FIELD  da_ip_lo   [31:16]
+            FIELD  src_port   [15:0]
+            }      
+            
+     DW[14] {
+            FIELD  dst_port    [31:16]
+            FIELD  udp_ttl_len [15:0]
+            }      
+            
+     DW[15] {
+            FIELD  udp_checksum [31:16]
+            FIELD  preamble     [15:8]
+            FIELD  hlen         [7:3]
+            FIELD  rid_hi       [2:0]       
+            }            
+              
+     DW[16] {
+            FIELD  rid_lo       [31:30]
+            FIELD  wbid         [29:25]
+            FIELD  t_flag       [24:24]
+            FIELD  f_flag       [23:23]       
+            FIELD  l_flag       [22:22]
+            FIELD  w_flag       [21:21]       
+            FIELD  m_flag       [20:20]
+            FIELD  k_flag       [19:19]       
+            FIELD  flags        [18:16]   
+            FIELD  frag_id      [15:0]               
+            }            
+     DW[17] {
+            FIELD  frag_off     [31:19]
+            FIELD  capwap_rsv   [18:16]
+            FIELD  payload      [15:0]
+           }
+}
+
+DS SOC_ACA_CFG_CTXT {
+   
+    //Promoted FPI Address (__EP_ADDR_BAR + ACA register addr) of TX_IN_HD_ACCUM_ADD
+    DW[0]   tx_in_aca_msg_ptr
+    
+    //Promoted FPI Address (__EP_ADDR_BAR + ACA register addr) of TX_OUT_HD_ACCUM_SUB
+    DW[1]   tx_out_aca_msg_ptr
+    
+    //Promoted FPI Address (__EP_ADDR_BAR + ACA register addr) of RX_IN_HD_ACCUM_ADD
+    DW[2]   rx_in_aca_msg_ptr
+    
+    //Promoted FPI Address (__EP_ADDR_BAR + ACA register addr) of RX_OUT_HD_ACCUM_SUB
+    DW[3]   rx_out_aca_msg_ptr
+    
+    //Not needed since similar to enq_idx of TX_IN desq_cfg_ctxt
+    DW[4]   tx_in_wr_ptr
+    
+    DW[5]   tx_out_rd_ptr
+    
+    //Not needed since similar to enq_idx of RX_IN desq_cfg_ctxt
+    DW[6]   rx_in_wr_ptr
+    
+    DW[7]   rx_out_rd_ptr
+    
+    DW[8]   tx_in_fw_cnt
+    
+    //Number of descriptors/data pointers released, to be written to TX_OUT_ACA_HD_ACCUM_SUB
+    DW[9]   tx_out_fw_cnt
+    
+    DW[10]  rx_in_fw_cnt
+    
+    DW[11]  rx_out_fw_cnt
+    
+    //Incremental number of pkts enqueued to SOC TX_IN but not inform device to take
+    DW[12]  tx_in_pend_fw_cnt
+    
+    DW[13..15]
+
+}
+
+//Counters updated by GRX330 PPE FW, accumulative counters
+DS TOTAL_SOC_ACA_CNT {
+
+    DW[0]   tx_in_enq_cnt
+    
+    DW[1]   tx_out_deq_cnt
+    
+    DW[2]   rx_in_enq_cnt
+    
+    DW[3]   rx_out_deq_cnt
+    
+}
+
+
+//Counters updated by VRX518 ACA, accumulative counters, base address needs to pass to device
+DS TOTAL_DEV_ACA_CNT {
+
+    DW[0]   tx_in_deq_cnt
+    
+    DW[1]   tx_out_enq_cnt
+    
+    DW[2]   rx_in_deq_cnt
+    
+    DW[3]   rx_out_enq_cnt
+    
+}
+
+
+

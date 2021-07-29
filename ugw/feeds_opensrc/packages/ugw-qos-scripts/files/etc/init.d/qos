@@ -1,0 +1,526 @@
+#!/bin/sh /etc/rc.common
+ 
+USE_PROCD=1
+START=55
+
+export LD_LIBRARY_PATH=/opt/lantiq/lib:/opt/lantiq/usr/lib:${LD_LIBRARY_PATH}
+export PATH=$PATH:/opt/lantiq/sbin:/opt/lantiq/usr/sbin:/opt/lantiq/bin:${PATH}
+
+ifcfg=/opt/lantiq/usr/sbin/ifcfg
+qcfg=/opt/lantiq/usr/sbin/qcfg
+qoscfg=/opt/lantiq/usr/sbin/qoscfg
+classcfg=/opt/lantiq/usr/sbin/classcfg
+switchfile=/opt/lantiq/etc/switchports.conf
+
+i="1"
+direction=" "
+device=" "
+configdb="/tmp/config.txt"
+
+map_interface()
+{
+	local wan="$1"
+	$ifcfg --ifmap -A "$wan" -t 1 -b eth1
+	$ifcfg --ifmap -A br-lan -t 0 -b eth0_1
+}
+
+parse_classifier()
+{
+	local class="c$i"
+	local interface="$1"
+	local cmd="$2"
+	local section="$3"
+
+	while read -r line
+	do
+		class_o=$(echo $line | awk '{print $2}')
+		interface_o=$(echo $line | awk '{print $3}')
+
+		if grep -Fq $class $configdb
+		then
+			#Modify existing classifier
+			if [ "$class" == "$class_o" ]; then
+				cmd_o=$(echo $line | awk '{ $1=""; $2=""; $3=""; print}' | xargs)
+				cmd=$(echo $cmd | xargs)
+				if [ "$cmd" != "$cmd_o" ]; then
+					string="$class $interface $cmd"
+					$classcfg -M $class -i $interface $cmd
+					sed -i "s/`echo $class`.*/`echo $string`/" $configdb
+					break
+				fi
+			fi
+		else
+			#Add new classifer
+			echo "$section $class $interface $cmd" >> $configdb
+			$classcfg -A $class -i $interface $cmd
+			break
+		fi
+	done < "$configdb"
+}
+
+parse_queue()
+{
+	local wan="$1"
+	local policy="$2"
+	local prio="$3"
+	local queue="q$i"
+	local pktsize="$4"
+	local class="$5"
+	local pir="$7"
+
+	if [ "$queue" = "q1" ]; then
+		queue="wan_def_queue"
+	elif [ "$queue" = "q2" ]; then
+		queue="wan_mgmt_queue"
+	elif [ "$direction" = "in" ] && [ "$queue" = "q3" ]; then
+		queue="eth_def_queue"
+	fi
+
+	while read -r line
+	do
+		queue_o=$(echo $line | awk '{print $2}')
+		wan_o=$(echo $line | awk '{print $3}')
+		policy_o=$(echo $line | awk '{print $5}')
+		prio_o=$(echo $line | awk '{print $4}')
+		found=`grep -F $queue $configdb`
+		if [ "$policy" = "sp" ]; then
+			pir_o=$(echo $line | awk '{print $6}')
+		elif [ "$policy" = "wfq" ]; then
+			pir_o=$(echo $line | awk '{print $7}')
+		fi
+
+		if [ -z "$pir" ]; then
+			shaper=""
+		else
+			shaper="-s cb --pir $pir"
+		fi
+		if grep -Fq $queue $configdb
+		then
+			#Modify existing queue
+			if [ "$queue" == "$queue_o" ]; then
+				if [ "$direction" = "in" ] && [ "$queue" != "wan_def_queue" ]  && [ "$queue" != "wan_mgmt_queue" ]; then
+					wan="br-lan"
+				fi
+				if [ "$policy" != "$policy_o" ]; then
+					if [ "$policy" = "sp" ]; then
+						$qcfg --queue -M $queue -i $wan -l $pktsize -m $policy --priority $prio --map $prio $shaper
+						string="$queue $wan $prio $policy $pir"
+						sed -i "s/`echo $queue`.*/`echo $string`/" $configdb
+						break
+					elif [ "$policy" = "wfq" ]; then
+						wgt="$6"
+						$qcfg --queue -M $queue -i $wan -l $pktsize -m $policy --weight $wgt --priority $prio --map $prio $shaper
+						string="$queue $wan $prio $policy $weight $pir"
+						sed -i "s/`echo $queue`.*/`echo $string`/" $configdb
+						break
+					fi
+				fi
+				if [ "$policy_o" = "sp" ] && [[ "$wan" != "$wan_o" ||  "$prio" != "$prio_o" || "$pir" != "$pir_o" ]]; then
+					if [ "$direction" = "in" ]; then
+						if [ "$queue" != "q1" ] && [ "$queue" != "q2" ]; then
+							wan="br-lan"
+						fi
+					fi
+					$qcfg --queue -M $queue -i $wan -l $pktsize -m $policy --priority $prio --map $prio $shaper
+					string="$queue $wan $prio $policy $pir"
+					sed -i "s/`echo $queue`.*/`echo $string`/" $configdb
+					break
+				elif [ "$policy_o" = "wfq" ]; then
+					weight_o=$(echo $line | awk '{print $6}')
+					wgt="$6"
+					pir_o=$(echo $line | awk '{print $7}')
+					if [[ "$wan_o" != "$wan" || "$prio_o" != "$prio" || "$weight_o" != "$weight" || "$pir" != "$pir_o" ]]; then
+						$qcfg --queue -M $queue -i $wan -l $pktsize -m $policy --weight $wgt --priority $prio --map $prio $shaper
+						string="$queue $wan $prio $policy $weight $pir"
+						sed -i "s/`echo $queue`.*/`echo $string`/" $configdb
+					fi
+					break
+				else
+					break
+				fi
+			fi
+		else
+			#Add new queue
+			[ "$direction" = "in" ] && wan="br-lan"
+			if [ "$policy" = "wfq" ]; then
+				weight=`uci -q get qos.$class.weight`
+				echo "$class $queue $wan $prio $policy $weight $pir" >> $configdb
+				$qcfg --queue -A $queue -i $wan -l $pktsize -m $policy --weight $weight --priority $prio --map $prio $shaper
+			else
+				echo "$class $queue $wan $prio $policy $pir" >> $configdb
+				$qcfg --queue -A $queue -i $wan -l $pktsize -m $policy --priority $prio --map $prio $shaper
+			fi
+		fi
+	done < "$configdb"
+}
+
+add_queues()
+{
+	local cg="$1"
+	local dev="$2"
+	local direction="$3"
+
+	classes=`uci get qos.$cg.classes`
+	size=$(wc -c <"$configdb")
+	for class in $classes; do
+		policy=`uci get qos.$class.policy`
+		pktsize=`uci get qos.$class.packetsize`
+		prio=`uci get qos.$class.priority`
+		pir=`uci -q get qos.$class.pir`
+		weight=`uci -q get qos.$class.weight`
+		if [ -z "$pir" ]; then
+			shaper=""
+		else
+			shaper="-s cb --pir $pir"
+		fi
+
+	if [ "$size" -le "1" ]; then
+		if [ "$class" = "Express" ]; then
+			class1="wan_mgmt_queue"
+		elif [ "$class" = "Priority" ]; then
+			class1="wan_def_queue"
+		elif [ "$direction" = "in" ]; then
+			dev="br-lan"
+			if [ "$prio" = "8" ]; then
+				class1="eth_def_queue"
+			else
+				class1="q$i"
+			fi
+		else
+				class1="q$i"
+		fi
+		if [ "$policy" = "wfq" ]; then
+			weight=`uci -q get qos.$class.weight`
+			echo "$class $class1 $dev $prio $policy $weight $pir" >> $configdb
+			$qcfg --queue -A $class1 -i $dev -l $pktsize -m $policy --weight $weight --priority $prio --map $prio $shaper
+		else
+			echo "$class $class1 $dev $prio $policy $pir" >> $configdb
+			$qcfg --queue -A $class1 -i $dev -l $pktsize -m $policy --priority $prio --map $prio  $shaper
+		fi
+	else
+		parse_queue  "$dev" "$policy" "$prio" "$pktsize" "$class" "$weight" "$pir"
+	fi
+	i=$((i+1))
+	done
+}
+
+add_classify()
+{
+	local section="$1"
+	local options="$2"
+	local excl="0"
+	local protoexcl="0"
+
+	for option in $options; do
+		config_get value "$section" "$option"
+		case "$option" in
+			exclude)
+				[ "$value" = "1" ] && excl="1"
+			;;
+			protoexclude)
+				[ "$value" = "1" ] && protoexcl="1"
+			;;
+			vlanidprio)
+				cmd="$cmd --vlan-prio-outer $value"
+					;;
+			vlanidpcp)
+				cmd="$cmd -j vlan --pcp-outer  $value"
+					;;
+			vlanidouter)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd --vlan-id-outer $value"
+				else
+					cmd="$cmd ! --vlan-id-outer $value"
+				fi
+			;;
+			srchost)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd -s $value"
+				else
+					cmd="$cmd ! -s $value"
+				fi
+			;;
+			dsthost)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd -d $value"
+				else
+					cmd="$cmd ! -d $value"
+				fi
+			;;
+			macsrc)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd --smac $value"
+				else
+					cmd="$cmd ! --smac $value"
+				fi
+			;;
+			macdest)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd --dmac $value"
+				else
+					cmd="$cmd ! --dmac $value"
+				fi
+			;;
+			srcports)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd --sport $value"
+				else
+					cmd="$cmd ! --sport $value"
+				fi
+			;;
+			destports)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd --dport $value"
+				else
+					cmd="$cmd ! --dport $value"
+				fi
+			;;
+			proto)
+				if [ "$protoexcl" = "0" ]; then
+					cmd="$cmd -p $value"
+				else
+					cmd="$cmd ! -p $value"
+				fi
+			;;
+			dscp)
+				if [ "$excl" = "0" ]; then
+					cmd="$cmd --iphdr-dscp $value"
+				else
+					cmd="$cmd ! --iphdr-dscp $value"
+				fi
+			;;
+			action)
+				cmd="$cmd -j dscp --actdscp $value"
+			;;
+			mark)
+				cmd="$cmd -j mark --mark $value"
+			;;
+			tcpflag)
+				cmd="$cmd --tcp-flags $value"
+		esac
+	done
+
+	if [ "$direction" = "out" ]; then
+		interface="br-lan"
+	elif [ "$direction" = "in" ]; then
+		interface="$device"
+	fi
+
+	parse_classifier "$interface" "$cmd" "$section"
+
+	i=$((i+1))
+	unset cmd
+}
+
+
+check_queue()
+{
+	while read -r line
+	do
+		class=$(echo $line | awk '{print $1}')
+		name_q=$(echo $line | awk '{print $2}')
+		wan=$(echo $line | awk '{print $3}')
+		if [ "$name_q" != "${name_q/c/}" ]; then
+			config_get mark "$class" mark
+			if [ -z "$mark" ]; then
+				$classcfg -D $name_q -i $wan
+				sed -i "/`echo $class`/d" $configdb
+			fi
+		else
+			prio=`uci -q get qos.$class.priority`
+			if [ -z "$prio" ] && [ "$name_q" = "${name_q/def_queue/}" ]; then
+				$qcfg --queue -D $name_q -i $wan -l 102400
+				sed -i "/`echo $class`/d" $configdb
+			fi
+		fi
+	done < "$configdb"
+
+	#Delete all def queue at the end
+	while read -r line
+	do
+		class=$(echo $line | awk '{print $1}')
+		name_q=$(echo $line | awk '{print $2}')
+		wan=$(echo $line | awk '{print $3}')
+		prio=`uci -q get qos.$class.priority`
+		if [ -z "$prio" ] && [ "$name_q" != "${name_q/def_queue/}" ]; then
+			$qcfg --queue -D $name_q -i $wan -l 102400
+			sed -i "/`echo $class`/d" $configdb
+		fi
+	done < "$configdb"
+}
+
+add_shaper()
+{
+	local rate="$1"
+	local section="$2"
+	local interface="$3"
+	local class="s$i"
+
+	while read -r line
+	do
+		class_o=$(echo $line | awk '{print $2}')
+		if grep -Fq $class $configdb
+		then
+			#Modify existing shaper
+			if [ "$class" == "$class_o" ]; then
+				interface_o=$(echo $line | awk '{print $3}')
+				rate_o=$(echo $line | awk '{print $4}')
+				if [[ "$interface" != "$interface_o" || "$rate" != "$rate_o" ]]; then
+					$qcfg --port -M $class -i $interface -s cb --pir $rate
+					string="$section s$i $interface $rate"
+					sed -i "s/`echo $queue`.*/`echo $string`/" $configdb
+				fi
+			fi
+		else
+			$qcfg --port -A s$i -i $interface -s cb --pir $rate
+			echo "$section s$i $interface $rate" >> $configdb
+		fi
+	done < "$configdb"
+}
+
+start_service()
+{
+	include /lib/functions.sh
+
+	config_cb() {
+		option_cb() {
+			return 0
+		}
+	case "$1" in
+		classify)
+			option_cb() {
+				append options "$1"
+			}
+		;;
+	esac
+		config_get TYPE "$CONFIG_SECTION" TYPE
+	case "$TYPE" in
+		interface)
+			config_get device "$CONFIG_SECTION" device
+			config_get enabled "$CONFIG_SECTION" enabled
+			config_get direction "$CONFIG_SECTION" direction
+			[ -z "$device" -o 1 -ne "$enabled" ] && {
+				[ -e "$configdb" ] && stop_service
+				return 1
+			}
+			config_get classgroup "$CONFIG_SECTION" classgroup
+			map_interface "$device"
+			add_queues "$classgroup" "$device" "$direction"
+			i=1
+	;;
+	classify|default|reclassify)
+		var="rules"
+		config_set "$CONFIG_SECTION" options "$options"
+		append "$var" "$CONFIG_SECTION"
+		for rule in $rules; do
+			config_get options "$rule" options
+		done
+			add_classify "$rule" "$options"
+			unset options
+	;;
+	shaper)
+		config_get rate "$CONFIG_SECTION" rate
+		add_shaper "$rate"
+	esac
+	}
+	config_load qos
+	check_queue
+}
+
+stop_service()
+{
+	#Delete classifiers
+	while read -r line
+	do
+		class=$(echo $line | awk '{print $1}')
+		name_q=$(echo $line | awk '{print $2}')
+		wan=$(echo $line | awk '{print $3}')
+		if [ "$name_q" != "${name_q/c/}" ]; then
+			$classcfg -D $name_q -i $wan
+			sed -i "/`echo $class`/d" $configdb
+		fi
+	done < "$configdb"
+
+	#Delete shaper
+	while read -r line
+	do
+		class=$(echo $line | awk '{print $1}')
+		name_q=$(echo $line | awk '{print $2}')
+		wan=$(echo $line | awk '{print $3}')
+		rate=$(echo $line | awk '{print $4}')
+		if [ "$name_q" != "${name_q/s/}" ]; then
+			$qcfg --port -D $name_q -i $wan -s cb --pir $rate
+			sed -i "/`echo $class`/d" $configdb
+		fi
+	done < "$configdb"
+
+	#Delete queues
+	while read -r line
+	do
+		class=$(echo $line | awk '{print $1}')
+		name_q=$(echo $line | awk '{print $2}')
+		wan=$(echo $line | awk '{print $3}')
+		if [ "$name_q" = "${name_q/def_queue/}" ]; then
+			$qcfg --queue -D $name_q -i $wan -l 102400
+			sed -i "/`echo $class`/d" $configdb
+		fi
+	done < "$configdb"
+
+	#Delete def_queues at the last
+	while read -r line
+	do
+		class=$(echo $line | awk '{print $1}')
+		name_q=$(echo $line | awk '{print $2}')
+		wan=$(echo $line | awk '{print $3}')
+		if [ "$name_q" != "${name_q/def_queue/}" ]; then
+			$qcfg --queue -D $name_q -i $wan -l 102400
+			sed -i "/`echo $class`/d" $configdb
+		fi
+	done < "$configdb"
+}
+
+reload_service()
+{
+	start
+}
+
+switchconfig()
+{
+	local wan="eth1"
+	local lanport=""
+
+	wanport=`uci get network.$wan.port`
+	wanport=$(($wanport+1))
+	lanintf=`uci get network.lan.ifname`
+
+	for lan in $lanintf;do
+		port=`uci get network.$lan.port`
+		port=$(($port+1))
+		lanport="$lanport $port"
+	done
+
+	if [ -e "$switchfile" ]; then
+		wport=`head -2 $switchfile | tail -1`
+		lport=`head -3 $switchfile | tail -1`
+		if [ "switch_mii1_port=\"$wanport"\" != "$wport" ]; then
+			sed -i "3s/.*/switch_mii1_port=\"$wanport\"/" $switchfile
+		elif [ "switch_lan_port=\"$lanport"\" != "$lport" ]; then
+			sed -i "4s/.*/switch_lan_ports=\"$lanport\"/" $switchfile
+		fi
+	else
+		echo "
+		#<< switch_ports
+		switch_mii1_port=\"$wanport\"
+		switch_lan_ports=\"$lanport\"
+		#>> switch_ports
+		" >> "$switchfile"
+	fi
+}
+
+boot()
+{
+	switchconfig
+	$qoscfg -I 1
+	touch $configdb
+	start
+}

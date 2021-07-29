@@ -1,0 +1,232 @@
+From 9929817378f4613dab1b7568999af48d89504adc Mon Sep 17 00:00:00 2001
+From: Boris Shehter <borisx.shehter@intel.com>
+Date: Fri, 4 Nov 2016 18:22:11 +0200
+Subject: [PATCH 515/639] DOCSISSW-1055 HIL event handling on ATOM side
+
+---
+ drivers/mrpc/Kconfig             |   7 ++
+ drivers/mrpc/Makefile            |  11 +--
+ drivers/mrpc/hil_events_server.c | 175 +++++++++++++++++++++++++++++++++++++++
+ include/linux/mrpc.h             |   1 +
+ 4 files changed, 189 insertions(+), 5 deletions(-)
+ create mode 100644 drivers/mrpc/hil_events_server.c
+
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+index 35e74ce..b73ad59 100755
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -76,3 +76,9 @@
+     help
+        Session Group Counter MRPC server driver support
+ 
++config MRPC_HIL_EVENTS_SERVER
++    bool "ARM to ATOM HIL events over HW Mailbox"
++    depends on MRPC
++    default n
++    help
++       Enable HIL events MRPC between ARM and ATOM
+diff --git a/drivers/mrpc/Makefile b/drivers/mrpc/Makefile
+index 20c5ea43..0b2c8b3 100755
+--- a/drivers/mrpc/Makefile
++++ b/drivers/mrpc/Makefile
+@@ -4,3 +4,4 @@
+ obj-$(CONFIG_MRPC_HANDSHAKE)	 += handshake_client.o
+ obj-$(CONFIG_MRPC_CPPI_CLIENT)	 += cppi_client.o
+ obj-$(CONFIG_MRPC_SGC_SERVER)    += sgc_server.o
++obj-$(CONFIG_MRPC_HIL_EVENTS_SERVER)    += hil_events_server.o
+diff --git a/drivers/mrpc/hil_events_server.c b/drivers/mrpc/hil_events_server.c
+new file mode 100644
+index 0000000..9e35aa9
+--- /dev/null
++++ b/drivers/mrpc/hil_events_server.c
+@@ -0,0 +1,175 @@
++/*
++ *
++ * hil_events_server.c
++ * Description:
++ * HIL events MRPC server driver
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++#include <linux/platform_device.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/ti_hil.h>
++#include <linux/mrpc.h>
++
++#define MAX_NAME_SIZE   50
++#define HILEVENTS_MRPC_ID        MRPC_RESERVED_ID_HILEVENTS
++
++#define HILEVENTS_SERV_PROC(proc, func, arglen) \
++[proc] = {                                      \
++        .procid   = proc,                       \
++        .p_func   = func,                       \
++        .p_arglen = arglen,                     \
++        .p_replen = 0,                          \
++        .p_name   = #func,                      \
++}
++
++/*HIL events MRPC PROC id*/
++enum
++{
++    MRPC_HIL_INIT_PROC_ID = 0,
++    MRPC_HIL_REMOTE_PROC_ID,
++    MRPC_HIL_NUM_IDS
++};
++
++typedef struct
++{
++    char                    name[MAX_NAME_SIZE];
++    struct  mrpc_server *   mrpc_serv;
++
++    struct mrpc_procinfo    hilevents_mrpc_procs[MRPC_HIL_NUM_IDS];
++} hil_mrpc_info_t;
++
++static int mrpc_hil_init_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_hil_remote_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++
++static hil_mrpc_info_t mrpc =
++{
++    .hilevents_mrpc_procs =
++    {
++        HILEVENTS_SERV_PROC(MRPC_HIL_INIT_PROC_ID, mrpc_hil_init_proc, 0),
++        HILEVENTS_SERV_PROC(MRPC_HIL_REMOTE_PROC_ID, mrpc_hil_remote_proc, sizeof(unsigned int)),
++    }
++};
++
++
++/**************************************************************************/
++/*! \fn static int mrpc_hil_init_proc
++ *                  (void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief prepare hil events server
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0.
++ **************************************************************************/
++static int mrpc_hil_init_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    printk ("HIL Core: %s invoked, remote profile on ARM activated \n", __func__);
++    return 0;
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_hil_remote_proc
++ *                  (void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief serv remote hil events 
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_hil_remote_proc(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    int ret = 0;
++    unsigned int *p_arg = arg;
++    Uint32 event = ntohl(*p_arg);
++
++    /* printk ("HIL Core: %s invoked for event %d\n", __func__, event); */
++
++    ret = ti_hil_pp_event(event, NULL);
++    if (ret)
++    {
++    	pr_err("hil event handler failed for event %lu, res=%d\n", event, ret);
++    }
++
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static int __init hilevents_server_init(void)
++ **************************************************************************
++ *  \brief Init function.
++ *  \param[in] None
++ *  \param[out] None
++ *  \0 for success, error code otherwise.
++ **************************************************************************/
++static int __init hilevents_server_init(void)
++{
++    int ret = 0;
++
++    snprintf(mrpc.name, MAX_NAME_SIZE, "HIL events MRPC");
++    mrpc.mrpc_serv = mrpc_server_register(  HILEVENTS_MRPC_ID,
++                                            mrpc.name,
++                                            mrpc.hilevents_mrpc_procs,
++                                            ARRAY_SIZE(mrpc.hilevents_mrpc_procs) );	
++
++    if (!mrpc.mrpc_serv)
++    {
++        pr_err("failed to register %s server\n", mrpc.name);	
++        ret = -ENODEV;
++    }
++
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static void __exit hilevents_server_exit(void)
++ **************************************************************************
++ *  \brief Exit function.
++ *  \param[in] None
++ *  \param[out] None
++ *  \0 for success, error code otherwise.
++ **************************************************************************/
++static void __exit hilevents_server_exit(void)
++{
++	int ret;
++
++	ret = mrpc_server_unregister(mrpc.mrpc_serv);
++	return ret;
++}
++
++module_init(hilevents_server_init);
++module_exit(hilevents_server_exit);
++
++MODULE_AUTHOR("Intel Corporation");
++MODULE_DESCRIPTION("HIL events mrpc server");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.0");
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+index 9c6fc24..c75aeaf 100644
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -84,6 +84,7 @@ enum {
+     MRPC_RESERVED_ID_WIFI_PROXY_FUNC_CALL,
+     MRPC_RESERVED_ID_DOCSIS_NETDEV,
+ 	MRPC_RESERVED_ID_SGC,
++    MRPC_RESERVED_ID_HILEVENTS,
+     MRPC_RESERVED_ID_LAST,
+ };
+ 
+-- 
+2.10.1
+

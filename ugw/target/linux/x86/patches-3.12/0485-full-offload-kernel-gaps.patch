@@ -1,0 +1,143 @@
+From e195fc82167f4ed5cb3ac32da438fcc238164b31 Mon Sep 17 00:00:00 2001
+From: Artur Saygin <artur.saygin@intel.com>
+Date: Mon, 26 Sep 2016 10:24:18 -0700
+Subject: [PATCH 485/639] full offload kernel gaps
+
+---
+ arch/x86/Kconfig          | 37 +++++++++++++++++++++++++++++++++++++
+ include/linux/netdevice.h |  3 +++
+ include/linux/skbuff.h    |  4 ++++
+ net/bridge/br_fdb.c       | 25 +++++++++++++++++++++++++
+ net/ti/pp/ti_hil_core.c   |  3 ++-
+ 5 files changed, 71 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index c398935..5d5869b 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -457,6 +457,43 @@ config NET_SUBSYSTEM_SYSFS
+         ---help---
+           Exposes sysfs interface to get and set NET-IP subsystem attributes.
+ 
++#
++# WIFI Proxy network device driver configuration
++#
++
++menu "Intel Puma7 wifi-proxy Support"
++config WIFI_PROXY
++        bool "WIFI proxy network device driver"
++        default n
++        ---help---
++          If PP to WIFI devices communication is needed
++          then select yes.
++          else, select no.
++
++config WIFI_PROXY_DEBUG
++        bool "Enable WiFi proxy FW debugging"
++        default n
++        depends on WIFI_PROXY
++        ---help---
++          Enable WiFi proxy FW debugging
++
++config WIFI_PROXY_DEBUG_BUFF_SIZE
++        int "Debug buffer size, number of debuf messages"
++        default 256
++        depends on WIFI_PROXY_DEBUG
++        ---help---
++          Configure extra shared memory for debugging, default 2MB for PUMA6_SOC, 512KB for PUMA5_SOC
++
++config WIFI_PROXY_EMULATOR
++        tristate "WIFI proxy emulator"
++        default n
++        depends on WIFI_PROXY_DEBUG
++        ---help---
++          If wifi proxy emulator is needed
++          then select yes.
++          else, select no.
++endmenu
++
+ menu "Intel Puma7 LitePath Support"
+     config PUMA_LITEPATH
+        bool "Configures Partial Offload feature in LitePath"
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index 76febf8..efa45ed 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -1475,6 +1475,9 @@ struct net_device {
+ 
+     /* For GMAC it will be set with NULL. for VLAN netdev we will set the original netdev pointer */
+     struct net_device   *parentDev;
++
++    /* Hook for letting the net device set its own PSI during session creation */
++    void (*netdev_set_psi_hook)(Uint32 *psi, struct sk_buff *skb, struct net_device *dev);
+ #endif
+ 
+     /* There QoS may be defined either for physical or virtual device
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+index 2737cb6..979497a 100755
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -473,6 +473,10 @@ struct sk_buff {
+ 	struct sk_buff		*next;
+ 	struct sk_buff		*prev;
+ 
++#ifdef CONFIG_LTQ_DIRECTCONNECT_DP
++	__u32 DW0, DW1, DW2, DW3;
++#endif
++
+ 	ktime_t			tstamp;
+ 
+ 	struct sock		*sk;
+diff --git a/net/bridge/br_fdb.c b/net/bridge/br_fdb.c
+index 6a4a86a..788c9b9 100644
+--- a/net/bridge/br_fdb.c
++++ b/net/bridge/br_fdb.c
+@@ -813,6 +813,31 @@ static int __br_fdb_delete(struct net_bridge_port *p,
+ 	return err;
+ }
+ 
++#ifdef CONFIG_LTQ_DIRECTCONNECT_DP
++/* named ppa for compatability with UGW, only used in DC_DP*/
++int ppa_br_fdb_delete(struct net_device *dev, const unsigned char *addr)
++{
++	struct net_bridge_port *p;
++	int err;
++
++	if (!dev || !addr) {
++		return -EINVAL;
++	}
++
++	p = br_port_get_rcu(dev);
++	if (!p) {
++		pr_info("bridge: %s not a bridge port\n",
++			dev->name);
++		return -EINVAL;
++	}
++
++	err = __br_fdb_delete(p, addr, 0);
++
++	return err;
++}
++EXPORT_SYMBOL(ppa_br_fdb_delete);
++#endif
++
+ /* Remove neighbor entry with RTM_DELNEIGH */
+ int br_fdb_delete(struct ndmsg *ndm, struct nlattr *tb[],
+ 		  struct net_device *dev,
+diff --git a/net/ti/pp/ti_hil_core.c b/net/ti/pp/ti_hil_core.c
+index dacf275..f53e7da 100755
+--- a/net/ti/pp/ti_hil_core.c
++++ b/net/ti/pp/ti_hil_core.c
+@@ -544,7 +544,8 @@ void ti_hil_clone_netdev_pp_info(struct net_device *newDev, struct net_device *o
+     newDev->qos_shutdown_hook       = origDev->qos_shutdown_hook;
+     newDev->qos_select_hook         = origDev->qos_select_hook;
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-    newDev->qos_get_params_hook       = origDev->qos_get_params_hook;
++    newDev->qos_get_params_hook     = origDev->qos_get_params_hook;
++    newDev->netdev_set_psi_hook     = origDev->netdev_set_psi_hook;
+ #endif
+     newDev->qos_virtual_scheme_idx  = origDev->qos_virtual_scheme_idx;
+     newDev->devInstance             = origDev->devInstance;
+-- 
+2.10.1
+

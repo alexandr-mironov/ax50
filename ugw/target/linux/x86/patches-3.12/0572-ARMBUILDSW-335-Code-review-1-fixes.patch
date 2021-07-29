@@ -1,0 +1,247 @@
+From 4a0ed64d2bbf2913c7ed56e47eff4695af02d676 Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Thu, 29 Dec 2016 16:28:40 +0200
+Subject: [PATCH 572/639] ARMBUILDSW-335: Code review 1 fixes
+
+---
+ arch/x86/pal_cppi41/pal_cppi41.c                   | 26 --------------
+ drivers/mrpc/cppi_client.c                         | 42 ++++++++++++++--------
+ .../linux/avalanche/generic/cppi41_hw_mbox_if.h    |  2 +-
+ include/linux/avalanche/generic/pal_cppi41.h       | 20 ++++++-----
+ 4 files changed, 40 insertions(+), 50 deletions(-)
+
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index d0aeace..fd15427 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -163,14 +163,6 @@ static spinlock_t init_lock;
+  *-----------------------------------*/
+ /***************************************/
+ 
+-
+-
+-/*********************************/
+-/**  external Functions declaration  **/
+-/*********************************/
+-extern Ptr mrpc_PAL_cppi4BufPopBuf (Cppi4BufPool pool);
+-extern int netip_memmap_cppi_bPool(unsigned int pool);
+-
+ /*********************************/
+ /**  Functions Implementations  **/
+ /*********************************/
+@@ -306,24 +298,6 @@ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *
+ }
+ EXPORT_SYMBOL(PAL_cppi4QueueGetEntryCount);
+ 
+-/*
+- * PAL_cppi4BufPopBuf
+- *  - Decrement the reference count of the valid buffer
+- */
+-Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool)
+-{
+-    // Approach mem_util with the pool to map
+-    if (netip_memmap_cppi_bPool(pool.bPool))
+-    {
+-        printk("%s:%d ERROR !!! Failed to map buffer pool memory region !!!\n",__FUNCTION__,__LINE__);
+-        return NULL;
+-    }
+-
+-    /* Approach MRPC to get the physical to pop buffer and get physical address*/
+-    return mrpc_PAL_cppi4BufPopBuf(pool);
+-}
+-EXPORT_SYMBOL(PAL_cppi4BufPopBuf);
+-
+ #define SIZE_IN_WORD(p) ((sizeof(p) + 0x3) >> 2)
+ 
+ static Int32 (*__pdsp_cmd_send)(pdsp_id_t, pdsp_cmd_t, void *, Uint32, void *, Uint32) = NULL;
+diff --git a/drivers/mrpc/cppi_client.c b/drivers/mrpc/cppi_client.c
+index a57539c..72cbef7 100644
+--- a/drivers/mrpc/cppi_client.c
++++ b/drivers/mrpc/cppi_client.c
+@@ -51,6 +51,9 @@
+ #include <linux/ethtool.h>
+ #include <linux/mrpc.h>
+ #include <linux/avalanche/generic/pal_cppi41.h>
++#ifdef CONFIG_PP_SANITY_TESTS
++#include <linux/netip_mem_util.h> // Memory mapping utility is needed when sanity module is enabled
++#endif
+ 
+ #ifdef DEBUG
+ #define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
+@@ -66,6 +69,13 @@ struct cppi_private {
+ 
+ static struct cppi_private *this;
+ 
++struct cppi_wifi_args {
++    Uint32 buffers_base_addr;
++    Uint32 buffer_sz;
++    Uint32 buffer_cnt;
++};
++
++#ifdef CONFIG_PP_SANITY_TESTS
+ struct cppi_sanity_dma_args {
+     Uint32 freeQMgr;
+     Uint32 freeQNum;
+@@ -73,23 +83,17 @@ struct cppi_sanity_dma_args {
+     Uint32 freeBpool;
+ };
+ 
+-struct cppi_wifi_args {
+-    Uint32 buffers_base_addr;
+-    Uint32 buffer_sz;
+-    Uint32 buffer_cnt;
+-};
+-
+ struct cppi_pp_buf_args {
+     Uint32 bMgr;
+     Uint32 bPool;
+     Uint32 bufAddr;
+ };
++#endif
+ 
+ enum {
+     CPPI_INIT_PP_WIFI_BUFFER_POOL = 0,
+-    CPPI_COFIGURE_SANITY_DMA_CHANNELS,
++    CPPI_CONFIGURE_SANITY_DMA_CHANNELS,
+     CPPI_POP_BUFFER_PP_REGION,
+-    CPPI_DEC_BUFFER_REF_CNT_PP_REGION,
+ };
+ 
+ 
+@@ -131,6 +135,7 @@ Uint32 avalanche_cppi_init_pp_wifi_buffer_pool(PAL_Handle palHandle,
+ }
+ EXPORT_SYMBOL(avalanche_cppi_init_pp_wifi_buffer_pool);
+ 
++#ifdef CONFIG_PP_SANITY_TESTS
+ /* DMA channels configuration for sanity tool */
+ Int32 avalanche_cppi_init_pp_sanity_dma_channels(PAL_Handle palHandle, Cppi4Queue freeQ, Cppi4BufPool freeBuf)
+ 
+@@ -142,24 +147,33 @@ Int32 avalanche_cppi_init_pp_sanity_dma_channels(PAL_Handle palHandle, Cppi4Queu
+     args.freeBMgr = htonl(freeBuf.bMgr);
+     args.freeBpool = htonl(freeBuf.bPool);
+ 
+-    return cppi_mrpc_call(CPPI_COFIGURE_SANITY_DMA_CHANNELS, &args, sizeof(args));
++    return cppi_mrpc_call(CPPI_CONFIGURE_SANITY_DMA_CHANNELS, &args, sizeof(args));
+ }
+ EXPORT_SYMBOL(avalanche_cppi_init_pp_sanity_dma_channels);
+ 
+-/* Pop buffer from CPPI */
+-Ptr mrpc_PAL_cppi4BufPopBuf (Cppi4BufPool pool)
+-
++/*
++ * PAL_cppi4BufPopBuf
++ *  - Decrement the reference count of the valid buffer
++ */
++Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool)
+ {
+     struct cppi_pp_buf_args args;
+ 
++    // Approach mem_util with the pool to map
++    if (netip_memmap_cppi_bPool(pool.bPool))
++    {
++        printk("%s:%d ERROR !!! Failed to map buffer pool memory region !!!\n",__FUNCTION__,__LINE__);
++        return NULL;
++    }
++
+     args.bMgr = htonl(pool.bMgr);
+     args.bPool = htonl(pool.bPool);
+     args.bufAddr = NULL;
+ 
+     return cppi_mrpc_call(CPPI_POP_BUFFER_PP_REGION, &args, sizeof(args));
+ }
+-EXPORT_SYMBOL(mrpc_PAL_cppi4BufPopBuf);
+-
++EXPORT_SYMBOL(PAL_cppi4BufPopBuf);
++#endif
+ /* sysfs for future use */
+ static ssize_t status_show(struct device *dev,
+                            struct device_attribute *attr, char *buf)
+diff --git a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+index e3f1592..0d8a996 100644
+--- a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
++++ b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+@@ -121,7 +121,7 @@ typedef struct
+ {
+     Cppi41HwMboxCmd_e   cmd;                /* command type */
+     Uint32              pool;               /* buffer pool number */
+-    Uint32              pHldr;              /* Place holder */
++    Uint32              reserved;              /* Place holder */
+ } Cppi41HwMboxCppiBpoolMemInfoGetMsg_t;
+ 
+ /* Cppi HW mailbox message to reply to a get offChip cppi buffer pool memory info message */
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+index 5a85e4e..dd80d7f 100644
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -216,7 +216,8 @@ typedef unsigned int PAL_Cppi4BD;
+  * underlying hardware) does not use the descriptor structre internally
+  * for any of its operations.
+  */
+-typedef struct {
++typedef struct
++{
+ 	Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
+ 	Uint32 tagInfo;      /**< Source tag (31:16), Dest Tag (15:0) (valid only in Host PD)*/
+ 	Uint32 pktInfo;      /**< pkt err state, type, proto flags, return info, desc location */
+@@ -226,17 +227,17 @@ typedef struct {
+ 	Uint32 orgBuffLen;   /**< Original buffer size */
+ 	Uint32 orgBufPtr;    /**< Original buffer pointer */
+ 	Uint32 netInfoWord0; /**< Network stack private communications info (valid only in Host PD) */
+-	Uint32 netInfoWord1; /**< Network stack private communications info (valid only in Host PD) */
+-
++    Uint32 netInfoWord1; /**< Network stack private communications info (valid only in Host PD) */
+ } Cppi4HostDesc;
+ 
+-typedef struct {
+-
++typedef struct
++{
+   Uint32 BufInfo;
+   Uint32 BufPtr;                // Pointer to the physical data buffer
+ } Cppi4EmbdBuf;
+ 
+-typedef struct {
++typedef struct
++{
+     Uint32 descInfo;     /**< Desc type, proto specific word cnt, pkt len (valid only in Host PD)*/
+     Uint32 tagInfo;      /**< Source tag (31:16), Dest Tag (15:0) (valid only in Host PD)*/
+     Uint32 pktInfo;      /**< pkt err state, type, proto flags, return info, desc location */
+@@ -250,7 +251,7 @@ typedef struct
+ 	Cppi4HostDesc       hw;         /* The Hardware Descriptor */
+ 	int                 psi[5];     /* protocol specific information for fw  */
+ 	struct sk_buff*     skb;        /* The data pointer virtual address */
+-}Cppi4HostDescLinux;
++} Cppi4HostDescLinux;
+ 
+ #define PAL_CPPI4_HOSTDESC_DESC_TYPE_SHIFT      27
+ #define PAL_CPPI4_HOSTDESC_DESC_TYPE_MASK       (0x1F << PAL_CPPI4_HOSTDESC_DESC_TYPE_SHIFT)
+@@ -340,7 +341,6 @@ typedef volatile struct
+     CSL_Reg32 Queue_Reg_B;
+     CSL_Reg32 Queue_Reg_C;
+     CSL_Reg32 Queue_Reg_D;
+-
+ } CSL_Queue_Mgmt_Regs;
+ 
+ /**
+@@ -676,6 +676,7 @@ PAL_Cppi4BD *PAL_cppi4QueuePop(PAL_Cppi4QueueHnd hnd);
+  */
+ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *entryCount);
+ 
++#if (defined(CONFIG_PP_SANITY_TESTS) && defined(CONFIG_MRPC_CPPI_CLIENT))
+ /**
+  *  \brief PAL CPPI4.1 Pop buffer and Increment reference count
+  *
+@@ -687,8 +688,9 @@ int PAL_cppi4QueueGetEntryCount(PAL_Handle hnd, Cppi4Queue queue, unsigned int *
+  *
+  *  @return Buffer point, NULL is pool is empty
+  */
+-Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool);
+ 
++Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool);
++#endif
+ /**
+  *  \brief PAL CPPI 4.1 accumulator channel enable rate limit.
+  */
+-- 
+2.10.1
+

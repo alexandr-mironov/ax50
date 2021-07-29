@@ -1,0 +1,195 @@
+# HG changeset patch
+# Parent 5bd1b640cc16d41e374f19abd0bad8238f2fa470
+vopp changes
+
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -2453,14 +2453,6 @@ extern void dev_kfree_skb_irq(struct sk_
+  */
+ extern void dev_kfree_skb_any(struct sk_buff *skb);
+ 
+-extern unsigned short int set_voice_udp_port(unsigned short int portNum );
+-extern unsigned short int get_voice_udp_port(unsigned short int *portNum );
+-extern unsigned short int set_voice_udp_port_range(unsigned short int portMinNum, unsigned short int portMaxNum);
+-extern unsigned short int get_voice_udp_port_range(unsigned short int *portMinNum, unsigned short int *portMaxNum);
+-extern unsigned short int dev_skb_get_udp_port(struct sk_buff *skb, unsigned short int *source_port, unsigned short int *dest_port );
+-extern unsigned short int check_voice_udp_port(struct sk_buff *skb, unsigned short int checkForSrcPort );
+-extern unsigned short int is_voice_udp_port_in_range(struct sk_buff *skb, unsigned short int checkForSrcPort );
+-
+ extern int		netif_rx(struct sk_buff *skb);
+ extern int		netif_rx_ni(struct sk_buff *skb);
+ extern int		netif_receive_skb(struct sk_buff *skb);
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -220,123 +220,6 @@ static inline void rps_unlock(struct sof
+ #endif
+ }
+ 
+-static unsigned short int voicePortNum    = htons(5002);
+-static unsigned short int voicePortMinNum = htons(5000);
+-static unsigned short int voicePortMaxNum = htons(5020);
+-
+-unsigned short int set_voice_udp_port(unsigned short int portNum )
+-{
+-    if (portNum == 0)
+-        return 1; //return error as port not set.
+-        
+-    voicePortNum = portNum;
+-    
+-    return 0;
+-}
+-EXPORT_SYMBOL(set_voice_udp_port);
+-
+-unsigned short int get_voice_udp_port(unsigned short int *portNum )
+-{
+-    *portNum = voicePortNum;
+-    
+-    return 0;
+-}
+-EXPORT_SYMBOL(get_voice_udp_port);
+-
+-unsigned short int set_voice_udp_port_range(unsigned short int portMinNum, unsigned short int portMaxNum)
+-{
+-    if ((portMinNum == 0) && (portMaxNum == 0))
+-        return 1; //return error as port not set.
+-        
+-    voicePortMinNum = portMinNum;
+-    voicePortMaxNum = portMaxNum;
+-    
+-    return 0;
+-}
+-EXPORT_SYMBOL(set_voice_udp_port_range);
+-
+-unsigned short int get_voice_udp_port_range(unsigned short int *portMinNum, unsigned short int *portMaxNum)
+-{
+-    *portMinNum = voicePortMinNum;
+-    *portMaxNum = voicePortMaxNum;
+-    
+-    return 0;
+-}
+-EXPORT_SYMBOL(get_voice_udp_port_range);
+-
+-unsigned short int dev_skb_get_udp_port(struct sk_buff *skb, unsigned short int *source_port, unsigned short int *dest_port )
+-{
+-    struct iphdr  *ipHeader  = NULL;
+-    struct udphdr *udpHeader = NULL;    
+-
+-    ipHeader = ip_hdr(skb);
+-
+-	  /* consider only UDP packets. */
+-	  if (ipHeader->protocol != IPPROTO_UDP)
+-	  	return 0;
+-    
+-    udpHeader = (struct udphdr *) ((unsigned int *) ipHeader + ipHeader->ihl);
+-    
+-    *source_port = udpHeader->source;
+-    *dest_port   = udpHeader->dest;
+-
+-    return 1;
+-}
+-EXPORT_SYMBOL(dev_skb_get_udp_port);
+-
+-unsigned short int check_voice_udp_port(struct sk_buff *skb, unsigned short int checkForSrcPort)
+-{
+-    unsigned short int SourcePort, DestPort, portNum;    
+-    unsigned short int *SourcePortPtr, *DestPortPtr;
+-    
+-    SourcePort         = 0;
+-    DestPort           = 0;
+-    portNum            = 0;
+-    SourcePortPtr      = &SourcePort;
+-    DestPortPtr        = &DestPort;
+-    
+-    dev_skb_get_udp_port(skb, SourcePortPtr, DestPortPtr);
+-    
+-    if(checkForSrcPort)
+-      portNum = SourcePort;
+-    else
+-      portNum = DestPort;
+-
+-    /* Look for Voice UDP port number match */
+-    if( portNum == voicePortNum )
+-      return 1;
+-    else
+-      return 0;
+-}
+-EXPORT_SYMBOL(check_voice_udp_port);
+-
+-unsigned short int is_voice_udp_port_in_range(struct sk_buff *skb, unsigned short int checkForSrcPort )
+-{
+-    unsigned short int SourcePort, DestPort, portNum;    
+-    unsigned short int *SourcePortPtr, *DestPortPtr;
+-    
+-    SourcePort         = 0;
+-    DestPort           = 0;
+-    portNum            = 0;
+-    SourcePortPtr      = &SourcePort;
+-    DestPortPtr        = &DestPort;
+-    
+-    dev_skb_get_udp_port(skb, SourcePortPtr, DestPortPtr);
+-    
+-    if(checkForSrcPort)
+-      portNum = SourcePort;
+-    else
+-      portNum = DestPort;
+-
+-    /* Check that Voice UDP port number is in range */
+-    if( ( portNum >= voicePortMinNum) && (portNum <=  voicePortMaxNum) )
+-      return 1;
+-    else
+-      return 0;
+-}
+-EXPORT_SYMBOL(is_voice_udp_port_in_range);
+-
+-
+ /* Device list insertion */
+ static void list_netdevice(struct net_device *dev)
+ {
+diff --git a/net/ipv4/ip_input.c b/net/ipv4/ip_input.c
+--- a/net/ipv4/ip_input.c
++++ b/net/ipv4/ip_input.c
+@@ -380,8 +380,6 @@ drop:
+ 	return NET_RX_DROP;
+ }
+ 
+-#define VOICENI_DEV_NAME "vni0"
+-
+ /*
+  * 	Main IP Receive routine.
+  */
+@@ -389,10 +387,7 @@ int ip_rcv(struct sk_buff *skb, struct n
+ {
+ 	const struct iphdr *iph;
+ 	u32 len;
+-#ifdef CONFIG_INTEL_KERNEL_VOICE_SUPPORT	
+-    struct net_device*  netdev = NULL;
+-#endif
+-    
++
+ 	/* When the interface is in promisc. mode, drop all the crap
+ 	 * that it receives, do not try to analyse it.
+ 	 */
+@@ -465,21 +460,6 @@ int ip_rcv(struct sk_buff *skb, struct n
+ 	/* Must drop socket now because of tproxy. */
+ 	skb_orphan(skb);
+ 
+-#ifdef CONFIG_INTEL_KERNEL_VOICE_SUPPORT
+-  /* Below code is added for VoPP. Checking that packet received is matching with Voice UDP port
+-     range. If it is Voice Packets range then, call hook function of HIL/VoPP. */
+-    netdev = dev_get_by_name(&init_net, VOICENI_DEV_NAME);
+-    if((netdev != NULL) && (is_voice_udp_port_in_range(skb, 0) == 1))
+-    {
+-        skb->dev = netdev;
+-        
+-        /* Calling HIL egress Hook function. */
+-        dev_queue_xmit(skb);
+-        
+-        return NET_RX_SUCCESS;
+-    }
+-#endif
+-
+ 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, dev, NULL,
+ 		       ip_rcv_finish);
+ 

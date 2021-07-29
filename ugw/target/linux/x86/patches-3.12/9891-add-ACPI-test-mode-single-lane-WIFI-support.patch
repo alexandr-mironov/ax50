@@ -1,0 +1,177 @@
+From c3013725f5ae3be5a637e7d122b8a592bd1e2e09 Mon Sep 17 00:00:00 2001
+From: Robert Li <robertx.li@intel.com>
+Date: Mon, 22 Jan 2018 16:20:00 -0700
+Subject: [PATCH] add ACPI test mode & single lane WIFI support
+
+1) Adds ACPI test mode support to the ACPI platform driver.
+2) This feature is required to cut off power to a single lane in WIFI
+through the BIOS.
+---
+ drivers/platform/x86/puma_acpi.c | 102 ++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 100 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/platform/x86/puma_acpi.c b/drivers/platform/x86/puma_acpi.c
+index 1547e72..da987af 100755
+--- a/drivers/platform/x86/puma_acpi.c
++++ b/drivers/platform/x86/puma_acpi.c
+@@ -80,6 +80,13 @@
+ #define PUMA_ACPI_NOTIFY_SD_OFF                 0xA0
+ #define PUMA_ACPI_NOTIFY_SATA_ON                0xA1
+ #define PUMA_ACPI_NOTIFY_SATA_OFF               0xA2
++#define PUMA_ACPI_NOTIFY_SFP_ACTIVE             0xA3
++#define PUMA_ACPI_NOTIFY_NETIP_HADNDSHAKE_DONE  0xA4
++#define PUMA_ACPI_NOTIFY_ERP_ACTIVE             0xA5
++#define PUMA_ACPI_NOTIFY_ERP_INACTIVE           0xA6
++
++//Power test automation support control method
++#define PUMA_ACPI_PTAS "PTAS"
+ 
+ /* PUMA initial devices state and mask in lower power mode */
+ #define PUMA_BBU_DEVICE_MASK     0
+@@ -215,7 +222,17 @@ enum puma_acpi_system_state {
+    PUMA_ACPI_STATE_ACTIVE,
+    PUMA_ACPI_STATE_BBU,
+    PUMA_ACPI_STATE_STANDBY,
+-   PUMA_ACPI_STATE_DEEP_STANDBY,
++   PUMA_ACPI_STATE_DEEP_STANDBY
++};
++
++enum puma_acpi_test_mode {
++   PUMA_ACPI_ENTER_ACTIVE_AC,
++   PUMA_ACPI_ENTER_ACTIVE_BBU,
++   PUMA_ACPI_ENTER_STANDBY,
++   PUMA_ACPI_ENTER_DEEP_STANDBY,
++   PUMA_ACPI_EXIT_STANDBY,
++   PUMA_ACPI_ERP_ACTIVE,
++   PUMA_ACPI_ERP_INACTIVE
+ };
+ 
+ enum puma_acpi_timer_state {
+@@ -305,6 +322,7 @@ struct puma_acpi_data {
+    uint32_t pmc_dev_disabled_config0;
+    uint32_t pmc_dev_disabled_config1;
+    unsigned int enabled_devices_mask;
++   unsigned int power_test_mode;
+ };
+ 
+ static unsigned long puma_events;
+@@ -418,7 +436,7 @@ static ssize_t show_function_disable_state(struct device *dev, struct device_att
+                   data->pmc_dev_disabled_config0, data->pmc_dev_disabled_config1);
+ }
+ 
+-static acpi_status update_lpm( acpi_handle handle, int xface, int operation, int *lpm_bbu)
++static acpi_status update_lpm(acpi_handle handle, int xface, int operation, int *lpm_bbu)
+ {
+    union acpi_object param[3];
+    struct acpi_object_list input;
+@@ -805,6 +823,18 @@ static ssize_t show_dsb_device_mask(struct device *dev, struct device_attribute
+    return sprintf(buf, "%08x\n", data->dsb_device_mask);
+ }
+ 
++static ssize_t show_power_test_mode(struct device *dev, struct device_attribute *attr, char *buf)
++{
++   struct acpi_device *acpi = to_acpi_device(dev);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
++
++   return sprintf(buf, "%d\n", data->power_test_mode);
++}
++
+ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+ {
+    unsigned int dsb_device_mask;
+@@ -827,6 +857,72 @@ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute
+    return count;
+ }
+ 
++int puma_acpi_set_data(struct puma_acpi_data *data, acpi_string pathname, unsigned int in_data){
++   int ret_value;
++   struct acpi_object_list input;   
++   union acpi_object in_params;
++   
++   in_params.type = ACPI_TYPE_INTEGER;
++   in_params.integer.value = in_data;
++   input.count = 1;
++   input.pointer = &in_params;
++   
++   ret_value = acpi_evaluate_object(data->acpi_dev->handle, pathname, &input, NULL);
++   if(ret_value != 0){
++      pr_err("acpi_evaluate_object failed.\n");
++   }
++   return ret_value;
++}
++
++static ssize_t store_power_test_mode(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
++{
++   unsigned int power_test_mode;
++   struct acpi_device *acpi = to_acpi_device(dev);
++   struct puma_acpi_data *data = (NULL==acpi)?NULL:acpi_driver_data(acpi);
++   
++   if (NULL == data) {
++      return -ENXIO;
++   }
++
++   if(sscanf(buf, "%x", &power_test_mode) != 1) {
++      return -EINVAL;
++   }
++   
++   switch(power_test_mode){
++   case PUMA_ACPI_ENTER_ACTIVE_AC:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_ACTIVE_ON_AC);
++      break;
++   case PUMA_ACPI_ENTER_ACTIVE_BBU:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_ACTIVE_ON_BATTERY);
++      break;
++   case PUMA_ACPI_ENTER_STANDBY:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_PWR_BUTTON_PRS);
++      msleep(7000);
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_PWR_BUTTON_RLS);
++      break;
++   case PUMA_ACPI_ENTER_DEEP_STANDBY:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_PWR_BUTTON_PRS);
++      msleep(12000);
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_PWR_BUTTON_RLS);
++      break;
++   case PUMA_ACPI_EXIT_STANDBY:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_PWR_BUTTON_PRS);
++      msleep(500);
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_PWR_BUTTON_RLS);
++      break;
++   case PUMA_ACPI_ERP_ACTIVE:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_ERP_ACTIVE);
++      break;
++   case PUMA_ACPI_ERP_INACTIVE:
++      puma_acpi_set_data(data, PUMA_ACPI_PTAS, PUMA_ACPI_NOTIFY_ERP_INACTIVE);
++      break;
++   }
++   
++   data->power_test_mode = power_test_mode;
++
++   return count;
++}
++
+ static DEVICE_ATTR(system_state, S_IRUGO, show_system_state, NULL);
+ static DEVICE_ATTR(netip_state, S_IRUGO, show_netip_state, NULL);
+ static DEVICE_ATTR(pmc_state, S_IRUGO, show_pmc_state, NULL);
+@@ -845,6 +941,7 @@ static DEVICE_ATTR(reset_btn_dur, S_IRUGO, show_reset_btn_dur, NULL);
+ static DEVICE_ATTR(bbu_device_mask, S_IRUGO | S_IWUSR, show_bbu_device_mask, store_bbu_device_mask);
+ static DEVICE_ATTR(sb_device_mask, S_IRUGO | S_IWUSR, show_sb_device_mask, store_sb_device_mask);
+ static DEVICE_ATTR(dsb_device_mask, S_IRUGO | S_IWUSR, show_dsb_device_mask, store_dsb_device_mask);
++static DEVICE_ATTR(power_test_mode, S_IRUGO | S_IWUSR, show_power_test_mode, store_power_test_mode);
+ 
+ static struct attribute_group *puma_acpi_sysfs_entries[] = {
+    &dev_attr_system_state.attr,
+@@ -865,6 +962,7 @@ static struct attribute_group *puma_acpi_sysfs_entries[] = {
+    &dev_attr_bbu_device_mask.attr,
+    &dev_attr_sb_device_mask.attr,
+    &dev_attr_dsb_device_mask.attr,
++   &dev_attr_power_test_mode.attr,
+    NULL,
+ };
+ 
+-- 
+2.15.1
+

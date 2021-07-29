@@ -1,0 +1,260 @@
+From a23897cb5ab95fd677784deb5ea039ba0b91cc44 Mon Sep 17 00:00:00 2001
+From: avelayux <arunkumar.velayutham@intel.com>
+Date: Tue, 19 Jul 2016 21:24:56 -0700
+Subject: [PATCH 446/639] mrpc: Use circular buffer to handle mrpc requests
+
+As per the current implementation, it uses memory from GFP_ATOMIC pool
+and there is no limit defined on the number of kzalloc can be done for the i
+incoming request. This might lead to unfair use of ATOMIC memory pool during
+worst case scenarios (though the changes are very rare unless the modem is heavy
+loaded with thousands of active connections and there are frequent timeout on
+the MRPC communication b/w ARM and ATOM).
+
+Handle data using circular buffer and allocate a fix size of memory
+from GFP_KERNEL pool during boot time.
+
+Signed-off-by: avelayux <arunkumar.velayutham@intel.com
+---
+ drivers/mrpc/core/conntrack_client.c | 116 +++++++++++++++++++++++++----------
+ 1 file changed, 84 insertions(+), 32 deletions(-)
+
+diff --git a/drivers/mrpc/core/conntrack_client.c b/drivers/mrpc/core/conntrack_client.c
+index 2f551ca..51e1e32 100644
+--- a/drivers/mrpc/core/conntrack_client.c
++++ b/drivers/mrpc/core/conntrack_client.c
+@@ -51,6 +51,7 @@
+ #include <linux/mrpc.h>
+ #include <linux/ti_hil.h>
+ #include <linux/platform_device.h>
++#include <linux/circ_buf.h>
+ #include <net/netfilter/nf_conntrack.h>
+ #include <net/netfilter/nf_conntrack_l3proto.h>
+ #include <net/netfilter/nf_conntrack_l4proto.h>
+@@ -82,16 +83,28 @@
+ #define CT_MRPC_FALIURE -1
+ #define IN_PROGRESS 1
+ #define COMPLETE 0
++/*Circular buffer size - allocated during boot up 
++  CB_MAX should be power-of-2 while we use linux 
++  provided macros to handle circular buffer data*/
++#define CB_MAX 1024
+ 
+ static struct platform_device *ct_client_device;
++/* connection tracking entry and event type - per connection */
++struct ct_worker_info {
++    struct nf_conn *ct;
++    unsigned long event;
++};
+ 
+ struct ct_client_private {
+     struct platform_device *pdev;
+     struct mrpc_client *mrpc;
+     struct notifier_block ct_event_notifier;
+     struct workqueue_struct *workQ;
++    struct work_struct worker;
++    struct circ_buf ct_data; /* connection tracking data buffer*/
+     unsigned int call_success_count;/* number of successful MRPC calls made */
+     unsigned int call_failure_count;/* number of failure  MRPC calls made */
++    unsigned int cb_alloc_failure_count; /* number of workqueue log failures */
+ 
+ };
+ 
+@@ -108,12 +121,6 @@ struct mrpc_conntrack_arm_reply{
+ 	int  extend_timeout;
+ };
+ 
+-struct ct_worker_info {
+-    struct work_struct work;
+-    struct nf_conn *ct;
+-    unsigned long event;
+-};
+-
+ enum {
+ 	TI_CT_DEATH_BY_TIMEOUT_PROC = 0,
+         TI_NPCPU_CONNTRACK_FLUSH_PROC = 1,
+@@ -133,7 +140,7 @@ static inline int ct_mrpc_call(__u8 procid, struct mrpc_conntrack_tuple_info *ct
+    int ret, errcode;
+    if(!priv)
+    {
+-     pr_err("ERROR: Conntrack MRPC client not initialized");
++     pr_info("ERROR: Conntrack MRPC client not initialized");
+      return CT_MRPC_FALIURE;
+    }
+ 
+@@ -240,17 +247,25 @@ int copy_conntrack_tuple_info(struct mrpc_conntrack_tuple_info *ct_tuple_info,
+  */
+ static void ct_tuple_info_fetcher(struct work_struct *work_arg)
+ {
+-   struct ct_worker_info *worker = container_of(work_arg, struct ct_worker_info, work);
+-   struct nf_conn *ct = worker->ct;
+-   unsigned long event = worker->event;
++   struct ct_client_private *priv = this;
++   struct circ_buf *cb = &priv->ct_data;
+    unsigned long extend_ct_time;
+    struct mrpc_conntrack_tuple_info conntrack_tuple_info;
+    struct mrpc_conntrack_arm_reply mrpc_reply;
+    int extend_timeout = 0;
++   unsigned long event;
++   struct nf_conn *ct;
+ 
+-   switch(event)
++   while(CIRC_CNT(cb->head, cb->tail, CB_MAX) >= 1)
+    {
+-      case TI_CT_ENTRY_CREATED:
++     struct ct_worker_info *ct_work_info;
++     ct_work_info = &((struct ct_worker_info *)cb->buf)[cb->tail];
++     ct = ct_work_info->ct;
++     event = ct_work_info->event;
++     smp_read_barrier_depends();
++     switch(event)
++     {
++        case TI_CT_ENTRY_CREATED:
+ 	  /*Do nothing. When there is a connection tracking entry getting created,the ARM side
+ 	   *init_conntrack generates this event to PP HIL layer.The HIL profile sets the
+ 	   *ti_pp_status_flag to TI_PP_BYPASS if this connection is associated to an ALG.
+@@ -260,8 +275,8 @@ static void ct_tuple_info_fetcher(struct work_struct *work_arg)
+ 	   *We don't need to sync the TI_CT_ENTRY_CREATED event with ARM as the SKB PP_INFO
+ 	   *flag set/reset is handled locally by ARM.
+ 	   */
+-      break;
+-      case TI_CT_DEATH_BY_TIMEOUT:
++        break;
++        case TI_CT_DEATH_BY_TIMEOUT:
+ 	   /*memset(&conntrack_tuple_info,0,sizeof(struct mrpc_conntrack_tuple_info));*/
+ 
+ 	   /*Copy required tuple information from timeout ct to conntrack_tuple_info.
+@@ -301,17 +316,18 @@ static void ct_tuple_info_fetcher(struct work_struct *work_arg)
+ 	     DBG("ARM replyed to KILL conntrack record. delete record.\n");
+ 	     ct->ti_pp_status_flag |= TI_PP_KILL_CONNTRACK;
+ 	   }
+-      break;
+-      case TI_NPCPU_CONNTRACK_FLUSH:
++        break;
++        case TI_NPCPU_CONNTRACK_FLUSH:
+            printk(KERN_DEBUG "CT FLUSH event generated.MRPC NPCPU to flush the sessions\n");
+            ct_mrpc_call(TI_NPCPU_CONNTRACK_FLUSH_PROC, &conntrack_tuple_info, &mrpc_reply);
+-      break;
+-      default:
++        break;
++        default:
+ 	   DBG("Connection tracking event not supported.");
+-  }
+-handle_error:
+-  kfree(worker);
+-  return;
++     } //switch
++     smp_mb();
++     cb->tail = (cb->tail + 1) & (CB_MAX - 1);
++   } //while
++   return;
+ }
+ 
+ /*Name: ct_tuple_info_worker
+@@ -324,14 +340,17 @@ static int ct_tuple_info_worker(struct notifier_block *self, unsigned long event
+ {
+    struct ct_client_private *priv = this;
+    struct ct_worker_info *ct_work_info;
++   struct circ_buf *cb = &priv->ct_data;
+ 
+-   ct_work_info = kzalloc(sizeof(*ct_work_info), GFP_ATOMIC);
+-   if(!ct_work_info)
++   if(!CIRC_SPACE(cb->head, cb->tail, CB_MAX))
+    {
+-     pr_err("Memory allocation failed for ct_work_info");
++     pr_info("MRPC conntrack circular buffer is FULL.");
++     priv->cb_alloc_failure_count++;
+      return NOTIFY_DONE;
+    }
+-
++   /*get the CB location to store the connection tracking ptr and event information */
++   ct_work_info = &((struct ct_worker_info *)cb->buf)[cb->head];
++    
+    if(event == TI_NPCPU_CONNTRACK_FLUSH) 
+    {
+       ct_work_info->ct = NULL;
+@@ -341,13 +360,34 @@ static int ct_tuple_info_worker(struct notifier_block *self, unsigned long event
+       ct_work_info->ct = (struct nf_conn *)ptr;
+    }
+    ct_work_info->event = event;
+-   INIT_WORK(&ct_work_info->work, ct_tuple_info_fetcher);
+-   queue_work(priv->workQ, &ct_work_info->work);
+-
++   smp_wmb();
++   cb->head = (cb->head + 1) & (CB_MAX - 1);
++   queue_work(priv->workQ, &priv->worker);
+    return NOTIFY_DONE;
+-
+ }
+ 
++/*Name: create_data_buffer
++ *Desc: creates and init the circular data buffer to handle connection tracking entry 
++ *      and event info.
++ *Input:NONE.
++ *Return: 0 SUCCESS, -ENOMEM FAILURE
++ */
++
++static int create_data_buffer(struct ct_client_private *priv)
++{
++  struct ct_worker_info *ct_info;
++  void *data_buff;
++
++  priv->ct_data.head = 0;
++  priv->ct_data.tail = 0;
++  data_buff = kzalloc(sizeof(*ct_info) * CB_MAX, GFP_KERNEL);
++  if(!data_buff)
++  {
++    return -ENOMEM;
++  }
++  priv->ct_data.buf = data_buff;
++  return 0;
++}
+ /*Name: nf_conn_info_event
+  *Desc: Event notify function used by nf_conntrack module to post CT events to this module.
+  *      conntrack_client_module.
+@@ -367,8 +407,11 @@ static ssize_t status_show(struct device *dev,
+    if(!priv)
+      return -EINVAL;
+ 
+-   return scnprintf(buf, PAGE_SIZE, "status ok.\nMRPC Success : %d\nMRPC Failure : %d\n",
+-                                     priv->call_success_count,priv->call_failure_count);
++   return scnprintf(buf, PAGE_SIZE, "status ok.\nMRPC Success : %d\nMRPC Failure : %d\n" \
++                                    "CB Failure : %d\n", \
++                                     priv->call_success_count,\
++                                     priv->call_failure_count,\
++                                     priv->cb_alloc_failure_count);
+ 
+ }
+ 
+@@ -406,6 +449,12 @@ static int ct_client_driver_probe(struct platform_device *pdev)
+       pr_err("sysfs_create_group failed (ret=%d)", ret);
+       return ret;
+   }
++  /*Create circular buffer to handle conntrack timeout MRPC request */
++  ret = create_data_buffer(priv);
++  if(ret) {
++      pr_err("Conntrack MRPC circular data buffer creation and init failed.");
++      goto out_remove_group;
++  }
+ 
+   priv->workQ = create_workqueue("Connection tracking MRPC worker");
+   if(!priv->workQ) {
+@@ -413,6 +462,8 @@ static int ct_client_driver_probe(struct platform_device *pdev)
+       ret = -ENOMEM;
+       goto out_remove_group;
+   }
++  /*Init workqueue*/ 
++  INIT_WORK(&priv->worker, ct_tuple_info_fetcher);  
+ 
+   priv->mrpc = mrpc_client_register(MRPC_RESERVED_ID_CONNTRACK,
+ 				    "Connection Tracking Client");
+@@ -427,6 +478,7 @@ static int ct_client_driver_probe(struct platform_device *pdev)
+   atomic_notifier_chain_register(&ct_chain, &ct_info_notifier_block);
+   priv->call_success_count = 0;
+   priv->call_failure_count = 0;
++  priv->cb_alloc_failure_count = 0;
+   this = priv;
+   return 0;
+ 
+-- 
+2.10.1
+

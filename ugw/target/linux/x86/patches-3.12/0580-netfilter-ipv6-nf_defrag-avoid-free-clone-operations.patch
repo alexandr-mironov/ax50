@@ -1,0 +1,259 @@
+From b021499bf7f9f74458abf150f9024aa631f90c96 Mon Sep 17 00:00:00 2001
+From: Florian Westphal <fw@strlen.de>
+Date: Wed, 18 Nov 2015 23:32:39 +0100
+Subject: [PATCH 580/639] netfilter: ipv6: nf_defrag: avoid/free clone
+ operations
+
+commit 6aafeef03b9d9ecf
+("netfilter: push reasm skb through instead of original frag skbs")
+changed ipv6 defrag to not use the original skbs anymore.
+
+So rather than keeping the original skbs around just to discard them
+afterwards just use the original skbs directly for the fraglist of
+the newly assembled skb and remove the extra clone/free operations.
+
+The skb that completes the fragment queue is morphed into a the
+reassembled one instead, just like ipv4 defrag.
+
+openvswitch doesn't need any additional skb_morph magic anymore to deal
+with this situation so just remove that.
+
+A followup patch can then also remove the NF_HOOK (re)invocation in
+the ipv6 netfilter defrag hook.
+
+Cc: Joe Stringer <joestringer@nicira.com>
+Signed-off-by: Florian Westphal <fw@strlen.de>
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+Signed-off-by: Michael L. Walker <michael.l.walker@intel.com>
+---
+ include/net/netfilter/ipv6/nf_defrag_ipv6.h |   1 -
+ net/ipv6/netfilter/nf_conntrack_reasm.c     | 104 +++++++++++-----------------
+ net/ipv6/netfilter/nf_defrag_ipv6_hooks.c   |   6 --
+ 3 files changed, 40 insertions(+), 71 deletions(-)
+
+diff --git a/include/net/netfilter/ipv6/nf_defrag_ipv6.h b/include/net/netfilter/ipv6/nf_defrag_ipv6.h
+index 17920d8..0d147fa 100644
+--- a/include/net/netfilter/ipv6/nf_defrag_ipv6.h
++++ b/include/net/netfilter/ipv6/nf_defrag_ipv6.h
+@@ -6,7 +6,6 @@ extern void nf_defrag_ipv6_enable(void);
+ extern int nf_ct_frag6_init(void);
+ extern void nf_ct_frag6_cleanup(void);
+ extern struct sk_buff *nf_ct_frag6_gather(struct sk_buff *skb, u32 user);
+-extern void nf_ct_frag6_consume_orig(struct sk_buff *skb);
+ 
+ struct inet_frags_ctl;
+ 
+diff --git a/net/ipv6/netfilter/nf_conntrack_reasm.c b/net/ipv6/netfilter/nf_conntrack_reasm.c
+index 7cd6235..a0e6b7cd 100644
+--- a/net/ipv6/netfilter/nf_conntrack_reasm.c
++++ b/net/ipv6/netfilter/nf_conntrack_reasm.c
+@@ -55,7 +55,6 @@ struct nf_ct_frag6_skb_cb
+ {
+ 	struct inet6_skb_parm	h;
+ 	int			offset;
+-	struct sk_buff		*orig;
+ };
+ 
+ #define NFCT_FRAG6_CB(skb)	((struct nf_ct_frag6_skb_cb*)((skb)->cb))
+@@ -152,12 +151,6 @@ static unsigned int nf_hashfn(struct inet_frag_queue *q)
+ 	return inet6_hash_frag(nq->id, &nq->saddr, &nq->daddr, nf_frags.rnd);
+ }
+ 
+-static void nf_skb_free(struct sk_buff *skb)
+-{
+-	if (NFCT_FRAG6_CB(skb)->orig)
+-		kfree_skb(NFCT_FRAG6_CB(skb)->orig);
+-}
+-
+ static void nf_ct_frag6_expire(unsigned long data)
+ {
+ 	struct frag_queue *fq;
+@@ -360,9 +353,9 @@ err:
+  *	the last and the first frames arrived and all the bits are here.
+  */
+ static struct sk_buff *
+-nf_ct_frag6_reasm(struct frag_queue *fq, struct net_device *dev)
++nf_ct_frag6_reasm(struct frag_queue *fq, struct sk_buff *prev,  struct net_device *dev)
+ {
+-	struct sk_buff *fp, *op, *head = fq->q.fragments;
++	struct sk_buff *fp, *head = fq->q.fragments;
+ 	int    payload_len;
+ 	u8 ecn;
+ 
+@@ -413,10 +406,38 @@ nf_ct_frag6_reasm(struct frag_queue *fq, struct net_device *dev)
+ 		clone->csum = 0;
+ 		clone->ip_summed = head->ip_summed;
+ 
+-		NFCT_FRAG6_CB(clone)->orig = NULL;
+ 		add_frag_mem_limit(&fq->q, clone->truesize);
+ 	}
+ 
++	/* morph head into last received skb: prev.
++	*
++	* This allows callers of ipv6 conntrack defrag to continue
++	* to use the last skb(frag) passed into the reasm engine.
++	* The last skb frag 'silently' turns into the full reassembled skb.
++	*
++	* Since prev is also part of q->fragments we have to clone it first.
++	*/
++	if (head != prev) {
++		struct sk_buff *iter;
++
++		fp = skb_clone(prev, GFP_ATOMIC);
++		if (!fp)
++			goto out_oom;
++
++		fp->next = prev->next;
++		skb_queue_walk(head, iter) {
++			if (iter->next != prev)
++			continue;
++			iter->next = fp;
++			break;
++		}
++
++		skb_morph(prev, head);
++		prev->next = head->next;
++		consume_skb(head);
++		head = prev;
++	}
++
+ 	/* We have to remove fragment header from datagram and to relocate
+ 	 * header in order to calculate ICV correctly. */
+ 	skb_network_header(head)[fq->nhoffset] = skb_transport_header(head)[0];
+@@ -457,21 +478,6 @@ nf_ct_frag6_reasm(struct frag_queue *fq, struct net_device *dev)
+ 	fq->q.fragments = NULL;
+ 	fq->q.fragments_tail = NULL;
+ 
+-	/* all original skbs are linked into the NFCT_FRAG6_CB(head).orig */
+-	fp = skb_shinfo(head)->frag_list;
+-	if (fp && NFCT_FRAG6_CB(fp)->orig == NULL)
+-		/* at above code, head skb is divided into two skbs. */
+-		fp = fp->next;
+-
+-	op = NFCT_FRAG6_CB(head)->orig;
+-	for (; fp; fp = fp->next) {
+-		struct sk_buff *orig = NFCT_FRAG6_CB(fp)->orig;
+-
+-		op->next = orig;
+-		op = orig;
+-		NFCT_FRAG6_CB(fp)->orig = NULL;
+-	}
+-
+ 	return head;
+ 
+ out_oversize:
+@@ -549,7 +555,6 @@ find_prev_fhdr(struct sk_buff *skb, u8 *prevhdrp, int *prevhoff, int *fhoff)
+ 
+ struct sk_buff *nf_ct_frag6_gather(struct sk_buff *skb, u32 user)
+ {
+-	struct sk_buff *clone;
+ 	struct net_device *dev = skb->dev;
+ 	struct net *net = skb_dst(skb) ? dev_net(skb_dst(skb)->dev)
+ 				       : dev_net(skb->dev);
+@@ -569,22 +574,12 @@ struct sk_buff *nf_ct_frag6_gather(struct sk_buff *skb, u32 user)
+ 	if (find_prev_fhdr(skb, &prevhdr, &nhoff, &fhoff) < 0)
+ 		return skb;
+ 
+-	clone = skb_clone(skb, GFP_ATOMIC);
+-	if (clone == NULL) {
+-		pr_debug("Can't clone skb\n");
++	if (!pskb_may_pull(skb, fhoff + sizeof(*fhdr)))
+ 		return skb;
+-	}
+-
+-	NFCT_FRAG6_CB(clone)->orig = skb;
+-
+-	if (!pskb_may_pull(clone, fhoff + sizeof(*fhdr))) {
+-		pr_debug("message is too short.\n");
+-		goto ret_orig;
+-	}
+ 
+-	skb_set_transport_header(clone, fhoff);
+-	hdr = ipv6_hdr(clone);
+-	fhdr = (struct frag_hdr *)skb_transport_header(clone);
++	skb_set_transport_header(skb, fhoff);
++	hdr = ipv6_hdr(skb);
++	fhdr = (struct frag_hdr *)skb_transport_header(skb);
+ 
+ 	local_bh_disable();
+ 	inet_frag_evictor(&net->nf_frag.frags, &nf_frags, false);
+@@ -592,23 +587,21 @@ struct sk_buff *nf_ct_frag6_gather(struct sk_buff *skb, u32 user)
+ 
+ 	fq = fq_find(net, fhdr->identification, user, &hdr->saddr, &hdr->daddr,
+ 		     skb->dev ? skb->dev->ifindex : 0, ip6_frag_ecn(hdr));
+-	if (fq == NULL) {
+-		pr_debug("Can't find and can't create new queue\n");
+-		goto ret_orig;
+-	}
++	if (fq == NULL)
++		return skb;
+ 
+ 	spin_lock_bh(&fq->q.lock);
+ 
+-	if (nf_ct_frag6_queue(fq, clone, fhdr, nhoff) < 0) {
++	if (nf_ct_frag6_queue(fq, skb, fhdr, nhoff) < 0) {
+ 		spin_unlock_bh(&fq->q.lock);
+ 		pr_debug("Can't insert skb to queue\n");
+ 		inet_frag_put(&fq->q, &nf_frags);
+-		goto ret_orig;
++		return skb;
+ 	}
+ 
+ 	if (fq->q.last_in == (INET_FRAG_FIRST_IN | INET_FRAG_LAST_IN) &&
+ 	    fq->q.meat == fq->q.len) {
+-		ret_skb = nf_ct_frag6_reasm(fq, dev);
++		ret_skb = nf_ct_frag6_reasm(fq, skb, dev);
+ 		if (ret_skb == NULL)
+ 			pr_debug("Can't reassemble fragmented packets\n");
+ 	}
+@@ -616,22 +609,6 @@ struct sk_buff *nf_ct_frag6_gather(struct sk_buff *skb, u32 user)
+ 
+ 	inet_frag_put(&fq->q, &nf_frags);
+ 	return ret_skb;
+-
+-ret_orig:
+-	kfree_skb(clone);
+-	return skb;
+-}
+-
+-void nf_ct_frag6_consume_orig(struct sk_buff *skb)
+-{
+-	struct sk_buff *s, *s2;
+-
+-	for (s = NFCT_FRAG6_CB(skb)->orig; s;) {
+-		s2 = s->next;
+-		s->next = NULL;
+-		consume_skb(s);
+-		s = s2;
+-	}
+ }
+ 
+ static int nf_ct_net_init(struct net *net)
+@@ -662,7 +639,6 @@ int nf_ct_frag6_init(void)
+ 	nf_frags.hashfn = nf_hashfn;
+ 	nf_frags.constructor = ip6_frag_init;
+ 	nf_frags.destructor = NULL;
+-	nf_frags.skb_free = nf_skb_free;
+ 	nf_frags.qsize = sizeof(struct frag_queue);
+ 	nf_frags.match = ip6_frag_match;
+ 	nf_frags.frag_expire = nf_ct_frag6_expire;
+diff --git a/net/ipv6/netfilter/nf_defrag_ipv6_hooks.c b/net/ipv6/netfilter/nf_defrag_ipv6_hooks.c
+index 581dd9e..7c04a98 100644
+--- a/net/ipv6/netfilter/nf_defrag_ipv6_hooks.c
++++ b/net/ipv6/netfilter/nf_defrag_ipv6_hooks.c
+@@ -71,12 +71,6 @@ static unsigned int ipv6_defrag(unsigned int hooknum,
+ 	if (reasm == NULL)
+ 		return NF_STOLEN;
+ 
+-	/* error occurred or not fragmented */
+-	if (reasm == skb)
+-		return NF_ACCEPT;
+-
+-	nf_ct_frag6_consume_orig(reasm);
+-
+ 	NF_HOOK_THRESH(NFPROTO_IPV6, hooknum, reasm,
+ 		       (struct net_device *) in, (struct net_device *) out,
+ 		       okfn, NF_IP6_PRI_CONNTRACK_DEFRAG + 1);
+-- 
+2.10.1
+

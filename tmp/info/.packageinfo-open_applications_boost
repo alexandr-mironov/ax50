@@ -1,0 +1,658 @@
+Source-Makefile: package/feeds/open_applications/boost/Makefile
+Package: boost-atomic
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (atomic)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost atomic library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-chrono
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (chrono)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost chrono library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-container
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (container)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost container library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-context
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-chrono +boost-system +boost-thread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (context)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost context library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-coroutine
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system +boost-chrono +boost-context +boost-thread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (coroutine)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost coroutine library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-date_time
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (date_time)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost date_time library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-filesystem
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (filesystem)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost filesystem library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-graph
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-regex
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (graph)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost graph library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-iostreams
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +zlib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (iostreams)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost iostreams library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-locale
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system +BUILD_NLS:libiconv-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (locale)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost locale library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-log
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system +boost-chrono +boost-date_time +boost-thread +boost-filesystem +boost-regex
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (log)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost log library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-math
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (math)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost math library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-program_options
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (program_options)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost program_options library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-random
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (random)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost random library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-python
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +PACKAGE_boost-python:python
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (python)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost python library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-regex
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (regex)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost regex library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-serialization
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (serialization)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost serialization library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-signals
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (signals)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost signals library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-system
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (system)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost system library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-thread
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-system +boost-chrono +boost-atomic
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (thread)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost thread library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-timer
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-chrono
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (timer)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost timer library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-wave
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-date_time +boost-thread +boost-filesystem
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (wave)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:      Boost provides free peer-reviewed portable C++ source libraries
+   .
+   This package contains the Boost wave library.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-test
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (test)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description: Boost C++ source library (test)
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost-libs
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread +librt +boost-atomic +boost-chrono +boost-container +boost-context +boost-coroutine +boost-date_time +boost-filesystem +boost-graph +boost-iostreams +boost-locale +boost-log +boost-math +boost-program_options +boost-random +boost-python +boost-regex +boost-serialization +boost-signals +boost-system +boost-thread +boost-timer +boost-wave
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library (all libs)
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Hidden: 1
+Description:   Boost provides free peer-reviewed portable C++ source libraries
+ .
+ This meta package contains only dependencies to the other libraries from
+ the boost libraries collection.
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+
+Package: boost
+Version: 1_58_0-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +ALL:boost-libs +ALL:boost-test
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl boost/host 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Boost C++ source library packages
+Maintainer: Carlos M. Ferreira <carlosmf.pt@gmail.com>
+Source: boost_1_58_0.tar.gz
+License: Boost Software License <http://www.boost.org/users/license.html>
+Type: ipkg
+Description: Boost C++ source library packages
+http://www.boost.org
+Carlos M. Ferreira <carlosmf.pt@gmail.com>
+@@
+Config:
+    menu "Select Boost libraries"
+      depends on PACKAGE_boost
+
+    config boost-libs-all
+      bool "Include all Boost libraries"
+      select PACKAGE_boost-libs
+
+   config boost-test-pkg
+     bool "Boost test package"
+     select PACKAGE_boost-test
+
+    comment "Libraries"
+
+     config PACKAGE_boost-atomic
+           prompt "Boost atomic library"
+
+     config PACKAGE_boost-chrono
+           prompt "Boost chrono library"
+
+     config PACKAGE_boost-container
+           prompt "Boost container library"
+
+     config PACKAGE_boost-context
+           prompt "Boost context library"
+
+     config PACKAGE_boost-coroutine
+           prompt "Boost coroutine library"
+
+     config PACKAGE_boost-date_time
+           prompt "Boost date_time library"
+
+     config PACKAGE_boost-filesystem
+           prompt "Boost filesystem library"
+
+     config PACKAGE_boost-graph
+           prompt "Boost graph library"
+
+     config PACKAGE_boost-iostreams
+           prompt "Boost iostreams library"
+
+     config PACKAGE_boost-locale
+           prompt "Boost locale library"
+
+     config PACKAGE_boost-log
+           prompt "Boost log library"
+
+     config PACKAGE_boost-math
+           prompt "Boost math library"
+
+     config PACKAGE_boost-program_options
+           prompt "Boost program_options library"
+
+     config PACKAGE_boost-random
+           prompt "Boost random library"
+
+     config PACKAGE_boost-python
+           prompt "Boost python library"
+
+     config PACKAGE_boost-regex
+           prompt "Boost regex library"
+
+     config PACKAGE_boost-serialization
+           prompt "Boost serialization library"
+
+     config PACKAGE_boost-signals
+           prompt "Boost signals library"
+
+     config PACKAGE_boost-system
+           prompt "Boost system library"
+
+     config PACKAGE_boost-thread
+           prompt "Boost thread library"
+
+     config PACKAGE_boost-timer
+           prompt "Boost timer library"
+
+     config PACKAGE_boost-wave
+           prompt "Boost wave library"
+
+   
+
+  endmenu
+
+@@
+
+

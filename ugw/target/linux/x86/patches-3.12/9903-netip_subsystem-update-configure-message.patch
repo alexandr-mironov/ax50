@@ -1,0 +1,198 @@
+From e635c3cc034005b934ad1c2ad8124b01b8406bde Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 15 Dec 2016 21:29:35 -0700
+Subject: [PATCH] netip_subsystem: update configure message
+
+Include the list of netip services running on Atom in the configure msg
+otherwise the related hw cannot be permanently shutdown.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/Kconfig                               |  8 +++
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c | 12 +++++
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c  | 71 ++++++++++++++++++++------
+ 3 files changed, 75 insertions(+), 16 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index d8d95a6bfc97..aeebd3b5d383 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -542,6 +542,14 @@ config NET_SUBSYSTEM_SYSFS
+         ---help---
+           Exposes sysfs interface to get and set NET-IP subsystem attributes.
+ 
++config NETIP_SERVICES_ON_ATOM
++    bool "Net IP services controlled by Atom SW components"
++        depends on NET_SUBSYSTEM
++        ---help---
++          Enables including of Net IP services in configure message that are
++          running on Atom.
++
++
+ menu "Intel Puma7 LitePath Support"
+     config PPA_PUMA7
+        bool "Configures Partial Offload feature in LitePath"
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index 10695189bff4..6b3e39a3cc9c 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -59,6 +59,12 @@ int docsis_chan_cfg = 0;
+ int  cm_mode = 0;
+ int RCE_Floor = 2;
+ int RCE_Filter = 0;
++#ifdef CONFIG_NETIP_SERVICES_ON_ATOM
++bool sgmii0_on_atom = true;
++bool sgmii1_on_atom = true;
++bool rgmii2_on_atom = true;
++bool rgmii3_on_atom = true;
++#endif
+ 
+ static const struct pci_device_id net_subsystem_pci_tbl[] = {
+         { PCI_DEVICE( 0x8086, NET_SUBSYTEM_DEV_ID), .driver_data = 0 },
+@@ -70,6 +76,12 @@ module_param(docsis_chan_cfg, int , (S_IRUSR | S_IWUSR ));
+ module_param(cm_mode, int, (S_IRUSR | S_IWUSR ));
+ module_param(RCE_Floor, int, (S_IRUSR | S_IWUSR ));
+ module_param(RCE_Filter, int, (S_IRUSR | S_IWUSR ));
++#ifdef CONFIG_NETIP_SERVICES_ON_ATOM
++module_param(sgmii0_on_atom, bool, (S_IRUSR | S_IWUSR ));
++module_param(sgmii1_on_atom, bool, (S_IRUSR | S_IWUSR ));
++module_param(rgmii2_on_atom, bool, (S_IRUSR | S_IWUSR ));
++module_param(rgmii3_on_atom, bool, (S_IRUSR | S_IWUSR ));
++#endif
+ 
+ MODULE_DEVICE_TABLE(pci, net_subsystem_pci_tbl);
+ /*This function creates boot handshake thread */
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index cf1294f51260..d95f75781bc9 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -49,6 +49,12 @@ extern int docsis_chan_cfg;
+ extern int cm_mode;
+ extern int RCE_Floor;
+ extern int RCE_Filter;
++#ifdef CONFIG_NETIP_SERVICES_ON_ATOM
++extern bool sgmii0_on_atom;
++extern bool sgmii1_on_atom;
++extern bool rgmii2_on_atom;
++extern bool rgmii3_on_atom;
++#endif
+ 
+ void netss_sysfs_clean_up(uint32_t available_services);
+ 
+@@ -135,6 +141,10 @@ static bool g_acpi_notified_bbu_status = false;
+  * has set the service level */
+ static bool g_service_level_initialized = false;
+ 
++/* Number of NetIP services on ATtom
++ * Currently hard coding it for xGMII 4 interfaces */
++static int g_netip_services_on_atom = 4;
++
+ /**
+  * puma_netip_notify_state() - invoke to update the state of NETIP
+  * @state: state of NETIP, 0 - Active, 1 - BBU, 2 - Standby, 3 - Deep standby
+@@ -503,34 +513,60 @@ static void netss_send_configure_msg (void)
+ {
+    int i, j=0, ret;
+    //uint32_t docsis_channels = 0xF0F00000; /*Mask indicating the channels numbers configured as docsis channels */
+-   netss_configure_msg_t cfg_msg;
+-   uint8_t *msg= (uint8_t *)(&cfg_msg);
++   netss_configure_msg_t *cfg_msg;
++   uint8_t *msg;
+    uint32_t reply_len;
++   int msg_len;
++   int services_offset = sizeof(netss_configure_msg_t);
++
++   msg_len = sizeof(netss_configure_msg_t);
+ 
+-   /*clear the message */
+-   memset(&cfg_msg, 0, sizeof(netss_configure_msg_t));
+-   cfg_msg.hdr.opcode = NETSS_OPCODE_CONFIGURE;
++#ifdef CONFIG_NETIP_SERVICES_ON_ATOM
++   msg_len += g_netip_services_on_atom;
++   msg_len = ((msg_len + 3) & ~3);
++#endif
++   cfg_msg = kzalloc(msg_len, GFP_KERNEL);
++   if(!cfg_msg)
++   {
++       printk(KERN_ERR "Failed to alloc memory for configure msg!\n");
++       return;
++   }
++   msg = (uint8_t *)cfg_msg;
++   cfg_msg->hdr.opcode = NETSS_OPCODE_CONFIGURE;
+ 
+    /*These values should be read from platfom config files
+     *for now writing some default values  */
+    for(i=0; i < 32; i++)
+    {
+       if(docsis_chan_cfg & (1 << i)) {
+-         cfg_msg.docsis_chan[j] = i+1;
++         cfg_msg->docsis_chan[j] = i+1;
+          j++;
+       }
+    }
+    /*Just write 0 to terminate the list */
+    if(j < 32) {
+-      cfg_msg.docsis_chan[j] = 0;
++      cfg_msg->docsis_chan[j] = 0;
+    }
+ 
+-   cfg_msg.cm_mode = cm_mode;
+-   cfg_msg.RCE_floor = RCE_Floor;
+-   cfg_msg.RCE_filter = RCE_Filter;
++   cfg_msg->cm_mode = cm_mode;
++   cfg_msg->RCE_floor = RCE_Floor;
++   cfg_msg->RCE_filter = RCE_Filter;
++
++#ifdef CONFIG_NETIP_SERVICES_ON_ATOM
++    msg += services_offset;
++    if(sgmii0_on_atom)
++        *msg++ = NETSS_SERVICE_ID_SGMII0_BARE;
++    if(sgmii1_on_atom)
++       *msg++ = NETSS_SERVICE_ID_SGMII1_BARE;
++    if(rgmii2_on_atom)
++       *msg++ = NETSS_SERVICE_ID_RGMII2_BARE;
++    if(rgmii3_on_atom)
++       *msg++ = NETSS_SERVICE_ID_RGMII3_BARE;
++     msg = (uint8_t *)cfg_msg;
++#endif
+ 
+    NETSS_PM_PRINT("configure Msg:");
+-   for(i=0; i<sizeof(netss_configure_msg_t); i++)
++   for(i=0; i<msg_len; i++)
+    {
+       if(i%4 == 0)
+       {
+@@ -539,11 +575,12 @@ static void netss_send_configure_msg (void)
+       NETSS_PM_PRINT("%2x\t", msg[i]);
+    }
+    NETSS_PM_PRINT("\n============================\n");
+-   ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU, 0, (uint8_t*)&cfg_msg, sizeof(netss_configure_msg_t), sizeof(netss_configure_msg_t), &reply_len);
++   ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU, 0, (uint8_t*)cfg_msg, msg_len, msg_len, &reply_len);
+    if(ret)
+    {
+        printk(KERN_ERR "Send configure message failed ret %d \n", ret);
+    }
++   kfree(cfg_msg);
+    /**Add some debug message on success */
+    return;
+ }
+@@ -795,10 +832,12 @@ static bool netss_request_for_service_level_change(int index)
+  * |15:14|   6    | BBU     10 - Reserved      |
+  * |17:16|   7    | Wifi    11 - Off           |
+  * |19:18|   8    | ExSw                       |
+- * |21:20|   9    | SGMII0                     |
+- * |23:22|  10    | SGMII1                     |
+- * |25:24|  11    | RGMII2                     |
+- * |27:26|  12    | RGMII3                     |
++ * |21:20|   9    | SFP                        |
++ * |23:22|  10    | SGMII1_BARE                |
++ * |25:24|  11    | ETHPHY                     |
++ * |27:26|  12    | RGMII3_BARE                |
++ * |29:28|  13    | SGMII0_BARE                |
++ * |31:30|  14    | RGMII2_BARE                |
+  * ---------------------------------------------
+  */
+ /** service request/reply message format
+-- 
+2.11.0
+

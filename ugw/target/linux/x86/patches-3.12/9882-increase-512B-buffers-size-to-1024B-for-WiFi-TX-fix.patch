@@ -1,0 +1,324 @@
+# HG changeset patch
+# Parent 3bf9642e82e2684d819ba0b3037417cd62fd14be
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -230,6 +230,44 @@ int PAL_cppi4BufDecRefCnt (PAL_Handle hn
+ EXPORT_SYMBOL(PAL_cppi4BufDecRefCnt);
+ 
+ 
++/**
++ * Retrieve all cppi buffers pools information from cppi driver
++ * on ARM
++ *
++ * @param pools array to fill in the pools info
++ *
++ * @return int 0 on success, non-zero value otherwise
++ */
++PAL_Result PAL_cppi4GetAllBufferPoolsInfo(PAL_Handle hnd, Cppi4BufPoolInfo *pools)
++{
++    Cppi4BufPool pool;
++    u32 i;
++
++    if (NULL == pools) {
++        EPRINTK("pools is null");
++        return PAL_ERROR_FLAG;
++    }
++
++    /* Get pools info */
++    for (i=0; i<PAL_CPPI41_BMGR_MAX_POOLS; i++) {
++        pool.bPool = i;
++        if(PAL_SOK == PAL_cppi4GetBufferPoolInfo(hnd, pool, &pools[i]))   {
++            DPRINTK("buffer pool %u Info:"      , i                       );
++            DPRINTK("\tbPoolPhyAddr    = 0x%08x", pools[i].bPoolPhyAddr   );
++            DPRINTK("\tbPoolSize       = 0x%08x", pools[i].bPoolSize      );
++            DPRINTK("\tbufSize         = 0x%08x", pools[i].bufSize        );
++            DPRINTK("\tnumBuf          = 0x%08x", pools[i].numBuf         );
++            DPRINTK("\tbPoolTopPhyAddr = 0x%08x", pools[i].bPoolTopPhyAddr);
++            DPRINTK("\tbPoolOffset     = 0x%08x", pools[i].bPoolOffset    );
++        }
++        else {
++            DPRINTK("buffer pool %u is not initialized", i);
++        }
++    }
++    return (PAL_SOK);
++}
++EXPORT_SYMBOL(PAL_cppi4GetAllBufferPoolsInfo);
++
+ PAL_Cppi4QueueHnd PAL_cppi4QueueOpen(PAL_Handle hnd, Cppi4Queue  queue)
+ {
+     PAL_Cppi4QueueHnd qHnd;
+diff --git a/drivers/mrpc/cppi_server.c b/drivers/mrpc/cppi_server.c
+--- a/drivers/mrpc/cppi_server.c
++++ b/drivers/mrpc/cppi_server.c
+@@ -7,7 +7,7 @@
+  *
+  * GPL LICENSE SUMMARY
+  *
+- *  Copyright(c) 2016 Intel Corporation.
++ *  Copyright(c) 2017 Intel Corporation.
+  *
+  *  This program is free software; you can redistribute it and/or modify
+  *  it under the terms of version 2 of the GNU General Public License as
+@@ -51,10 +51,10 @@
+ #include <linux/ethtool.h>
+ #include <linux/mrpc.h>
+ #include <linux/avalanche/generic/pal_cppi41.h>
++#include <linux/skbuff.h>
+ #include <asm/io.h>
+ 
+ 
+-
+ #define DEBUG
+ 
+ #ifdef DEBUG
+@@ -73,6 +73,10 @@ struct mrpc_cppi_init_pp_buffer_pool_arg
+     Uint32 size;
+ };
+ 
++struct mrpc_cppi_get_skb_shared_info_struct_size_args {
++    Uint32 sizeof_arm_skb_shared_info_struct;
++};
++
+ /* p_arglen is assigned the sizof(func_args), therefor each arguments struct name should begin with the function's name */
+ #define CPPI_PROC_32(proc, func)                      \
+ [proc] = {                                            \
+@@ -83,8 +87,14 @@ struct mrpc_cppi_init_pp_buffer_pool_arg
+         .p_name   = #func,                            \
+ }
+ 
++typedef enum {
++    SKB_SHARED_INFO_STATUS_OK = 0,
++    SKB_SHARED_INFO_STATUS_NOK,
++} skb_shared_info_status_e;
++
+ enum {
+     CPPI_INIT_PP_BUFFER_POOL = 0,
++    CPPI_GET_SKB_SHARED_INFO,
+ };
+ 
+ static int mrpc_cppi_init_pp_buffer_pool(void *arg, ssize_t arglen,
+@@ -100,7 +110,6 @@ static int mrpc_cppi_init_pp_buffer_pool
+ 
+     printk(KERN_ERR "MRPC server mrpc_cppi_init_pp_buffer_pool with size: %d\n", size);
+ 
+-
+     buf = PAL_osMemAllocSizeAligned(size);
+ 
+     if (NULL != buf)
+@@ -116,10 +125,25 @@ static int mrpc_cppi_init_pp_buffer_pool
+     return 0;
+ }
+ 
++static int mrpc_cppi_get_skb_shared_info_struct_size(void *arg, ssize_t arglen,
++					      void *rep, ssize_t replen)
++{
++    Uint32 *p_rep = rep;
++    struct mrpc_cppi_get_skb_shared_info_struct_size_args *p_arg = arg;
++    Uint32 sizeof_arm_skb_shared_info_struct;
+ 
++    *p_rep = SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
++
++    printk(KERN_ERR "MRPC server mrpc_cppi_get_skb_shared_info_struct_size with skb_shared_info_size (reply): %d\n", *p_rep);
++
++    *p_rep = cpu_to_be32(*p_rep);
++
++    return 0;
++}
+ 
+ static struct mrpc_procinfo cppi_server_procs[] = {
+     CPPI_PROC_32(CPPI_INIT_PP_BUFFER_POOL, mrpc_cppi_init_pp_buffer_pool),	
++    CPPI_PROC_32(CPPI_GET_SKB_SHARED_INFO, mrpc_cppi_get_skb_shared_info_struct_size),	
+ };
+ 
+ /* sysfs for future use */
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -688,6 +688,17 @@ Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, 
+  *  @return PAL_SOK on success
+  */
+ PAL_Result PAL_cppi4GetBufferPoolInfo(PAL_Handle hnd, Cppi4BufPool pool, Cppi4BufPoolInfo* bp_info);
++
++/**
++ * Retrieve all cppi buffers pools information from cppi driver
++ * on ARM
++ *
++ * @param pools array to fill in the pools info
++ *
++ * @return int 0 on success, non-zero value otherwise
++ */
++PAL_Result PAL_cppi4GetAllBufferPoolsInfo(PAL_Handle hnd, Cppi4BufPoolInfo *pools);
++
+ /**
+  *  \brief PAL CPPI 4.1 accumulator channel enable rate limit.
+  */
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h b/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
+@@ -5,7 +5,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2008-2016 Intel Corporation.
++  Copyright(c) 2008-2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -60,7 +60,7 @@
+ */
+ 
+ #define PAL_CPPI_PP_BMGR_POOL_LIST                                                                              \
+-PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_LOW_512B_BUFFER_POOL)                 /* PAL_CPPI_PP_BUFFER_POOL0  */ \
++PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_LOW_1KB_BUFFER_POOL)                  /* PAL_CPPI_PP_BUFFER_POOL0  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_LOW_2KB_BUFFER_POOL)                  /* PAL_CPPI_PP_BUFFER_POOL1  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_LOW_4KB_BUFFER_POOL)                  /* PAL_CPPI_PP_BUFFER_POOL2  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_SHARED_RX_HIGH_BUFFER_POOL)                     /* PAL_CPPI_PP_BUFFER_POOL3  */ \
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -5,7 +5,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014 - 2016 Intel Corporation.
++  Copyright(c) 2014 - 2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -721,7 +721,7 @@ typedef enum PAL_CPPI_PP_BUFFER_POOLs
+ }PAL_CPPI_PP_BUFFER_POOLs_e;
+ 
+ 
+-#define PAL_CPPI_PP_SHARED_RX_LOW_512B_BUFFER_COUNT                 PAL_CPPI_PP_RX_LOW_SHORT_SHARED_DDR_EMB_FD_DESC_COUNT                               +   \
++#define PAL_CPPI_PP_SHARED_RX_LOW_1KB_BUFFER_COUNT                  PAL_CPPI_PP_RX_LOW_SHORT_SHARED_DDR_EMB_FD_DESC_COUNT                               +   \
+                                                                     PAL_CPPI_PP_DOCSIS_RX_LOW_SHORT_PRIVATE_DESC_PACKET_RAM_BUFF_DDR_EMB_FD_DESC_COUNT  +   \
+                                                                     PAL_CPPI_PP_MoCA_RX_LOW_SHORT_PRIVATE_DDR_EMB_FD_DESC_COUNT                         +   \
+                                                                     PAL_CPPI_PP_ATOM_RX_LOW_SHORT_PRIVATE_DDR_EMB_FD_DESC_COUNT                         +   \
+@@ -729,8 +729,8 @@ typedef enum PAL_CPPI_PP_BUFFER_POOLs
+                                                                     PAL_CPPI_PP_RGMII1_RX_LOW_SHORT_PRIVATE_DDR_EMB_FD_DESC_COUNT                       +   \
+                                                                     PAL_CPPI_PP_SGMII0_RX_LOW_SHORT_PRIVATE_DDR_EMB_FD_DESC_COUNT                       +   \
+                                                                     PAL_CPPI_PP_SGMII1_RX_LOW_SHORT_PRIVATE_DDR_EMB_FD_DESC_COUNT
+-#define PAL_CPPI_PP_SHARED_RX_LOW_512B_BUFFER_SIZE                  512
+-#define PAL_CPPI_PP_SHARED_RX_LOW_512B_BUFFER_REF_CNT               0
++#define PAL_CPPI_PP_SHARED_RX_LOW_1KB_BUFFER_SIZE                   1024
++#define PAL_CPPI_PP_SHARED_RX_LOW_1KB_BUFFER_REF_CNT                0
+ 
+ #define PAL_CPPI_PP_SHARED_RX_LOW_2KB_BUFFER_COUNT                  PAL_CPPI_PP_RX_LOW_LONG_SHARED_DDR_EMB_FD_DESC_COUNT                                +   \
+                                                                     PAL_CPPI_PP_DOCSIS_RX_LOW_LONG_PRIVATE_DESC_PACKET_RAM_BUFF_DDR_EMB_FD_DESC_COUNT   +   \
+@@ -936,7 +936,7 @@ typedef enum PAL_CPPI_PP_DMA00_OFDM0_RX_
+     PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_512B_DESC_PACKET_RAM_BUFF_DDR,
+-    PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA00_OFDM0_RX_CH_LOW_2KB_DESC_PACKET_RAM_BUFF_DDR,
+@@ -962,7 +962,7 @@ typedef enum PAL_CPPI_PP_DMA01_OFDM1_RX_
+     PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_512B_DESC_PACKET_RAM_BUFF_DDR,
+-    PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA01_OFDM1_RX_CH_LOW_2KB_DESC_PACKET_RAM_BUFF_DDR,
+@@ -988,7 +988,7 @@ typedef enum PAL_CPPI_PP_DMA02_SC_QAM_RX
+     PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_512B_DESC_PACKET_RAM_BUFF_DDR,
+-    PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA02_SC_QAM_RX_CH_LOW_2KB_DESC_PACKET_RAM_BUFF_DDR,
+@@ -1013,8 +1013,8 @@ typedef enum PAL_CPPI_PP_DMA03_SGMII0_RX
+ {
+     PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+-    PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_512B_PRIVATE_DDR,
+-    PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_1KB_PRIVATE_DDR,
++    PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA03_SGMII0_RX_CH_LOW_2KB_PRIVATE_DDR,
+@@ -1033,8 +1033,8 @@ typedef enum PAL_CPPI_PP_DMA04_SGMII1_RX
+ {
+     PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+-    PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_512B_PRIVATE_DDR,
+-    PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_1KB_PRIVATE_DDR,
++    PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA04_SGMII1_RX_CH_LOW_2KB_PRIVATE_DDR,
+@@ -1053,8 +1053,8 @@ typedef enum PAL_CPPI_PP_DMA05_RGMII0_RX
+ {
+     PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+-    PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_512B_PRIVATE_DDR,
+-    PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_1KB_PRIVATE_DDR,
++    PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA05_RGMII0_RX_CH_LOW_2KB_PRIVATE_DDR,
+@@ -1078,8 +1078,8 @@ typedef enum PAL_CPPI_PP_DMA06_MoCA_RX_C
+ {
+     PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+-    PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_512B_PRIVATE_DDR,
+-    PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_1KB_PRIVATE_DDR,
++    PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA06_MoCA_RX_CH_LOW_2KB_PRIVATE_DDR,
+@@ -1101,8 +1101,8 @@ typedef enum PAL_CPPI_PP_DMA07_ATOM_RX_C
+ {
+     PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+-    PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_512B_PRIVATE_DDR,
+-    PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_1KB_PRIVATE_DDR,
++    PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA07_ATOM_RX_CH_LOW_2KB_PRIVATE_DDR,
+@@ -1444,8 +1444,8 @@ typedef enum PAL_CPPI_PP_DMA23_RGMII1_RX
+ {
+     PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_512B_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_512B_SHARED_PACKET_RAM,
+-    PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_512B_PRIVATE_DDR,
+-    PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_512B_SHARED_DDR,
++    PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_1KB_PRIVATE_DDR,
++    PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_1KB_SHARED_DDR,
+     PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_2KB_PRIVATE_PACKET_RAM,
+     PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_2KB_SHARED_PACKET_RAM,
+     PAL_CPPI_PP_DMA23_RGMII1_RX_CH_LOW_2KB_PRIVATE_DDR,
+diff --git a/include/linux/avalanche/puma7/puma7_pp.h b/include/linux/avalanche/puma7/puma7_pp.h
+--- a/include/linux/avalanche/puma7/puma7_pp.h
++++ b/include/linux/avalanche/puma7/puma7_pp.h
+@@ -8,7 +8,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014 - 2016 Intel Corporation.
++  Copyright(c) 2014 - 2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -85,8 +85,8 @@
+ #define MIN_IP_PACKET_SIZE      64
+ 
+ /* Queue threshold (short/long/xl) */
+-#define THRESHOLD_0_VALUE       (384)
+-#define THRESHOLD_1_VALUE       (1920)
++#define THRESHOLD_0_VALUE       (PAL_CPPI_PP_SHARED_RX_LOW_1KB_BUFFER_SIZE - PAL_CPPI_PP_START_OF_PACKET_OFFSET - SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
++#define THRESHOLD_1_VALUE       (PAL_CPPI_PP_SHARED_RX_LOW_2KB_BUFFER_SIZE - PAL_CPPI_PP_START_OF_PACKET_OFFSET - SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+ 
+ /*
+  * PID Range configurations

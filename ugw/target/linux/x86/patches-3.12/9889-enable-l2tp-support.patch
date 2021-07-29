@@ -1,0 +1,97 @@
+# HG changeset patch
+# Parent 355795b592d2b14a147cf7dc00b55e166ab7181c
+# Changes to enable L2TP acceleration over PP.
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -807,7 +807,7 @@ typedef enum
+ {
+     PP_LOOKUP_FIELD_L4_PROTOCOL_UDP             = 1,
+     PP_LOOKUP_FIELD_L4_PROTOCOL_TCP             = 2,
+-    PP_LOOKUP_FIELD_L4_PROTOCOL_L2TPv3          = 3,
++    PP_LOOKUP_FIELD_L4_PROTOCOL_L2TP            = 3,
+     PP_LOOKUP_FIELD_L4_PROTOCOL_ICMP            = 4,
+     PP_LOOKUP_FIELD_L4_PROTOCOL_0xFF            = 15
+ }PP_LOOKUP_FIELD_L4_TYPES_e;
+@@ -818,17 +818,17 @@ typedef enum
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE             = 2,
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_PPPoE              = 3,
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_6rd                = 4,
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_L2TPv3             = 5,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_L2TP               = 5,
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_ESP          = 6,
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE_IPSEC_ESP      = 7,             /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_ESP */
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE_IPSEC_ESP   = 8,             /* PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_ESP */
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH           = 9,
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE_IPSEC_AH       = 10,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH */
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE_IPSEC_AH    = 11,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH */
+-    /* PP_LOOKUP_FIELD_TUNNEL_TYPE_RESERVED1          = 12, */
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_L2TP_PPPoE         = 12,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_L2TP + PP_LOOKUP_FIELD_TUNNEL_TYPE_PPPoE   */
+     /* PP_LOOKUP_FIELD_TUNNEL_TYPE_RESERVED2          = 13, */
+     /* PP_LOOKUP_FIELD_TUNNEL_TYPE_RESERVED3          = 14, */
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_LAST               = 12
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_LAST               = 13
+ }PP_LOOKUP_FIELD_TUNNEL_TYPE_e;
+ 
+ typedef enum
+@@ -1190,6 +1190,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_NO_ACK             0x800
+                                 #define AVALANCHE_PP_EGRESS_DO_TCP_CTRL                         0x1000
+                                 #define AVALANCHE_PP_EGRESS_MULTI_DROP_SESSION                  0x2000
++                                #define AVALANCHE_PP_EGRESS_WH_UDP                              0x4000
+     Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+diff --git a/net/l2tp/l2tp_core.c b/net/l2tp/l2tp_core.c
+--- a/net/l2tp/l2tp_core.c
++++ b/net/l2tp/l2tp_core.c
+@@ -17,6 +17,10 @@
+  * it under the terms of the GNU General Public License version 2 as
+  * published by the Free Software Foundation.
+  */
++/*
++ * Includes Intel Corporation's changes/modifications dated: [10/03/2016].
++ * Changed/modified portions - Copyright © [2016], Intel Corporation.
++ */
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+@@ -65,6 +69,10 @@
+ 
+ #include "l2tp_core.h"
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++#include <linux/ti_hil.h>
++#endif
++
+ #define L2TP_DRV_VERSION	"V2.0"
+ 
+ /* L2TP header constants */
+@@ -1856,6 +1864,10 @@ EXPORT_SYMBOL_GPL(__l2tp_session_unhash)
+  */
+ int l2tp_session_delete(struct l2tp_session *session)
+ {
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++	/* For L2TP - Generate the HIL Event indicating that the L2TPv3 session has been deleted. */
++	ti_hil_pp_event (TI_L2TP_ENTRY_DELETED, (void *)session);
++#endif// CONFIG_TI_PACKET_PROCESSOR
+ 	if (session->ref)
+ 		(*session->ref)(session);
+ 	__l2tp_session_unhash(session);
+@@ -1970,8 +1982,14 @@ struct l2tp_session *l2tp_session_create
+ 		}
+ 
+ 		/* Ignore management session in session count value */
+-		if (session->session_id != 0)
++		if (session->session_id != 0) {
+ 			atomic_inc(&l2tp_session_count);
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++			/* For L2TP (PP does not support send_seq option) - Generate the HIL Event indicating that the L2TPv3 session has been created. */
++			if (!session->send_seq)
++				ti_hil_pp_event (TI_L2TP_ENTRY_CREATED, (void *)session);
++#endif// CONFIG_TI_PACKET_PROCESSOR
++		}
+ 	}
+ 
+ 	return session;

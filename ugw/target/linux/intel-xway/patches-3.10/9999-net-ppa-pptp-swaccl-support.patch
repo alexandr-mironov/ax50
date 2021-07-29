@@ -1,0 +1,756 @@
+# HG changeset patch
+# Parent 5230fa83383ce41de62c81c2c9bb814eece228dc
+
+diff --git a/drivers/net/ppp/ppp_generic.c b/drivers/net/ppp/ppp_generic.c
+--- a/drivers/net/ppp/ppp_generic.c
++++ b/drivers/net/ppp/ppp_generic.c
+@@ -53,6 +53,12 @@
+ #include <linux/nsproxy.h>
+ #include <net/net_namespace.h>
+ #include <net/netns/generic.h>
++#include <linux/if_pppox.h>
++
++#include <net/ppa_api.h>
++#include <net/route.h>
++#include <net/gre.h>
++#include <net/arp.h>
+ 
+ #define PPP_VERSION	"2.4.2"
+ 
+@@ -75,6 +81,7 @@
+  * interface unit or a ppp channel.  In both cases, file->private_data
+  * points to one of these.
+  */
++
+ struct ppp_file {
+ 	enum {
+ 		INTERFACE=1, CHANNEL
+@@ -338,6 +345,8 @@ static void *unit_find(struct idr *p, in
+ 
+ static struct class *ppp_class;
+ 
++static uint8_t g_updated_ppp_xmit = 0;
++
+ /* per net-namespace data */
+ static inline struct ppp_net *ppp_pernet(struct net *net)
+ {
+@@ -617,6 +626,55 @@ static int get_filter(void __user *arg, 
+ 	return uprog.len;
+ }
+ #endif /* CONFIG_PPP_FILTER */
++static ssize_t proc_file_updated_ppp_xmit_write(struct file *file, 
++                                       const char __user *buf, 
++                                       size_t count, 
++                                       loff_t *ppos)
++{
++	int len;
++	char str[64];
++	char *cmd;
++	len = min(count, (size_t)(sizeof(str) - 1));
++    
++	len -= ppa_copy_from_user(str, buf, len);
++ 	/* skip spaces */  
++	while ( len && str[len - 1] <= ' ' )
++		len--;
++    	str[len] = 0;
++	for ( cmd = str; *cmd && (*cmd) <= ' '; cmd++, len-- );
++  
++	if( !(*cmd) )
++		return count;
++
++	if ( strcmp(cmd, "enable") == 0 ) {
++		g_updated_ppp_xmit = 1;
++	} else if ( strcmp(cmd, "disable") == 0 ) {
++		g_updated_ppp_xmit = 0;
++	}
++
++	return count;
++}
++static int proc_read_updated_ppp_xmit(struct seq_file *seq, void *v)
++{
++	seq_printf(seq, "updated_ppp_xmit = %s\n", 
++		g_updated_ppp_xmit?"Enabled":"Disabled");
++	return 0;
++}
++
++
++static int proc_file_updated_ppp_xmit_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, proc_read_updated_ppp_xmit, NULL);
++}
++static struct file_operations g_proc_file_updated_ppp_xmit = {
++	.owner      = THIS_MODULE,
++	.open       = proc_file_updated_ppp_xmit_open,
++	.read       = seq_read,
++	.write      = proc_file_updated_ppp_xmit_write,
++	.llseek     = seq_lseek,
++	.release    = seq_release,
++};
++
+ 
+ static long ppp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+ {
+@@ -928,6 +986,7 @@ static const struct file_operations ppp_
+ static __net_init int ppp_init_net(struct net *net)
+ {
+ 	struct ppp_net *pn = net_generic(net, ppp_net_id);
++    	struct proc_dir_entry *res;
+ 
+ 	idr_init(&pn->units_idr);
+ 	mutex_init(&pn->all_ppp_mutex);
+@@ -936,6 +995,11 @@ static __net_init int ppp_init_net(struc
+ 	INIT_LIST_HEAD(&pn->new_channels);
+ 
+ 	spin_lock_init(&pn->all_channels_lock);
++    	res = proc_create("updated_ppp_xmit",
++                            S_IRUGO|S_IWUSR,
++                            net->proc_net,
++			    &g_proc_file_updated_ppp_xmit);
++
+ 
+ 	return 0;
+ }
+@@ -943,6 +1007,7 @@ static __net_init int ppp_init_net(struc
+ static __net_exit void ppp_exit_net(struct net *net)
+ {
+ 	struct ppp_net *pn = net_generic(net, ppp_net_id);
++	remove_proc_entry("updated_ppp_xmit", net->proc_net);
+ 
+ 	idr_destroy(&pn->units_idr);
+ }
+@@ -954,6 +1019,47 @@ static struct pernet_operations ppp_net_
+ 	.size = sizeof(struct ppp_net),
+ };
+ 
++void *ppa_get_pptp_info(struct net_device *ppp_dev)
++{
++	struct ppp *ppp;
++	struct channel *pch;
++	struct list_head *list;
++	struct ppp_net *pn;
++
++	if (unlikely(!ppp_dev))
++		return NULL;
++
++	ppp = netdev_priv(ppp_dev);
++
++	if (unlikely(!(ppp_dev->flags & IFF_POINTOPOINT) || !ppp))
++		goto err_unlockppp;
++
++	/*check ppp validity */
++	if (unlikely(ppp->file.dead || atomic_read(&ppp->file.refcnt) == 0 ||
++		!ppp->dev || ppp->n_channels == 0)) {
++		goto err_unlockppp;
++	}
++
++	/*don't support multipul link*/
++	if (unlikely(ppp->flags & SC_MULTILINK))
++		goto err_unlockppp;
++
++	list = &ppp->channels;
++	if (unlikely(list_empty(list)))
++		goto err_unlockppp;
++
++	list = list->next;
++	pch = list_entry(list, struct channel, clist);
++
++	if (unlikely(!pch->chan))
++		goto err_unlockppp;
++	return pch->chan->private;
++err_unlockppp:
++
++	return NULL;
++
++}
++
+ #define PPP_MAJOR	108
+ 
+ /* Called at boot time if ppp is compiled into the kernel,
+@@ -982,6 +1088,7 @@ static int __init ppp_init(void)
+ 		goto out_chrdev;
+ 	}
+ 
++	ppa_get_pptp_info_fn = ppa_get_pptp_info;
+ 	/* not a big deal if we fail here :-) */
+ 	device_create(ppp_class, NULL, MKDEV(PPP_MAJOR, 0), NULL, "ppp");
+ 
+@@ -1143,8 +1250,8 @@ static void ppp_setup(struct net_device 
+  * Called to do any work queued up on the transmit side
+  * that can now be done.
+  */
+-static void
+-ppp_xmit_process(struct ppp *ppp)
++
++static void __ppp_xmit_process(struct ppp *ppp)
+ {
+ 	struct sk_buff *skb;
+ 
+@@ -1155,7 +1262,7 @@ ppp_xmit_process(struct ppp *ppp)
+ 		       (skb = skb_dequeue(&ppp->file.xq)))
+ 			ppp_send_frame(ppp, skb);
+ 		/* If there's no work left to do, tell the core net
+-		   code that we can accept some more. */
++		code that we can accept some more. */
+ 		if (!ppp->xmit_pending && !skb_peek(&ppp->file.xq))
+ 			netif_wake_queue(ppp->dev);
+ 		else
+@@ -1164,6 +1271,35 @@ ppp_xmit_process(struct ppp *ppp)
+ 	ppp_xmit_unlock(ppp);
+ }
+ 
++static DEFINE_PER_CPU(int, ppp_xmit_recursion);
++static void
++ppp_xmit_process(struct ppp *ppp)
++{
++	if (g_updated_ppp_xmit) {
++		local_bh_disable();
++
++		if (unlikely(__this_cpu_read(ppp_xmit_recursion)))
++			goto err;
++
++		__this_cpu_inc(ppp_xmit_recursion);
++		__ppp_xmit_process(ppp);
++		__this_cpu_dec(ppp_xmit_recursion);
++
++		local_bh_enable();
++
++		return;
++
++	err:
++		local_bh_enable();
++
++		if (net_ratelimit())
++			netdev_err(ppp->dev, "recursion detected\n");
++	} else {
++		__ppp_xmit_process(ppp);
++	}
++
++}
++
+ static inline struct sk_buff *
+ pad_compress_skb(struct ppp *ppp, struct sk_buff *skb)
+ {
+@@ -3042,6 +3178,7 @@ static void __exit ppp_cleanup(void)
+ 	/* should never happen */
+ 	if (atomic_read(&ppp_unit_count) || atomic_read(&channel_count))
+ 		pr_err("PPP: removing module but units remain!\n");
++	ppa_get_pptp_info_fn = NULL;
+ 	unregister_chrdev(PPP_MAJOR, "ppp");
+ 	device_destroy(ppp_class, MKDEV(PPP_MAJOR, 0));
+ 	class_destroy(ppp_class);
+@@ -3113,51 +3250,45 @@ int32_t ppa_ppp_get_info(struct net_devi
+ 	struct channel *pch;
+ 	struct list_head *list;
+ 	int32_t ret = -EFAULT;
+-    struct ppp_net *pn;
++	struct ppp_net *pn;
+ 	
+-	if(unlikely(!ppp_dev || !value)){
+-		/* printk("PPP arg error\n"); */
++	if (unlikely(!ppp_dev || !value)) {
+ 		return ret;
+ 	}
+ 
+-    ppp = netdev_priv(ppp_dev);
+-
+-	if (unlikely(!(ppp_dev->flags & IFF_POINTOPOINT) || !ppp)){
+-		/* printk("PPP device in abnormal status!\n"); */
++	ppp = netdev_priv(ppp_dev);
++
++	if (unlikely(!(ppp_dev->flags & IFF_POINTOPOINT) || !ppp)) {
+ 		return ret;
+ 	}
+ 
+ 	/*check ppp validity */
+ 
+-	if(unlikely(ppp->file.dead || atomic_read(&ppp->file.refcnt) == 0 || !ppp->dev || ppp->n_channels == 0)){
+-		/* printk("PPP device is dead, being destroyed!\n"); */
++	if (unlikely(ppp->file.dead || atomic_read(&ppp->file.refcnt) == 0 || !ppp->dev || ppp->n_channels == 0)) {
+ 		goto err_unlockppp;
+ 	}
+ 
+ 	/*don't support multipul link*/
+-	if(unlikely(ppp->flags & SC_MULTILINK)){
+-		/* printk("Don't support multiple link\n"); */
++	if (unlikely(ppp->flags & SC_MULTILINK)) {
+ 		goto err_unlockppp;
+ 	}
+ 
+ 	list = &ppp->channels;
+-	if(unlikely(list_empty(list))){
+-		/* printk("PPP channel list empty!\n"); */
++	if (unlikely(list_empty(list))) {
+ 		goto err_unlockppp;
+ 	}
+ 
+ 	list = list->next;
+ 	pch = list_entry(list, struct channel, clist);
+ 
+-	if(unlikely(!pch->chan)){
+-		/* printk("PPP cannot get channel!\n"); */
++	if (unlikely(!pch->chan)) {
+ 		goto err_unlockppp;
+ 	}
+ 
+     pn = ppp_pernet(pch->chan_net);
+ 
+ 	
+-	if((ppp_info_id & PPA_PPP_MASK) == PPA_PPPOE_ID){
++	if ((ppp_info_id & PPA_PPP_MASK) == PPA_PPPOE_ID) {
+ #if (defined(CONFIG_PPPOE) || defined(CONFIG_PPPOE_MODULE))
+ 		ret = ppa_get_pppoe_info(ppp_dev, pch->chan->private, ppp_info_id >>PPA_PPP_MASK_LEN, value);
+ #endif
+@@ -3187,6 +3318,59 @@ err_unlockppp:
+ }
+ EXPORT_SYMBOL(ppa_ppp_get_info);
+ 
++int32_t ppa_pptp_get_info(struct net_device *ppp_dev)
++{
++	struct ppp *ppp;
++	struct channel *pch;
++	struct list_head *list;
++	int32_t ret = -EFAULT;
++	struct ppp_net *pn;
++	struct sock *sk ;
++
++	if (unlikely(!ppp_dev))
++		return ret;
++
++	ppp = netdev_priv(ppp_dev);
++
++	if (unlikely(!(ppp_dev->flags & IFF_POINTOPOINT) || !ppp))
++		return ret;
++
++	/*check ppp validity */
++
++	if (unlikely(ppp->file.dead || atomic_read(&ppp->file.refcnt) == 0 || 
++		!ppp->dev || ppp->n_channels == 0)) {
++		goto err_unlockppp;
++	}
++
++	/*don't support multipul link*/
++	if (unlikely(ppp->flags & SC_MULTILINK))
++		goto err_unlockppp;
++
++	list = &ppp->channels;
++	if (unlikely(list_empty(list)))
++		goto err_unlockppp;
++
++	list = list->next;
++	pch = list_entry(list, struct channel, clist);
++
++	if (unlikely(!pch->chan))
++		goto err_unlockppp;
++
++	list = list->next;
++	pch = list_entry(list, struct channel, clist);
++
++	if (unlikely(!pch->chan))
++		goto err_unlockppp;
++
++	sk = (struct sock *) pch->chan->private;
++	if (sk->sk_protocol == PX_PROTO_PPTP)
++		ret = 1;
++
++err_unlockppp:
++
++	return ret;
++}
++EXPORT_SYMBOL(ppa_pptp_get_info);
+ #endif
+ /* Module/initialization stuff */
+ 
+@@ -3205,6 +3389,7 @@ EXPORT_SYMBOL(ppp_input_error);
+ EXPORT_SYMBOL(ppp_output_wakeup);
+ EXPORT_SYMBOL(ppp_register_compressor);
+ EXPORT_SYMBOL(ppp_unregister_compressor);
++EXPORT_SYMBOL(ppa_get_pptp_info);
+ MODULE_LICENSE("GPL");
+ MODULE_ALIAS_CHARDEV(PPP_MAJOR, 0);
+ MODULE_ALIAS("devname:ppp");
+diff --git a/drivers/net/ppp/pppoe.c b/drivers/net/ppp/pppoe.c
+--- a/drivers/net/ppp/pppoe.c
++++ b/drivers/net/ppp/pppoe.c
+@@ -1223,26 +1223,25 @@ int32_t ppa_check_pppoe_addr_valid(struc
+ {
+ 	struct pppox_sock *po=NULL;
+ 	struct pppoe_net *pn;
+-    struct net_device *pppoe_netdev;
++	struct net_device *pppoe_netdev;
+ 	int32_t ret = -EFAULT;
+ 
+ 	if ((pa->dev == NULL) || (pa->remote == NULL) || (pa->sid == NULL))
+ 		return ret;
++	if (strncmp(dev->name, "pptp-vpn", sizeof(char)*16) == 0)
++		return ret;
+ 
+-    pn = pppoe_pernet(dev_net(dev));
+-    if (pppoe_netdev = dev_get_by_name(dev_net(dev), pa->dev)) {
+-	    dev_put (pppoe_netdev);
+-    }
++	pn = pppoe_pernet(dev_net(dev));
++	if (pppoe_netdev = dev_get_by_name(dev_net(dev), pa->dev)) {
++		dev_put(pppoe_netdev);
++	}
+ 	po = get_item(pn, pa->sid, pa->remote, pppoe_netdev->ifindex);
+-	if (!po){
+-		printk("Cannot find the pppoe addr in hash table \n");
++	if (!po)
+ 		goto err;
+-	}	
+ 
+ 	if (!po->pppoe_dev || 
+ 		(po->pppoe_pa.remote[0] | po->pppoe_pa.remote[1] | po->pppoe_pa.remote[2] |
+-		 po->pppoe_pa.remote[3] | po->pppoe_pa.remote[4] | po->pppoe_pa.remote[5]) == 0){
+-		 printk("no pppoe device or remote address is zero\n");
++		 po->pppoe_pa.remote[3] | po->pppoe_pa.remote[4] | po->pppoe_pa.remote[5]) == 0) {
+ 		goto err;
+ 	}
+ 
+@@ -1274,7 +1273,7 @@ int32_t ppa_pppoe_get_pppoe_addr(struct 
+ 
+ __u16 ppa_get_pkt_pppoe_session_id(struct sk_buff *skb)
+ {
+-	if(!skb)
++	if (!skb)
+ 		return 0;
+ 	
+ 	return ppa_pppoe_get_pppoe_session_id(skb->dev);
+@@ -1284,28 +1283,28 @@ int32_t ppa_pppoe_get_eth_netif(struct n
+ {
+ 	uint32_t id = (PPPOE_GET_ETH_ADDR << PPA_PPP_MASK_LEN) | PPA_PPPOE_ID;
+ 
+-	return ppa_ppp_get_info(dev, id, pppoe_eth_ifname);
++	if (strncmp(dev->name, "pptp-vpn", sizeof(char)*16) == 0)
++		return -1;
++	else
++		return ppa_ppp_get_info(dev, id, pppoe_eth_ifname);
+ }
+ 
+ int32_t ppa_get_pppoe_info(struct net_device *dev, void *po, uint32_t pppoe_id, void *value)
+ {
+ 	struct pppoe_addr pa;
+ 
+-	if(!po){
+-		printk("No pppoe sock \n");
++	if (!po)
+ 		return -1;
+-	}
+ 
+-	if((pppox_sk(po)->chan.private != po)){
++	if ((pppox_sk(po)->chan.private != po))
+ 		return -1;
+-	}
+ 
+ 	pa = pppox_sk(po)->pppoe_pa;
+ 
+-	if(ppa_check_pppoe_addr_valid(dev, &pa) < 0)
++	if (ppa_check_pppoe_addr_valid(dev, &pa) < 0)
+ 		return -1;
+ 
+-	switch(pppoe_id){
++	switch (pppoe_id) {
+ 		case PPPOE_GET_ADDR:
+ 			*(struct pppoe_addr *)value = pa; break;
+ 		case PPPOE_GET_SESSION_ID:
+@@ -1317,7 +1316,6 @@ int32_t ppa_get_pppoe_info(struct net_de
+ 	}
+ 
+ 	return 0;
+-		
+ }
+ 
+ EXPORT_SYMBOL(ppa_pppoe_get_pppoe_addr);
+diff --git a/drivers/net/ppp/pptp.c b/drivers/net/ppp/pptp.c
+--- a/drivers/net/ppp/pptp.c
++++ b/drivers/net/ppp/pptp.c
+@@ -41,6 +41,7 @@
+ #include <net/gre.h>
+ 
+ #include <linux/uaccess.h>
++#include <net/ppa_api.h>
+ 
+ #define PPTP_DRIVER_VERSION "0.8.5"
+ 
+@@ -632,6 +633,248 @@ static int pptp_ppp_ioctl(struct ppp_cha
+ 	return err;
+ }
+ 
++int ppa_pptp_get_callid(struct net_device *ppp_dev, struct ppp_channel *chan)
++{
++	if (chan == NULL)
++		return 0;
++	struct sock *sk = (struct sock *) chan->private;
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	/* *sent_seq= opt->seq_sent; */
++	/* *rcv_seq= opt->seq_recv; */
++	return htons(opt->dst_addr.call_id);
++
++}
++
++
++
++int ppa_pptp_get_seq_num(struct net_device *ppp_dev, void *chan, int *sent_seq, int *rcv_seq)
++{
++	if (chan == NULL)
++		return 0;
++
++	struct sock *sk = (struct sock *) chan;
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	*sent_seq = opt->seq_sent;
++	*rcv_seq = opt->seq_recv;
++	return 1;
++
++}
++
++static int ppa_is_zero_mac(uint8_t *mac)
++{
++	return !(mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5]);
++}
++
++
++extern struct net_device *ppa_get_pptp_dmac(uint8_t *mac,
++		struct net_device *dev,
++		struct rtable *rt,
++		uint32_t  saddr,
++		uint32_t  daddr);
++struct net_device *ppa_pptp_get_outer_src_dst_addr(struct net_device *ppp_dev, void *chan, uint32_t *outer_srcip, uint32_t *outer_dstip, struct rtable *rut, uint8_t *dmac, struct net_device *base_intrf_dev)
++{
++	int32_t ret = 1;
++	if (chan == NULL)
++		goto tx_error;
++	struct sock *sk = (struct sock *) chan;
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	struct pptp_gre_header *hdr;
++	struct net_device *phydev;
++	unsigned int header_len = sizeof(*hdr);
++	struct flowi4 fl4;
++
++	struct rtable *rt;
++	struct iphdr  *iph;
++
++	__be32 pkey = 0x0;
++	memset(dmac, 0, 6);
++
++	if (sk_pppox(po)->sk_state & PPPOX_DEAD)
++		goto tx_error;
++
++	rt = ip_route_output_ports(sock_net(sk), &fl4, NULL,
++				   opt->dst_addr.sin_addr.s_addr,
++				   opt->src_addr.sin_addr.s_addr,
++				   0, 0, IPPROTO_GRE,
++				   RT_TOS(0), 0);
++	/* phydev = __ip_dev_find(&init_net, opt->src_addr.sin_addr.s_addr,false); */
++	rut = rt ;
++	if (IS_ERR(rt)) {
++		goto tx_error;
++	} else {
++		*outer_srcip = fl4.saddr;
++		*outer_dstip = fl4.daddr;
++		if (rt->rt_gateway == NULL) 
++			phydev = ppa_get_pptp_dmac(dmac,ppp_dev,rt,fl4.saddr,fl4.daddr); 
++		else
++			phydev = ppa_get_pptp_dmac(dmac, ppp_dev, rt, fl4.saddr, rt->rt_gateway);
++		return phydev;
++	}
++tx_error:
++	return NULL;
++}
++
++
++int32_t ppa_get_pptp_hdrlen(struct net_device *ppp_dev, void *chan)
++{
++	if (chan == NULL)
++		return 0;
++	struct sock *sk = (struct sock *) chan;
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	__u32 seq_recv;
++	struct pptp_gre_header pptph;
++	unsigned int header_len = sizeof(pptph);
++
++	seq_recv = opt->seq_recv;
++
++	if (opt->ack_sent == seq_recv)
++		header_len -= sizeof(pptph.ack);
++	return header_len;
++}
++
++int32_t ppa_check_pptp_ack_flag(void *data)
++{
++	struct pptp_gre_header *header;
++
++	header = (struct pptp_gre_header *)data;
++	if (ntohs(header->protocol) == PPTP_GRE_PROTO) { /* PPTP-GRE protocol for PPTP */
++		if (PPTP_GRE_IS_A(header->ver)) {                /* flag K should be set */
++			return sizeof(*header)+4;
++		} else {
++			return sizeof(*header);
++		}
++	}
++
++}
++
++int32_t ppa_form_pptp_hdr(struct net_device *ppp_dev, void *chan, void *hdr)
++{
++	if (chan == NULL)
++		return 0;
++
++	struct sock *sk = (struct sock *) chan;
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	__u32 seq_recv;
++	struct pptp_gre_header pptph;
++	unsigned int header_len = sizeof(struct pptp_gre_header);
++
++	seq_recv = opt->seq_recv;
++
++	pptph.flags       = PPTP_GRE_FLAG_K;
++	pptph.ver         = PPTP_GRE_VER;
++	pptph.protocol    = htons(PPTP_GRE_PROTO);
++	pptph.call_id     = htons(opt->dst_addr.call_id);
++
++	pptph.flags      |= PPTP_GRE_FLAG_S;
++	pptph.seq         = htonl(++opt->seq_sent);
++	if (opt->ack_sent != seq_recv) {
++		/* send ack with this message */
++		pptph.ver |= PPTP_GRE_FLAG_A;
++		pptph.ack  = htonl(seq_recv);
++		/* opt->ack_sent = seq_recv; */
++	}
++	pptph.payload_len = 0;
++
++	memcpy(hdr , &pptph, header_len);
++	return header_len;
++
++}
++
++int32_t ppa_update_pptp_hdr(struct net_device *ppp_dev, void *chan, void *hdr, int len)
++{
++	if (chan == NULL)
++		return 0;
++	struct sock *sk = (struct sock *) chan;
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	struct pptp_gre_header *pptph = hdr;
++	unsigned int header_len = sizeof(struct pptp_gre_header);
++	__u32 seq_recv;
++	seq_recv = opt->seq_recv;
++	pptph->seq  = htonl(++opt->seq_sent);
++	if (opt->ack_sent == seq_recv) {
++		header_len -= 4; /* 4 is the ack lenght */
++		pptph->ver &= 0x7F; /* Reset the Ack flag bit */
++	} else {
++		/* send ack with this message */
++		pptph->ack  = htonl(seq_recv);
++		opt->ack_sent = seq_recv;
++		pptph->ver |= PPTP_GRE_FLAG_A;
++	}
++	pptph->payload_len = htons(len) - header_len ; /* don't add the PPTP header as part of payload */
++
++}
++
++
++int ppa_pptp_rcv(struct net_device *ppp_dev, struct ppp_channel *chan, struct sk_buff *skb, uint32_t pptp_gre_header_len)
++{
++	if (chan == NULL)
++		goto drop;
++	struct sock *sk = (struct sock *) chan;
++
++	struct pppox_sock *po = pppox_sk(sk);
++	struct pptp_opt *opt = &po->proto.pptp;
++	int headersize, payload_len, seq;
++	__u8 *payload;
++	struct pptp_gre_header *header;
++
++	header = (struct pptp_gre_header *)(skb->data-pptp_gre_header_len);
++	headersize  = sizeof(*header);
++
++	/* test if acknowledgement present */
++	if (PPTP_GRE_IS_A(header->ver)) {
++		__u32 ack;
++		/* ack in different place if S = 0 */
++		ack = PPTP_GRE_IS_S(header->flags) ? header->ack : header->seq;
++
++		ack = ntohl(ack);
++
++		if (ack > opt->ack_recv)
++			opt->ack_recv = ack;
++		/* also handle sequence number wrap-around  */
++		if (WRAPPED(ack, opt->ack_recv))
++			opt->ack_recv = ack;
++	} else {
++		headersize -= sizeof(header->ack);
++	}
++	/* test if payload present */
++	if (!PPTP_GRE_IS_S(header->flags))
++		goto drop;
++
++	payload_len = ntohs(header->payload_len);
++	seq         = ntohl(header->seq);
++
++	payload = skb->data-4 ;
++	/* check for expected sequence number */
++	if (seq < opt->seq_recv + 1 || WRAPPED(opt->seq_recv, seq)) {
++		if ((payload[0] == PPP_ALLSTATIONS) && (payload[1] == PPP_UI) && (payload[2] == 0x00) && (payload[3] == 0x21))	
++		goto allow_packet;
++	} else {
++		opt->seq_recv = seq;
++allow_packet:
++		skb->ip_summed = CHECKSUM_NONE;
++
++		return NET_RX_SUCCESS;
++	}
++drop:
++	return NET_RX_DROP;
++
++
++}
++
++EXPORT_SYMBOL(ppa_pptp_get_callid);
++EXPORT_SYMBOL(ppa_pptp_get_outer_src_dst_addr);
++EXPORT_SYMBOL(ppa_get_pptp_hdrlen);
++EXPORT_SYMBOL(ppa_form_pptp_hdr);
++EXPORT_SYMBOL(ppa_update_pptp_hdr);
++EXPORT_SYMBOL(ppa_pptp_get_seq_num);
++EXPORT_SYMBOL(ppa_pptp_rcv);
++
+ static const struct ppp_channel_ops pptp_chan_ops = {
+ 	.start_xmit = pptp_xmit,
+ 	.ioctl      = pptp_ppp_ioctl,
+@@ -681,6 +924,16 @@ static int __init pptp_init_module(void)
+ 	if (!callid_sock)
+ 		return -ENOMEM;
+ 
++	ppa_pptp_get_callid_fn  = ppa_pptp_get_callid;
++	ppa_pptp_get_seq_num_fn = ppa_pptp_get_seq_num;
++	ppa_pptp_get_outer_src_dst_addr_fn = ppa_pptp_get_outer_src_dst_addr;
++	ppa_get_pptp_hdrlen_fn = ppa_get_pptp_hdrlen;
++	ppa_form_pptp_hdr_fn = ppa_form_pptp_hdr;
++	ppa_update_pptp_hdr_fn = ppa_update_pptp_hdr;
++	ppa_pptp_rcv_fn = ppa_pptp_rcv;
++	ppa_check_pptp_ack_flag_fn = ppa_check_pptp_ack_flag;
++
++
+ 	err = gre_add_protocol(&gre_pptp_protocol, GREPROTO_PPTP);
+ 	if (err) {
+ 		pr_err("PPTP: can't add gre protocol\n");
+@@ -714,6 +967,15 @@ out_mem_free:
+ static void __exit pptp_exit_module(void)
+ {
+ 	unregister_pppox_proto(PX_PROTO_PPTP);
++	ppa_pptp_get_callid_fn  = NULL;
++	ppa_pptp_get_seq_num_fn = NULL;
++	ppa_pptp_get_outer_src_dst_addr_fn = NULL;
++	ppa_get_pptp_hdrlen_fn = NULL;
++	ppa_form_pptp_hdr_fn = NULL;
++	ppa_update_pptp_hdr_fn = NULL;
++	ppa_pptp_rcv_fn = NULL;
++
++
+ 	proto_unregister(&pptp_sk_proto);
+ 	gre_del_protocol(&gre_pptp_protocol, GREPROTO_PPTP);
+ 	vfree(callid_sock);

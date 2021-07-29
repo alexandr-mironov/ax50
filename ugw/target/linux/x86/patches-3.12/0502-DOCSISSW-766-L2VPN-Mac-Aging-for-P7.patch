@@ -1,0 +1,242 @@
+From dceede1feceddb7e1e3b45f13c586e2118a39b41 Mon Sep 17 00:00:00 2001
+From: iemergi <idan.emergi@intel.com>
+Date: Sun, 9 Oct 2016 16:49:47 +0300
+Subject: [PATCH 502/639] DOCSISSW-766: L2VPN - Mac Aging for P7
+
+L2VPN - Mac Aging for P7 - merge from SDK6.1
+
+Signed-off-by: iemergi <idan.emergi@intel.com>
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h |  26 ++++-
+ include/linux/ti_hil.h                             |  13 +++
+ net/core/skbuff.c                                  |   7 ++
+ net/ti/pp/ti_hil_core.c                            | 114 +++++++++++++++++++++
+ 4 files changed, 158 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 2389397..c080108 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1207,8 +1207,11 @@ typedef struct // former TI_PP_SESSION
+ 
+     Uint8                   is_irreg_moca;
+ #endif
+-
+-
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++    Uint8                   cpe_number;
++    Uint8                   spare_align_byte;
++    Uint16                  spare_align_word;
++#endif
+ }
+ AVALANCHE_PP_SESSION_INFO_t;
+ 
+@@ -1574,7 +1577,26 @@ typedef struct // former TI_PP_GLOBAL_STATS
+ } AVALANCHE_PP_GLOBAL_STATS_t;
+ #endif
+ 
++/**************************************************************************
++ * STRUCTURE NAME : AVALANCHE_PP_SESSION_DELETE_CB_PARAM1_t
++ **************************************************************************
++ * DESCRIPTION   :
++ *  The structure describes the param1 of the session delete function call back.
++ *  Since the session handle is maximum 2 bytes value, it possible to use the
++ *  other 2 bytes for additional info, 1 byte will be used for saving the
++ *  cpe_number of the deleted session
++ * Note: former TI_PP_GLOBAL_STATS
++ **************************************************************************/
++struct AVALANCHE_PP_SESSION_DELETE_CB_PARAM1_t{
++
++	Uint32	session_handle;
++	Uint8	cpe_number;
++	Uint8	spare;
++};
+ 
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++#define AVALANCHE_PP_L2VPN_INVALID_CPE_NUMBER 0xff
++#endif
+ 
+ #ifdef __KERNEL__
+ /* **************************************************************************************** */
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index ec83a09..1df1412 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -345,6 +345,19 @@ extern int ti_hil_register_delete_session_notification(TI_HIL_DELETE_SESSION ti_
+ extern int ti_hil_unregister_delete_session_notification(void);
+ #endif /* CONFIG_TI_PACKET_PROCESSOR_STATS */
+ 
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++/* DOCSIS Packet processor session notification API */
++typedef int (*TI_HIL_MAC_AGING_START_SESSION)(unsigned int sessionHandle, struct sk_buff* skb);
++typedef int (*TI_HIL_MAC_AGING_DELETE_SESSION)(unsigned char cpeNumber);
++
++extern int ti_hil_register_mac_aging_start_session_notification(
++	TI_HIL_MAC_AGING_START_SESSION ti_hil_start_session_notification);
++extern int ti_hil_unregister_mac_aging_start_session_notification(void);
++extern int ti_hil_register_mac_aging_delete_session_notification(
++	TI_HIL_MAC_AGING_DELETE_SESSION ti_hil_delete_session_notification);
++extern int ti_hil_unregister_mac_aging_delete_session_notification(void);
++#endif /* CONFIG_INTEL_L2VPN_MAC_AGING */
++
+ #ifdef CONFIG_MACH_PUMA5
+ /* Power Saving Mode (PSM) API */
+ extern int ti_hil_enable_psm (void);
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+index b916194..22980d8 100755
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -299,6 +299,13 @@ int skb_init_intel(struct sk_buff *skb)
+ #endif
+ #endif  /* CONFIG_TI_PACKET_PROCESSOR */
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++	/* Indicating N.I.U cpe number */
++	skb->pp_packet_info->pp_session.cpe_number =
++		AVALANCHE_PP_L2VPN_INVALID_CPE_NUMBER;
++#endif
++#endif
+     return 0;
+ }
+ 
+diff --git a/net/ti/pp/ti_hil_core.c b/net/ti/pp/ti_hil_core.c
+index dacf275..93cbe92 100755
+--- a/net/ti/pp/ti_hil_core.c
++++ b/net/ti/pp/ti_hil_core.c
+@@ -178,6 +178,15 @@ TI_HIL_DELETE_SESSION ti_hil_delete_session_notification_cb = NULL;
+ EXPORT_SYMBOL(ti_hil_delete_session_notification_cb);
+ #endif /* CONFIG_TI_PACKET_PROCESSOR_STATS */
+ 
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++/* DOCSIS Packet processor MAC AGING start session notification Callback */
++TI_HIL_MAC_AGING_START_SESSION ti_hil_mac_aging_start_session_notification_cb = NULL;
++EXPORT_SYMBOL(ti_hil_mac_aging_start_session_notification_cb);
++/* DOCSIS Packet processor MAC AGING delete session notification Callback */
++TI_HIL_MAC_AGING_DELETE_SESSION ti_hil_mac_aging_delete_session_notification_cb = NULL;
++EXPORT_SYMBOL(ti_hil_mac_aging_delete_session_notification_cb);
++#endif
++
+ /**************************************************************************
+  ******************************* Functions  *******************************
+  **************************************************************************/
+@@ -662,6 +671,104 @@ int ti_hil_unregister_delete_session_notification(void)
+ }
+ #endif /* CONFIG_TI_PACKET_PROCESSOR_STATS */
+ 
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++/**************************************************************************
++ * FUNCTION NAME : ti_hil_register_mac_aging_start_session_notification
++ **************************************************************************
++ * DESCRIPTION   :
++ *  Register the DOCSIS Packet Processor start session notification for mac aging feature
++ *  callback function
++ *
++ * RETURNS       :
++ *  0   -   Success
++ *  <0  -   Error
++ **************************************************************************/
++int ti_hil_register_mac_aging_start_session_notification(
++	TI_HIL_MAC_AGING_START_SESSION ti_hil_start_session_notification)
++{
++	if (ti_hil_mac_aging_start_session_notification_cb != NULL) {
++		pr_err("Error: DOCSIS Packet Processor mac aging start session notification callback already exist\n");
++		return -1;
++	}
++
++	ti_hil_mac_aging_start_session_notification_cb =
++		ti_hil_start_session_notification;
++
++	return 0;
++}
++
++/**************************************************************************
++ * FUNCTION NAME : ti_hil_unregister_mac_aging_start_session_notification
++ **************************************************************************
++ * DESCRIPTION   :
++ *  Un-Register the DOCSIS Packet Processor start session notification for mac aging feature
++ *  callback function
++ *
++ * RETURNS       :
++ *  0   -   Success
++ *  <0  -   Error
++ **************************************************************************/
++int ti_hil_unregister_mac_aging_start_session_notification(void)
++{
++	if (ti_hil_mac_aging_start_session_notification_cb == NULL) {
++		pr_err("Error: DOCSIS Packet Processor mac aging start session notification callback empty\n");
++		return -1;
++	}
++
++	ti_hil_mac_aging_start_session_notification_cb = NULL;
++
++	return 0;
++}
++
++/**************************************************************************
++ * FUNCTION NAME : ti_hil_register_mac_aging_delete_session_notification
++ **************************************************************************
++ * DESCRIPTION   :
++ *  Register the DOCSIS Packet processor delete session notification for mac aging feature
++ *  callback function
++ *
++ * RETURNS       :
++ *  0   -   Success
++ *  <0  -   Error
++ **************************************************************************/
++int ti_hil_register_mac_aging_delete_session_notification(
++	TI_HIL_MAC_AGING_DELETE_SESSION ti_hil_delete_session_notification)
++{
++	if (ti_hil_mac_aging_delete_session_notification_cb != NULL) {
++		pr_err("Error: DOCSIS Packet Processor delete session notification callback already exist\n");
++		return -1;
++	}
++
++	ti_hil_mac_aging_delete_session_notification_cb =
++		ti_hil_delete_session_notification;
++
++	return 0;
++}
++
++/**************************************************************************
++ * FUNCTION NAME : ti_hil_unregister_mac_aging_delete_session_notification
++ **************************************************************************
++ * DESCRIPTION   :
++ *  Un-Register the DOCSIS Packet processor delete session notification for mac aging feature
++ *  callback function
++ *
++ * RETURNS       :
++ *  0   -   Success
++ *  <0  -   Error
++ **************************************************************************/
++int ti_hil_unregister_mac_aging_delete_session_notification(void)
++{
++	if (ti_hil_mac_aging_delete_session_notification_cb == NULL) {
++		pr_err("Error: DOCSIS Packet Processor mac aging delete session notification callback empty\n");
++		return -1;
++	}
++
++	ti_hil_mac_aging_delete_session_notification_cb = NULL;
++
++	return 0;
++}
++#endif CONFIG_INTEL_L2VPN_MAC_AGING
++
+ /* Export all the Symbols for Linux; so that these can be called from modules. */
+ EXPORT_SYMBOL(ti_hil_initialize);
+ EXPORT_SYMBOL(ti_hil_register_profile);
+@@ -673,4 +780,11 @@ EXPORT_SYMBOL(ti_hil_unregister_start_session_notification);
+ EXPORT_SYMBOL(ti_hil_register_delete_session_notification);
+ EXPORT_SYMBOL(ti_hil_unregister_delete_session_notification);
+ #endif /* CONFIG_TI_PACKET_PROCESSOR_STATS */
++#ifdef CONFIG_INTEL_L2VPN_MAC_AGING
++/* DOCSIS Packet processor start/delete session notification API */
++EXPORT_SYMBOL(ti_hil_register_mac_aging_start_session_notification);
++EXPORT_SYMBOL(ti_hil_unregister_mac_aging_start_session_notification);
++EXPORT_SYMBOL(ti_hil_register_mac_aging_delete_session_notification);
++EXPORT_SYMBOL(ti_hil_unregister_mac_aging_delete_session_notification);
++#endif /* CONFIG_INTEL_L2VPN_MAC_AGING */
+ 
+-- 
+2.10.1
+

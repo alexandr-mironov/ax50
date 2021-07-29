@@ -1,0 +1,475 @@
+From a5d1d4fca57305c7c67b354c74419ff57dbba621 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Thu, 13 Jul 2017 12:16:40 +0300
+Subject: [PATCH 1/2] added mechanism to notify userspace about mgmt frames
+ with VSIE
+
+upon recevied mgmt frames in rx path, if the frames contains the
+configured filter in the vendor specific IE, the supplicant will
+generate an event that userspace app can register to receive.
+<ctrl_event_frame_type> <mac_address> <VSIE>
+example:
+CTRL-EVENT-BEACON 00:ca:fe:ca:fe:10 11223301
+
+the filter can be configured (usually 3 bytes of vendor OUI)
+via wpa_supplicant conf file:
+driver_param="vendor_events_filter=<filter_hexdump>"
+usage example:
+driver_param="vendor_events_filter=112233"
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ src/common/ieee802_11_common.h     |  2 +
+ src/common/wpa_ctrl.h              |  6 +++
+ src/drivers/driver.h               |  4 +-
+ src/drivers/driver_bsd.c           |  2 +-
+ src/drivers/driver_nl80211.c       | 31 +++++++++++-
+ src/drivers/driver_nl80211.h       |  2 +
+ src/drivers/driver_nl80211_event.c |  5 +-
+ wpa_supplicant/config.c            |  1 -
+ wpa_supplicant/driver_i.h          |  4 +-
+ wpa_supplicant/events.c            | 99 ++++++++++++++++++++++++++++++++++++++
+ wpa_supplicant/wpa_cli.c           | 10 ++++
+ wpa_supplicant/wpa_priv.c          |  2 +-
+ wpa_supplicant/wpa_supplicant.c    | 16 +++++-
+ wpa_supplicant/wpa_supplicant_i.h  |  3 ++
+ 14 files changed, 177 insertions(+), 10 deletions(-)
+
+diff --git a/src/common/ieee802_11_common.h b/src/common/ieee802_11_common.h
+index 4ce4013..752e72a 100644
+--- a/src/common/ieee802_11_common.h
++++ b/src/common/ieee802_11_common.h
+@@ -48,6 +48,7 @@ struct ieee802_11_elems {
+ 	const u8 *vht_opmode_notif;
+ 	const u8 *vendor_ht_cap;
+ 	const u8 *vendor_vht;
++	const u8 *vendor_ie_to_notify;
+ 	const u8 *p2p;
+ 	const u8 *wfd;
+ 	const u8 *link_id;
+@@ -83,6 +84,7 @@ struct ieee802_11_elems {
+ 	u8 peer_mgmt_len;
+ 	u8 vendor_ht_cap_len;
+ 	u8 vendor_vht_len;
++	u8 vendor_ie_to_notify_len;
+ 	u8 p2p_len;
+ 	u8 wfd_len;
+ 	u8 interworking_len;
+diff --git a/src/common/wpa_ctrl.h b/src/common/wpa_ctrl.h
+index 1d15908..8e7ceed 100644
+--- a/src/common/wpa_ctrl.h
++++ b/src/common/wpa_ctrl.h
+@@ -79,6 +79,12 @@ extern "C" {
+ /** Channel switch (followed by freq=<MHz> and other channel parameters) */
+ #define WPA_EVENT_CHANNEL_SWITCH "CTRL-EVENT-CHANNEL-SWITCH "
+ 
++#define WPA_EVENT_BEACON		"CTRL-EVENT-BEACON "
++#define WPA_EVENT_PROBE_RSP		"CTRL-EVENT-PROBE-RSP "
++#define WPA_EVENT_AUTH_RSP		"CTRL-EVENT-AUTH-RSP "
++#define WPA_EVENT_ASSOC_RSP		"CTRL-EVENT-ASSOC-RSP "
++#define WPA_EVENT_REASSOC_RSP	"CTRL-EVENT-REASSOC-RSP "
++
+ /** IP subnet status change notification
+  *
+  * When using an offloaded roaming mechanism where driver/firmware takes care
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index bfcda82..4337917 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -2584,12 +2584,14 @@ struct wpa_driver_ops {
+ 	 * e.g., wpa_supplicant_event()
+ 	 * @ifname: interface name, e.g., wlan0
+ 	 * @global_priv: private driver global data from global_init()
++	 * @param: driver specific configuration parameters
+ 	 * Returns: Pointer to private data, %NULL on failure
+ 	 *
+ 	 * This function can be used instead of init() if the driver wrapper
+ 	 * uses global data.
+ 	 */
+-	void * (*init2)(void *ctx, const char *ifname, void *global_priv);
++	void * (*init2)(void *ctx, const char *ifname, void *global_priv,
++			const char *param);
+ 
+ 	/**
+ 	 * get_interfaces - Get information about available interfaces
+diff --git a/src/drivers/driver_bsd.c b/src/drivers/driver_bsd.c
+index 2afd7df..dad90cf 100644
+--- a/src/drivers/driver_bsd.c
++++ b/src/drivers/driver_bsd.c
+@@ -1560,7 +1560,7 @@ get80211opmode(struct bsd_driver_data *drv)
+ }
+ 
+ static void *
+-wpa_driver_bsd_init(void *ctx, const char *ifname, void *priv)
++wpa_driver_bsd_init(void *ctx, const char *ifname, void *priv, const char *param)
+ {
+ #define	GETPARAM(drv, param, v) \
+ 	(((v) = get80211param(drv, param)) != -1)
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 3a70ed0..d38ba10 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -1745,10 +1745,10 @@ failed:
+  * Returns: Pointer to private data, %NULL on failure
+  */
+ static void * wpa_driver_nl80211_init(void *ctx, const char *ifname,
+-				      void *global_priv)
++				      void *global_priv, const char *param)
+ {
+ 	return wpa_driver_nl80211_drv_init(ctx, ifname, global_priv, 0, NULL,
+-					   NULL);
++			param);
+ }
+ 
+ 
+@@ -1817,6 +1817,14 @@ static int nl80211_register_action_frame(struct i802_bss *bss,
+ 				      type, match, match_len);
+ }
+ 
++static int nl80211_register_mgmt_frame(struct i802_bss *bss, u16 stype,
++					 const u8 *match, size_t match_len)
++{
++	u16 type = (WLAN_FC_TYPE_MGMT << 2) | (stype << 4);
++	return nl80211_register_frame(bss, bss->nl_mgmt,
++				      type, match, match_len);
++}
++
+ 
+ static int nl80211_mgmt_subscribe_non_ap(struct i802_bss *bss)
+ {
+@@ -1938,6 +1946,16 @@ static int nl80211_mgmt_subscribe_non_ap(struct i802_bss *bss)
+ 	    (nl80211_register_action_frame(bss, (u8 *) "\x05\x02", 2) < 0))
+ 		ret = -1;
+ 
++	if (drv->vendor_events_filter_len &&
++		nl80211_register_mgmt_frame(bss, WLAN_FC_STYPE_BEACON,
++		(u8 *) drv->vendor_events_filter, drv->vendor_events_filter_len) < 0)
++		ret = -1;
++
++	if (drv->vendor_events_filter_len &&
++		nl80211_register_mgmt_frame(bss, WLAN_FC_STYPE_PROBE_RESP,
++		(u8 *) drv->vendor_events_filter, drv->vendor_events_filter_len) < 0)
++		ret = -1;
++
+ 	nl80211_mgmt_handle_register_eloop(bss);
+ 
+ 	return ret;
+@@ -7252,6 +7270,7 @@ static int nl80211_set_param(void *priv, const char *param)
+ {
+ 	struct i802_bss *bss = priv;
+ 	struct wpa_driver_nl80211_data *drv = bss->drv;
++	char *pos;
+ 
+ 	if (param == NULL)
+ 		return 0;
+@@ -7282,6 +7301,14 @@ static int nl80211_set_param(void *priv, const char *param)
+ 		drv->test_use_roc_tx = 1;
+ 	}
+ 
++	pos = os_strstr(param, "vendor_events_filter=");
++	if (pos) {
++		pos += 21;
++		drv->vendor_events_filter_len = (os_strlen(pos) - 1) / 2;
++		if (drv->vendor_events_filter_len)
++			hexstr2bin(pos, drv->vendor_events_filter, drv->vendor_events_filter_len);
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/src/drivers/driver_nl80211.h b/src/drivers/driver_nl80211.h
+index 1b9f3e1..5754788 100644
+--- a/src/drivers/driver_nl80211.h
++++ b/src/drivers/driver_nl80211.h
+@@ -197,6 +197,8 @@ struct wpa_driver_nl80211_data {
+ 	int auth_wep_tx_keyidx;
+ 	int auth_local_state_change;
+ 	int auth_p2p;
++	u8 vendor_events_filter[32];
++	u8 vendor_events_filter_len;
+ 
+ 	/*
+ 	 * Tells whether the last scan issued from wpa_supplicant was a normal
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index e44770d..5dfe8ac 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -207,7 +207,7 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
+ {
+ 	const struct ieee80211_mgmt *mgmt;
+ 	union wpa_event_data event;
+-	u16 status;
++	u16 status, fc, stype;
+ 
+ 	if (!(drv->capa.flags & WPA_DRIVER_FLAGS_SME) &&
+ 	    drv->force_connect_cmd) {
+@@ -250,6 +250,9 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
+ 
+ 	os_memset(&event, 0, sizeof(event));
+ 	if (len > 24 + sizeof(mgmt->u.assoc_resp)) {
++		fc = le_to_host16(mgmt->frame_control);
++		stype = WLAN_FC_GET_STYPE(fc);
++		event.assoc_info.reassoc = stype == WLAN_FC_STYPE_REASSOC_RESP;
+ 		event.assoc_info.resp_ies = (u8 *) mgmt->u.assoc_resp.variable;
+ 		event.assoc_info.resp_ies_len =
+ 			len - 24 - sizeof(mgmt->u.assoc_resp);
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 58a4034..4a04daa 100644
+--- a/wpa_supplicant/config.c
++++ b/wpa_supplicant/config.c
+@@ -4141,7 +4141,6 @@ static int wpa_config_process_ap_vendor_elements(
+ 	return 0;
+ }
+ 
+-
+ #ifdef CONFIG_CTRL_IFACE
+ static int wpa_config_process_no_ctrl_interface(
+ 	const struct global_parse_data *data,
+diff --git a/wpa_supplicant/driver_i.h b/wpa_supplicant/driver_i.h
+index fe943cb..2826a6c 100644
+--- a/wpa_supplicant/driver_i.h
++++ b/wpa_supplicant/driver_i.h
+@@ -13,11 +13,11 @@
+ 
+ /* driver_ops */
+ static inline void * wpa_drv_init(struct wpa_supplicant *wpa_s,
+-				  const char *ifname)
++				  const char *ifname, const char *param)
+ {
+ 	if (wpa_s->driver->init2)
+ 		return wpa_s->driver->init2(wpa_s, ifname,
+-					    wpa_s->global_drv_priv);
++					    wpa_s->global_drv_priv, param);
+ 	if (wpa_s->driver->init) {
+ 		return wpa_s->driver->init(wpa_s, ifname);
+ 	}
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index abe3b47..24b3a60 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1975,6 +1975,75 @@ static int wpas_fst_update_mbie(struct wpa_supplicant *wpa_s,
+ }
+ #endif /* CONFIG_FST */
+ 
++static ParseRes ieee802_11_parse_configurable_vendor(const u8 *start, size_t len,
++				struct ieee802_11_elems *elems,
++				u8 *vendor_events_filter, u8 vendor_events_filter_len)
++{
++	size_t left = len;
++	const u8 *pos = start;
++
++	os_memset(elems, 0, sizeof(*elems));
++
++	while (left >= 2) {
++		u8 id, elen;
++
++		id = *pos++;
++		elen = *pos++;
++		left -= 2;
++
++		if (elen > left)
++			return ParseFailed;
++
++		switch (id) {
++		case WLAN_EID_VENDOR_SPECIFIC:
++			if (elen >= 4 && vendor_events_filter && vendor_events_filter_len >= 3) {
++				int i = 0, found = 1;
++				for (i = 0; i < vendor_events_filter_len; i++) {
++					if (pos[i] != vendor_events_filter[i]) {
++						found = 0;
++						break;
++					}
++				}
++				if (found) {
++					elems->vendor_ie_to_notify = pos;
++					elems->vendor_ie_to_notify_len = elen;
++				}
++			}
++			break;
++		default:
++			break;
++		}
++
++		left -= elen;
++		pos += elen;
++	}
++
++	if (left)
++		return ParseFailed;
++
++	return ParseOK;
++}
++
++static void process_configurable_vendor_specific(struct wpa_supplicant *wpa_s,
++				   const u8 *ies, size_t ies_len,
++				   const u8 *addr, const char *event)
++{
++	struct ieee802_11_elems elems;
++
++	if (!ies)
++		return;
++
++	if (ieee802_11_parse_configurable_vendor(ies, ies_len, &elems,
++			wpa_s->vendor_events_filter, wpa_s->vendor_events_filter_len) == ParseFailed)
++		return;
++
++	if (elems.vendor_ie_to_notify) {
++		char str_vs_ie[128];
++		wpa_snprintf_hex(str_vs_ie, 128, elems.vendor_ie_to_notify, elems.vendor_ie_to_notify_len);
++		wpa_msg_ctrl(wpa_s, MSG_INFO, "%s" MACSTR " %s",
++				event, MAC2STR(addr), str_vs_ie);
++	}
++}
+ 
+ static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
+ 					  union wpa_event_data *data)
+@@ -1984,6 +2053,7 @@ static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
+ #ifdef CONFIG_IEEE80211R
+ 	u8 bssid[ETH_ALEN];
+ #endif /* CONFIG_IEEE80211R */
++	u8 addr[ETH_ALEN];
+ 
+ 	wpa_dbg(wpa_s, MSG_DEBUG, "Association info event");
+ 	if (data->assoc_info.req_ies)
+@@ -2004,6 +2074,15 @@ static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
+ 		interworking_process_assoc_resp(wpa_s, data->assoc_info.resp_ies,
+ 						data->assoc_info.resp_ies_len);
+ #endif /* CONFIG_INTERWORKING */
++
++		if (wpa_drv_get_bssid(wpa_s, addr) < 0)
++			wpa_dbg(wpa_s, MSG_ERROR, "Failed to get BSSID");
++		else if (data->assoc_info.reassoc)
++			process_configurable_vendor_specific(wpa_s, data->assoc_info.resp_ies,
++					data->assoc_info.resp_ies_len, addr, WPA_EVENT_REASSOC_RSP);
++		else
++			process_configurable_vendor_specific(wpa_s, data->assoc_info.resp_ies,
++					data->assoc_info.resp_ies_len, addr, WPA_EVENT_ASSOC_RSP);
+ 	}
+ 	if (data->assoc_info.beacon_ies)
+ 		wpa_hexdump(MSG_DEBUG, "beacon_ies",
+@@ -3468,6 +3547,8 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 			wpa_printf(MSG_DEBUG,
+ 				   "FST: MB IEs updated from auth IE");
+ #endif /* CONFIG_FST */
++		process_configurable_vendor_specific(wpa_s, data->auth.ies,
++				data->auth.ies_len, data->auth.peer, WPA_EVENT_AUTH_RSP);
+ 		sme_event_auth(wpa_s, data);
+ 		break;
+ 	case EVENT_ASSOC:
+@@ -3844,6 +3925,24 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
+ 				break;
+ 			}
+ 
++			if ((stype == WLAN_FC_STYPE_BEACON || stype == WLAN_FC_STYPE_PROBE_RESP ) &&
++					data->rx_mgmt.frame_len > IEEE80211_HDRLEN) {
++				const u8 *src = mgmt->sa;
++				const u8 *ie;
++				size_t ie_len;
++
++				ie = data->rx_mgmt.frame + IEEE80211_HDRLEN;
++				ie_len = data->rx_mgmt.frame_len - IEEE80211_HDRLEN;
++
++				if (stype == WLAN_FC_STYPE_BEACON)
++					process_configurable_vendor_specific(wpa_s, ie, ie_len, src,
++							WPA_EVENT_BEACON);
++				else
++					process_configurable_vendor_specific(wpa_s, ie, ie_len, src,
++							WPA_EVENT_PROBE_RSP);
++				break;
++			}
++
+ 			wpa_dbg(wpa_s, MSG_DEBUG, "AP: ignore received "
+ 				"management frame in non-AP mode");
+ 			break;
+diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
+index 137f441..9920f8f 100644
+--- a/wpa_supplicant/wpa_cli.c
++++ b/wpa_supplicant/wpa_cli.c
+@@ -3680,6 +3680,16 @@ static void wpa_cli_action_process(const char *msg)
+ 		wpa_cli_exec(action_file, ifname, pos);
+ 	} else if (str_starts(pos, HS20_DEAUTH_IMMINENT_NOTICE)) {
+ 		wpa_cli_exec(action_file, ifname, pos);
++	} else if (str_starts(pos, WPA_EVENT_BEACON)) {
++		wpa_cli_exec(action_file, ifname, pos);
++	} else if (str_starts(pos, WPA_EVENT_PROBE_RSP)) {
++		wpa_cli_exec(action_file, ifname, pos);
++	} else if (str_starts(pos, WPA_EVENT_AUTH_RSP)) {
++		wpa_cli_exec(action_file, ifname, pos);
++	} else if (str_starts(pos, WPA_EVENT_ASSOC_RSP)) {
++		wpa_cli_exec(action_file, ifname, pos);
++	} else if (str_starts(pos, WPA_EVENT_REASSOC_RSP)) {
++		wpa_cli_exec(action_file, ifname, pos);
+ 	} else if (str_starts(pos, WPA_EVENT_TERMINATING)) {
+ 		printf("wpa_supplicant is terminating - stop monitoring\n");
+ 		wpa_cli_quit = 1;
+diff --git a/wpa_supplicant/wpa_priv.c b/wpa_supplicant/wpa_priv.c
+index 511df4f..429b38b 100644
+--- a/wpa_supplicant/wpa_priv.c
++++ b/wpa_supplicant/wpa_priv.c
+@@ -82,7 +82,7 @@ static void wpa_priv_cmd_register(struct wpa_priv_interface *iface,
+ 			iface->drv_global_priv = NULL;
+ 		}
+ 		iface->drv_priv = iface->driver->init2(iface, iface->ifname,
+-						       iface->drv_global_priv);
++						       iface->drv_global_priv, NULL);
+ 	} else if (iface->driver->init) {
+ 		iface->drv_priv = iface->driver->init(iface, iface->ifname);
+ 	} else {
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 863b76c..c191db7 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -4642,7 +4642,7 @@ next_driver:
+ 	if (wpa_supplicant_set_driver(wpa_s, driver) < 0)
+ 		return -1;
+ 
+-	wpa_s->drv_priv = wpa_drv_init(wpa_s, wpa_s->ifname);
++	wpa_s->drv_priv = wpa_drv_init(wpa_s, wpa_s->ifname, wpa_s->conf->driver_param);
+ 	if (wpa_s->drv_priv == NULL) {
+ 		const char *pos;
+ 		pos = driver ? os_strchr(driver, ',') : NULL;
+@@ -4680,6 +4680,18 @@ next_driver:
+ 	return 0;
+ }
+ 
++void wpas_set_vendor_events_filter(struct wpa_supplicant *wpa_s)
++{
++	if (wpa_s->conf->driver_param) {
++		u8 *pos = os_strstr(wpa_s->conf->driver_param, "vendor_events_filter=");
++		if (pos) {
++			pos += 21;
++			wpa_s->vendor_events_filter_len = (os_strlen(pos) - 1) / 2;
++			if (wpa_s->vendor_events_filter_len)
++				hexstr2bin(pos, wpa_s->vendor_events_filter, wpa_s->vendor_events_filter_len);
++		}
++	}
++}
+ 
+ static int wpa_supplicant_init_iface(struct wpa_supplicant *wpa_s,
+ 				     struct wpa_interface *iface)
+@@ -4997,6 +5009,8 @@ static int wpa_supplicant_init_iface(struct wpa_supplicant *wpa_s,
+ 
+ 	wpa_supplicant_set_default_scan_ies(wpa_s);
+ 
++	wpas_set_vendor_events_filter(wpa_s);
++
+ 	return 0;
+ }
+ 
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 0ace942..72aece6 100644
+--- a/wpa_supplicant/wpa_supplicant_i.h
++++ b/wpa_supplicant/wpa_supplicant_i.h
+@@ -1071,6 +1071,9 @@ struct wpa_supplicant {
+ 	 */
+ 	struct wpabuf *lci;
+ 	struct os_reltime lci_time;
++
++	u8 vendor_events_filter[32];
++	u8 vendor_events_filter_len;
+ };
+ 
+ 
+-- 
+2.10.1
+

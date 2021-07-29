@@ -1,0 +1,311 @@
+Source-Makefile: feeds/open_applications/avahi/Makefile
+Package: libavahi-client
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libavahi-dbus
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: dbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: libs
+Category: Libraries
+Title: mDNS/DNS-SD  (libavahi-client library)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This packages adds the libavahi-client library.
+ For more information please see the avahi documentation.
+ .
+ Requires D-Bus support.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-utils
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libavahi-client
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: dbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: mDNS/DNS-SD  (utilities)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This packages installs the following avahi utility programs:
+ avahi-browse, avahi-publish, avahi-resolve, avahi-set-host-name.
+ For more information please see the avahi documentation.
+ .
+ Requires D-Bus support.
+http://www.avahi.org/
+
+@@
+
+Package: libavahi-dbus
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libdaemon +libpthread +libgdbm +dbus @!LINUX_2_4
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: dbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: libs
+Category: Libraries
+Title: mDNS/DNS-SD  (library) (dbus)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package contains the mDNS/DNS-SD shared libraries, used by other programs.
+ Specifically, it provides libavahi-core and libavahi-common libraries.
+ This version is compiled with D-Bus support
+http://www.avahi.org/
+
+@@
+
+Package: libavahi
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libdaemon +libpthread +libgdbm
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: nodbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: libs
+Category: Libraries
+Title: mDNS/DNS-SD  (library)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package contains the mDNS/DNS-SD shared libraries, used by other programs.
+ Specifically, it provides libavahi-core and libavahi-common libraries.
+ This version is compiled without D-Bus support, i.e. the --disable-dbus 
+ compilation flag is set.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-autoipd
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libdaemon
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: nodbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: IPv4LL address conf daemon
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package implements IPv4LL, "Dynamic Configuration of IPv4 Link-Local 
+ Addresses" (IETF RFC3927), a protocol for automatic IP address configuration 
+ from the link-local 169.254.0.0/16 range without the need for a central 
+ server. It is primarily intended to be used in ad-hoc networks which lack a
+ DHCP server.
+ .
+ This verison is compile along with non-D-Bus version of libavahi.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-autoipd-dbus
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libdaemon
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: dbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: IPv4LL address conf daemon (dbus)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package implements IPv4LL, "Dynamic Configuration of IPv4 Link-Local 
+ Addresses" (IETF RFC3927), a protocol for automatic IP address configuration 
+ from the link-local 169.254.0.0/16 range without the need for a central 
+ server. It is primarily intended to be used in ad-hoc networks which lack a
+ DHCP server.
+ .
+ This version is compiled along with the D-Bus version of libavahi.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-daemon
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libavahi +libexpat
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: nodbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: mDNS/DNS-SD  (daemon)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package contains an mDNS/DNS-SD daemon.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-daemon-dbus
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libavahi-dbus +libexpat
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: dbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: mDNS/DNS-SD  (daemon) (dbus)
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package contains an mDNS/DNS-SD daemon with dbus support.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-dnsconfd
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libavahi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: nodbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: A Unicast DNS server from mDNS/DNS-SD configuration daemon
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package contains a Unicast DNS server from mDNS/DNS-SD configuration
+ daemon, which may be used to configure conventional DNS servers using mDNS
+ in a DHCP-like fashion. Especially useful on IPv6.
+ .
+ This version does not have D-Bus support.
+http://www.avahi.org/
+
+@@
+
+Package: avahi-dnsconfd-dbus
+Submenu: IP Addresses and Names
+Version: 0.6.30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libavahi-dbus
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: dbus
+Build-Depends: libexpat libdaemon libgdbm libpthread
+Section: net
+Category: Network
+Title: A Unicast DNS server from mDNS/DNS-SD configuration daemon with dbus support
+Maintainer: 
+Source: avahi-0.6.30.tar.gz
+Type: ipkg
+Description:  An mDNS/DNS-SD (aka RendezVous/Bonjour/ZeroConf) implementation (library).
+ Avahi is a system which facilitates service discovery on a local network --
+ this means that you can plug your laptop or computer into a network and
+ instantly be able to view other people who you can chat with, find printers
+ to print to or find files being shared. This kind of technology is already
+ found in MacOS X (branded 'Rendezvous', 'Bonjour' and sometimes 'ZeroConf')
+ and is very convenient.
+ .
+ This package contains a Unicast DNS server from mDNS/DNS-SD configuration
+ daemon, which may be used to configure conventional DNS servers using mDNS
+ in a DHCP-like fashion. Especially useful on IPv6.
+ .
+ This version has D-Bus support.
+http://www.avahi.org/
+
+@@
+
+

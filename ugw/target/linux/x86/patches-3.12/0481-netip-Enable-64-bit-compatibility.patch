@@ -1,0 +1,462 @@
+From b24b6c9aaac65495a21544fc6d9fe3a235fb254c Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Tue, 20 Sep 2016 16:14:53 +0300
+Subject: [PATCH 481/639] netip: Enable 64 bit compatibility
+
+Enable 64 bit compatibility when communicating with ARM over RPC
+to determine MMIO addresses.
+
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_mem_util.c          | 242 ++++++++++++++-------
+ arch/x86/pal_cppi41/pal_cppi41.c                   |   3 +-
+ drivers/mrpc/modphy_client.c                       |  11 +-
+ .../linux/avalanche/generic}/cppi41_hw_mbox_if.h   |  44 ++--
+ net/ti.Kconfig                                     |   7 +
+ 5 files changed, 199 insertions(+), 108 deletions(-)
+ rename {arch/x86/pal_cppi41 => include/linux/avalanche/generic}/cppi41_hw_mbox_if.h (82%)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_mem_util.c b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+index 37c3abe..4a98f24 100644
+--- a/arch/x86/NetIP_SubSystem/netip_mem_util.c
++++ b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+@@ -66,6 +66,10 @@
+ #include <asm/cacheflush.h>
+ #include <linux/netip_mem_util.h>
+ #include <linux/netip_subsystem.h>
++#include <linux/avalanche/generic/cppi41_hw_mbox_if.h>
++#include <linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h>
++#include <linux/hw_mbox_defs.h>
++#include <linux/hw_mailbox.h>
+ #include "netip_subsystem_config.h"
+ 
+ /*************************************************************************/
+@@ -75,9 +79,16 @@
+ 
+ /* following address are for debug use will be removed in final solution */
+ /* After final solution following address range will go in exact map for descriptors in shared memory */
+-#define NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE  0xFC00000
+-#define NPCPU_DESCRIPTOR_PHYSICAL_MEM_SIZE  (0xBF00000 - 0x100000)
+-void *NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE = NULL;
++
++/* MMIO information for Atom only configuration */
++#define NPCPU_DESCRIPTOR_MEM_BASE (0xFC00000)
++#define NPCPU_DESCRIPTOR_MEM_SIZE (0xBF00000 - 0x100000)
++
++static phys_addr_t npcpu_descriptor_physical_mem_base;
++static size_t npcpu_descriptor_physical_mem_size;
++static void *npcpu_descriptor_virtual_mem_base;
++
++#define NPCPU_DESCRIPTOR_MAX_PHYSICAL_MEM_SIZE  (0x10000000)
+ 
+ struct netip_mem_rgion_device {
+     netss_dev_t subdevice;
+@@ -113,50 +124,116 @@ static struct netip_mem_rgion_device mem_util_dev[] =
+ 
+ int netip_memmap_init(void)
+ {
+-    int i, ret = 0;
+-    netss_dev_info_t mmio_dev_info;
+-
+-    if(!netss_driver_ready()) {
+-        pr_err("netss driver is not ready!\n");
+-        return -1;
+-    }
+-
+-    for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+-        if (mem_util_dev[i].ioremapped) {
+-            /* Already mapped */
+-            continue;
+-        }
+-        if (netss_device_get_info(mem_util_dev[i].subdevice, &mmio_dev_info)) {
+-            pr_err("Get device info failed for region %s\n", mem_util_dev[i].name);
+-            ret = -2;
+-            continue;
+-        }
+-
+-        mem_util_dev[i].arm_end_address = mem_util_dev[i].arm_start_address + mmio_dev_info.size;
+-        mem_util_dev[i].virtual_base_address = ioremap_nocache(mmio_dev_info.base, mmio_dev_info.size);
+-        if (mem_util_dev[i].virtual_base_address) {
+-                mem_util_dev[i].ioremapped = true;
+-        } else {
+-            pr_err("ioremap failed for region %s\n", mem_util_dev[i].name);
+-            ret = -2;
+-        }
+-    }
+-
+-    if (NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE != NULL)
+-	return ret;
++	int i, ret = 0, hw_mbox_ret = 0;
++	netss_dev_info_t mmio_dev_info;
++	u64 npcpu_rpc_phys_addr = 0;
++	u64 npcpu_rpc_mem_size = 0;
++	phys_addr_t max_phys_addr = 0;
++
++	Cppi41HwMboxOffChipMemInfoReplyMsg_t off_chip_reply;
++	size_t dataLen = sizeof(Cppi41HwMboxOffChipMemInfoReplyMsg_t);
++
++	if(!netss_driver_ready()) {
++		pr_err("netss driver is not ready!\n");
++		return -ENODEV;
++	}
++
++	for (i = 0; i < ARRAY_SIZE(mem_util_dev); i++) {
++		if (mem_util_dev[i].ioremapped) {
++			/* Already mapped */
++			continue;
++		}
++		if (netss_device_get_info(mem_util_dev[i].subdevice,
++					 &mmio_dev_info)) {
++			pr_err("Get device info failed for region %s\n",
++					 mem_util_dev[i].name);
++			ret = -EINVAL;
++			continue;
++		}
++
++		mem_util_dev[i].arm_end_address =
++			mem_util_dev[i].arm_start_address + mmio_dev_info.size;
++		mem_util_dev[i].virtual_base_address =
++			ioremap_nocache(mmio_dev_info.base, mmio_dev_info.size);
++
++		if (mem_util_dev[i].virtual_base_address) {
++			mem_util_dev[i].ioremapped = true;
++		} else {
++			pr_err("ioremap failed for region %s\n",
++					mem_util_dev[i].name);
++			ret = -ENOMEM;
++		}
++	}
++
++	if (npcpu_descriptor_virtual_mem_base != NULL)
++	{
++		pr_info("netip_memmap_init: npcpu_descriptor_virtual_mem_base already mapped\n");
++		return 0;
++	}
++
++#ifdef CONFIG_NPCPU_HARDCODED_OFFCHIP_INFO
++	npcpu_descriptor_physical_mem_base = NPCPU_DESCRIPTOR_MEM_BASE;
++	npcpu_descriptor_physical_mem_size = NPCPU_DESCRIPTOR_MEM_SIZE;
++#else
++	pr_info("netip_memmap_init: Request offChip information from NPCPU\n");
++
++	/* Request offChip information from NPCPU */
++	off_chip_reply.cmd =
++		cpu_to_be32(CPPI41_HWMBOX_CMD_GET_OFFCHIP_MEM_INFO_REPLY);
++	off_chip_reply.length = 0;
++	off_chip_reply.off_chip_phy_addr = 0;
++
++	if(hwMbox_isReady()) {
++		pr_err("HW mailbox isn't ready yet.");
++		return -ENODEV;
++	}
++
++	hw_mbox_ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU,
++			NPCPU_APPCPU_HW_MBOX_TAG_CPPI41_MBX,
++			(uint8_t *)&off_chip_reply,
++			dataLen,
++			dataLen,
++			&dataLen);
++	if(hw_mbox_ret) {
++		pr_err("HW mailbox hwMbox_sendOpcode failed (retCode =%d).",
++			hw_mbox_ret);
++		return -ECOMM;
++	}
++
++	npcpu_rpc_phys_addr = be64_to_cpu(off_chip_reply.off_chip_phy_addr);
++	npcpu_rpc_mem_size = be64_to_cpu(off_chip_reply.length);
++
++	max_phys_addr = sizeof(phys_addr_t) > 4 ? U64_MAX : U32_MAX;
++
++	if (!npcpu_rpc_phys_addr || !npcpu_rpc_mem_size  ||
++	    (npcpu_rpc_mem_size > NPCPU_DESCRIPTOR_MAX_PHYSICAL_MEM_SIZE) ||
++	    (npcpu_rpc_phys_addr > (max_phys_addr - npcpu_rpc_mem_size))) {
++		pr_err("Offchip info is out of bounds.");
++		return -EINVAL;
++	}
++	/* We can now absorb these addresses in their correct types */
++	npcpu_descriptor_physical_mem_base = npcpu_rpc_phys_addr;
++	npcpu_descriptor_physical_mem_size = npcpu_rpc_mem_size;
++
++	pr_info("netip_memmap_init: received offChip base addr %llx len 0x%zx\n",
++			npcpu_descriptor_physical_mem_base,
++			npcpu_descriptor_physical_mem_size);
++#endif
+ 
+-    NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE = (void *)ioremap_nocache(NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE, NPCPU_DESCRIPTOR_PHYSICAL_MEM_SIZE);
+-    if(!NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE) {
+-        pr_err(" NPCPU_VIRTUAL_MEM_BASE IOREMAP  error \n");
+-        return -2;
+-    }
++	npcpu_descriptor_virtual_mem_base = ioremap_nocache(
++			npcpu_descriptor_physical_mem_base,
++			npcpu_descriptor_physical_mem_size);
++	if(!npcpu_descriptor_virtual_mem_base) {
++		pr_err("NPCPU_VIRTUAL_MEM_BASE IOREMAP error \n");
++		return -ENOMEM;
++	}
+ 
+-    netss_bootcfg_init();
++	netss_bootcfg_init();
+ #ifdef CONFIG_NET_SUBSYSTEM_SNOOPED_MODE
+-    netss_enable_snooped_mode();
++	netss_enable_snooped_mode();
+ #endif
+ 
+-    return ret;
++	return ret;
+ }
+ EXPORT_SYMBOL(netip_memmap_init);
+ 
+@@ -166,10 +243,10 @@ void netip_memmap_cleanup(void)
+ 
+     pr_info("cleaningup mapped descriptor memory \n");
+ 
+-    if(NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE)
++    if(npcpu_descriptor_virtual_mem_base)
+     {
+-        iounmap(NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE);
+-        NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE = NULL;
++        iounmap(npcpu_descriptor_virtual_mem_base);
++        npcpu_descriptor_virtual_mem_base = NULL;
+     }
+     for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+         if(mem_util_dev[i].ioremapped) {
+@@ -184,33 +261,41 @@ EXPORT_SYMBOL(netip_memmap_cleanup);
+ 
+ void *netip_mmio_to_virtual(unsigned long netip_phys_addr)
+ {
+-    unsigned long offset = 0;
+-    int i;
+-
+-    if( (netip_phys_addr >= NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE) && (netip_phys_addr < (NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE + NPCPU_DESCRIPTOR_PHYSICAL_MEM_SIZE))) {
+-        offset = (netip_phys_addr - NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE);
+-        pr_debug(" netip_phys_addr=%p virt_addr=%p offset=%x\n", netip_phys_addr, (NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE + offset), offset);
+-        return (void *)(NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE + offset);
+-    }
+-
+-    for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+-
+-        if (!mem_util_dev[i].ioremapped)
+-            continue;
+-
+-        if (netip_phys_addr > mem_util_dev[i].arm_end_address)
+-            continue;
+-
+-        if (netip_phys_addr < mem_util_dev[i].arm_start_address)
+-            continue;
+-
+-        offset = netip_phys_addr - mem_util_dev[i].arm_start_address;
+-        pr_debug("Physical to virtual called netip_phys_addr=%p virt _addr=%p offset=%x\n", netip_phys_addr, (mem_util_dev[i].virtual_base_address + offset), offset);
+-        return (mem_util_dev[i].virtual_base_address + offset);
+-    }
+-
+-    pr_debug("%s:%d: No region found for 0x%p, return as Kernel map instead\n", __func__, __LINE__, netip_phys_addr);
+-    return phys_to_virt(netip_phys_addr);
++	unsigned long offset = 0;
++	int i;
++
++	if((netip_phys_addr >= npcpu_descriptor_physical_mem_base) &&
++	   (netip_phys_addr < (npcpu_descriptor_physical_mem_base +
++			       npcpu_descriptor_physical_mem_size))) {
++		offset = (netip_phys_addr - npcpu_descriptor_physical_mem_base);
++		pr_debug("netip_phys_addr=%lx virt_addr=%p offset=%lx\n",
++			netip_phys_addr,
++			npcpu_descriptor_virtual_mem_base + offset,
++			offset);
++		return (void *)(npcpu_descriptor_virtual_mem_base + offset);
++	}
++
++	for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
++
++		if (!mem_util_dev[i].ioremapped)
++			continue;
++
++		if (netip_phys_addr > mem_util_dev[i].arm_end_address)
++			continue;
++
++		if (netip_phys_addr < mem_util_dev[i].arm_start_address)
++			continue;
++
++		offset = netip_phys_addr - mem_util_dev[i].arm_start_address;
++		pr_debug("Physical to virtual called netip_phys_addr=%p virt _addr=%p offset=%x\n",
++			netip_phys_addr,
++			(mem_util_dev[i].virtual_base_address + offset),
++			offset);
++		return (mem_util_dev[i].virtual_base_address + offset);
++	}
++
++	pr_debug("%s:%d: No region found for 0x%p, return as Kernel map instead\n", __func__, __LINE__, netip_phys_addr);
++	return phys_to_virt(netip_phys_addr);
+ }
+ EXPORT_SYMBOL(netip_mmio_to_virtual);
+ 
+@@ -219,10 +304,15 @@ void *netip_mmio_to_physical(void* virt_addr)
+     unsigned long offset = 0;
+     int i;
+ 
+-    if( (virt_addr >= NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE) && (virt_addr < ((unsigned long)NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE + (unsigned long)NPCPU_DESCRIPTOR_PHYSICAL_MEM_SIZE))) {
+-        offset = (virt_addr - NPCPU_DESCRIPTOR_VIRTUAL_MEM_BASE);
+-        pr_debug("virt_addr=%p phys_addr=%p offset=%x\n",virt_addr,(NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE + offset),offset);
+-        return (void*)(NPCPU_DESCRIPTOR_PHYSICAL_MEM_BASE + offset);
++    if( (virt_addr >= npcpu_descriptor_virtual_mem_base) &&
++	(virt_addr < (npcpu_descriptor_virtual_mem_base +
++		      npcpu_descriptor_physical_mem_size))) {
++	offset = virt_addr - npcpu_descriptor_virtual_mem_base;
++	pr_debug("virt_addr=%p phys_addr=0x%llx offset=%lx\n",
++				virt_addr,
++				npcpu_descriptor_physical_mem_base + offset,
++				offset);
++        return (void*)(npcpu_descriptor_physical_mem_base + offset);
+     }
+ 
+     for (i=0; i < ARRAY_SIZE(mem_util_dev); i++) {
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index ded6044..0039c60 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -90,8 +90,7 @@
+ #include <linux/avalanche/generic/pal_os.h>
+ #include <linux/avalanche/generic/pal_osProtect.h>
+ #include <linux/avalanche/generic/pal_osProtect_inline.h>
+-
+-#include "cppi41_hw_mbox_if.h"
++#include <linux/avalanche/generic/cppi41_hw_mbox_if.h>
+ #include <linux/hw_mailbox.h>
+ /***************/
+ /**  Defines  **/
+diff --git a/drivers/mrpc/modphy_client.c b/drivers/mrpc/modphy_client.c
+index 939af71..c3cbd7c 100644
+--- a/drivers/mrpc/modphy_client.c
++++ b/drivers/mrpc/modphy_client.c
+@@ -58,6 +58,8 @@
+ #define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
+ #endif
+ 
++#define MODPHY_CLIENT_MRPC_CALL_TIMEOUT_MS (1000) /* Timeout is needed due to delays in modphy server */
++
+ /* driver private database */
+ struct modphy_private {
+     struct platform_device *pdev;   /* platform device */
+@@ -95,7 +97,14 @@ static inline int modphy_mrpc_call(__u8 procid,
+     args.client = htonl(modphyClientId);
+     args.lane = htonl(lane);
+ 
+-    ret = mrpc_call(priv->mrpc, procid, &args, sizeof(struct modphy_args), NULL, 0, 0, &errcode);
++    ret = mrpc_call(priv->mrpc,
++                    procid,
++                    &args,
++                    sizeof(struct modphy_args),
++                    NULL,
++                    0,
++                    MODPHY_CLIENT_MRPC_CALL_TIMEOUT_MS,
++                    &errcode);
+ 
+     if (ret || errcode) {
+         pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
+diff --git a/arch/x86/pal_cppi41/cppi41_hw_mbox_if.h b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+similarity index 82%
+rename from arch/x86/pal_cppi41/cppi41_hw_mbox_if.h
+rename to include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+index 2d65884..f830239 100644
+--- a/arch/x86/pal_cppi41/cppi41_hw_mbox_if.h
++++ b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+@@ -7,7 +7,7 @@
+  *
+  * GPL LICENSE SUMMARY
+  *
+- *  Copyright(c) 2015 Intel Corporation.
++ *  Copyright(c) 2015-2016 Intel Corporation.
+  *
+  *  This program is free software; you can redistribute it and/or modify
+  *  it under the terms of version 2 of the GNU General Public License as
+@@ -31,34 +31,14 @@
+  *  Santa Clara, CA  97052
+  */
+ 
++#ifndef __CPPI41_HW_MBOX_IF_H__
++#define __CPPI41_HW_MBOX_IF_H__
++
++#include <linux/avalanche/generic/pal_cppi41.h>
++
+  /************************************************/
+ /*                 Structures                   */
+ /************************************************/
+-#ifndef _PPI41_HW_MBOX_IF_H
+-#define  _PPI41_HW_MBOX_IF_H
+-
+-/*! \enum hw_mbox_Masters_e
+-  \brief Enumerate all HW_MBOX Master with MID value.
+-  \note name of the Masters is according to HW_MBOX_MASTER_TABLE_AS_ENUM Macro.
+- */
+-
+-typedef enum npcpu_appcpu_hw_mbox_tags
+-{
+-    NPCPU_APPCPU_HW_MBOX_MID_INVALID = -1,
+-    NPCPU_APPCPU_HW_MBOX_TAG_NET_IP_DRV,
+-    NPCPU_APPCPU_HW_MBOX_TAG_PM,
+-    NPCPU_APPCPU_HW_MBOX_TAG_CM,
+-    NPCPU_APPCPU_HW_MBOX_TAG_RPC,
+-    NPCPU_APPCPU_HW_MBOX_TAG_MUX,
+-    NPCPU_APPCPU_HW_MBOX_TAG_VLAN,
+-    NPCPU_APPCPU_HW_MBOX_TAG_PP,
+-    NPCPU_APPCPU_HW_MBOX_TAG_NETDEV,
+-    NPCPU_APPCPU_HW_MBOX_TAG_CPPI41_MBX,
+-    NPCPU_APPCPU_HW_MBOX_TAG_DATAPIPE_MBX,
+-    NPCPU_APPCPU_HW_LAST_ENTRY
+-} npcpu_appcpu_hw_mbox_tags_e;
+-
+-
+ 
+ /* CPPI HW mailbox commands enum */
+ typedef enum
+@@ -68,6 +48,7 @@ typedef enum
+     CPPI41_HWMBOX_CMD_ACC_CH_CLOSE              ,    /* Accumulator close command */
+     CPPI41_HWMBOX_CMD_GET_REGION_MEM_INFO       ,    /* Descriptors region memory info command */
+     CPPI41_HWMBOX_CMD_GET_REGION_MEM_INFO_REPLY ,    /* Descriptors region memory info reply command */
++    CPPI41_HWMBOX_CMD_GET_OFFCHIP_MEM_INFO_REPLY,    /* OffChip memory info reply command */
+     CPPI41_HWMBOX_CMD_FAILED                    ,    /* command processing failed command, use only for reply - the error code is from the type Cppi41HwMboxRetCode_e */
+     CPPI41_HWMBOX_CMD_COUNT
+ }Cppi41HwMboxCmd_e;
+@@ -114,7 +95,6 @@ typedef struct
+ typedef struct
+ {
+     Cppi41HwMboxCmd_e           cmd;    /* command type */
+-    //PAL_CPPI_PP_DESC_REGIONs_e  region; /* region number */
+     unsigned int                region; /* region number */
+     Uint32                      qMgr;   /* queue manager */
+ } Cppi41HwMboxDescRegionMemInfoGetMsg_t;
+@@ -127,5 +107,11 @@ typedef struct
+     Uint32              length;         /* region memory length in bytes */
+ } Cppi41HwMboxDescRegionMemInfoReplyMsg_t;
+ 
+-
+-#endif
++/* Cppi HW mailbox message to reply to a get offChip memory info message */
++typedef struct
++{
++    Cppi41HwMboxCmd_e   cmd;                /* command type */
++    Uint64              off_chip_phy_addr;  /* offChip physical address */
++    Uint64              length;             /* offChip memory length in bytes */
++} Cppi41HwMboxOffChipMemInfoReplyMsg_t;
++#endif /* __CPPI41_HW_MBOX_IF_H__ */
+diff --git a/net/ti.Kconfig b/net/ti.Kconfig
+index 47ac184..226dc3c 100644
+--- a/net/ti.Kconfig
++++ b/net/ti.Kconfig
+@@ -187,6 +187,13 @@ config INTEL_NS_DEVICE_FILTER
+ menu "TI Packet Processor Subsystem"
+ 
+ 
++config NPCPU_HARDCODED_OFFCHIP_INFO
++	bool "Hard coded address and size of NPCPU"
++	default n
++	help
++		Force Mapping NPCPU DDR in a hardcoded manner
++		Address and size will be hardcoded
++
+ config EXCLUDE_GMAC4
+         bool "Exclude GMAC4"
+     default n
+-- 
+2.10.1
+

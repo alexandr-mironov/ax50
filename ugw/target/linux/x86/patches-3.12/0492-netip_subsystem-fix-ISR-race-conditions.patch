@@ -1,0 +1,251 @@
+From b0c3aaffd505a4b82e872fb328f4e1202a46be00 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 27 Sep 2016 13:56:06 -0700
+Subject: [PATCH 492/639] netip_subsystem: fix ISR race conditions
+
+NetIP subsystem driver apis to enable/disable interrupts are not
+using locks to synchronize with ISR which can cause race conditions.
+Now adding the spinlock in these APIs to synchronize with ISR.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c | 111 ++++++++++++++++++++-----
+ include/linux/netip_subsystem.h                |  27 +++++-
+ 2 files changed, 118 insertions(+), 20 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index 532daf5..a9cda5f 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -89,19 +89,25 @@ static unsigned int netss_get_reg_index(unsigned int irq)
+    return irq / NUM_ARM11_INTR_PER_REG;
+ }
+ 
++static inline void __netss_interrupt_ack(netss_interrupt_t intrpt)
++{
++   __raw_writel((1<<intrpt), pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
++}
++
+ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_interrupt_info_t *irq_info)
+ {
+    unsigned int reg_indx = 0;
+    unsigned int irq_bit  = 0;
+    unsigned long flags;
+-
+-   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
+-   if(intrpt > NETSS_INTERUPT_MAX)
++   /*GBE does not register its ISR */
++   if(intrpt >= (NETSS_INTERUPT_MAX-1))
+    {
+-      printk("Registering for Invalid NETIP interrupt %d\n", intrpt);
+-      spin_unlock(&pnetss_drv_data->irq_lock);
++      printk(KERN_WARNING "Registering for Invalid NETIP interrupt %d\n", intrpt);
+       return;
+    }
++
++   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
++
+    if(intrpt != NETSS_INTERUPT_ARM11)
+    {
+         pnetss_drv_data->irqs[intrpt].func = irq_info->func;
+@@ -119,7 +125,7 @@ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_
+             if(pnetss_drv_data->pending_interrupts & (1<<intrpt))
+             {
+                 irq_info->func(pnetss_drv_data->irq_num, irq_info->args);
+-                netss_interrupt_ack(intrpt);
++                __netss_interrupt_ack(intrpt);
+                 pnetss_drv_data->pending_interrupts &= ~(1<<intrpt);
+                 NETSS_DBG_PRINT("Cleared pending interrupt for device %d IIR %08x pending %08x\n", intrpt,
+                                  __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET),
+@@ -138,7 +144,7 @@ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_
+                  *For ARM11 interrupt bundle this might hvae got cleared by some other irq handle */
+                 if( __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET) & (1<<intrpt))
+                 {
+-                    netss_interrupt_ack(intrpt);
++                    __netss_interrupt_ack(intrpt);
+                 }
+                 pnetss_drv_data->pending_arm11_interrupts[reg_indx] &= ~(1 << irq_bit);
+                 NETSS_DBG_PRINT("Cleared pending interrupt for armm11 %d IIR %08x pending %08x\n", arm11_int_id,
+@@ -345,13 +351,14 @@ int netss_device_get_info(netss_dev_t subdevice, netss_dev_info_t *mmio)
+ 
+ EXPORT_SYMBOL(netss_device_get_info);
+ 
+-void netss_interrupt_enable(netss_interrupt_t intrpt)
++void __netss_interrupt_enable(netss_interrupt_t intrpt)
+ {
+-   if(intrpt > NETSS_INTERUPT_MAX)
++   if(intrpt >= NETSS_INTERUPT_MAX)
+    {
+-      printk("Invalid NetIP interrupt %d\n", intrpt);
++      printk(KERN_WARNING "Invalid NetIP interrupt %d\n", intrpt);
+       return;
+    }
++
+    if(!(pnetss_drv_data->ier_reg & (1 << intrpt))) {
+       pnetss_drv_data->ier_reg |= (1<<intrpt);
+       __raw_writel(pnetss_drv_data->ier_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IER_OFFSET);
+@@ -362,16 +369,49 @@ void netss_interrupt_enable(netss_interrupt_t intrpt)
+       __raw_writel(pnetss_drv_data->imr_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET);
+       NETSS_DBG_PRINT(KERN_INFO "Unmasking NetIP subdevice %d IMR reg = %x\n", __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET));
+    }
++
++}
++/* Exported temporarly for cppp driver */
++EXPORT_SYMBOL(__netss_interrupt_enable);
++
++/**************************************************************************/
++/*! \fn void netss_interrupt_enable(netss_interrupt_t intrpt)
++ **************************************************************************
++ *  \brief NetSS driver API to enable NET IP interrupts to be seen in NETIP
++ *         bridge. This API should be only called while opening/loading
++ *         or while resuming of the respective NetIP sub device driver
++ *         module. This API should not be called from the sub device driver
++ *         ISR and if it wants to switch to polling mode and wants to do
++ *         disable/enable interrupts it should do that by disabling/enabling
++ *         its source of interrupts.
++ *  \param[in] intrpt - Enum netss_interrupt_t of NETIP interrupt. 
++ *  \return void.
++ **************************************************************************/
++void netss_interrupt_enable(netss_interrupt_t intrpt)
++{
++   unsigned long flags;
++
++   if(intrpt >= NETSS_INTERUPT_MAX)
++   {
++      printk(KERN_WARNING "Invalid NetIP interrupt %d\n", intrpt);
++      return;
++   }
++   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
++
++   __netss_interrupt_enable(intrpt);
++
++   spin_unlock_irqrestore(&pnetss_drv_data->irq_lock, flags);
+ }
+ EXPORT_SYMBOL(netss_interrupt_enable);
+ 
+-void netss_interrupt_disable(netss_interrupt_t intrpt)
++void __netss_interrupt_disable(netss_interrupt_t intrpt)
+ {
+-   if(intrpt > NETSS_INTERUPT_MAX)
++   if(intrpt >= NETSS_INTERUPT_MAX)
+    {
+-      printk("Invalid NetIP interrupt %d\n", intrpt);
++      printk(KERN_WARNING "Invalid NetIP interrupt %d\n", intrpt);
+       return;
+    }
++   
+    if(pnetss_drv_data->ier_reg & (1 << intrpt)) {
+       pnetss_drv_data->ier_reg &= ~(1<<intrpt);
+       __raw_writel(pnetss_drv_data->ier_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IER_OFFSET);
+@@ -382,19 +422,52 @@ void netss_interrupt_disable(netss_interrupt_t intrpt)
+       __raw_writel(pnetss_drv_data->imr_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET);
+       NETSS_DBG_PRINT(KERN_INFO "Masking NetIP subdevice %d IMR reg = %x\n", __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET));
+    }
++
++}
++/* Exported temporarly for cppp driver */
++EXPORT_SYMBOL(__netss_interrupt_disable);
++
++/**************************************************************************/
++/*! \fn void netss_interrupt_disable(netss_interrupt_t intrpt)
++ **************************************************************************
++ *  \brief NetSS driver API to enable NET IP interrupts to be seen in NETIP
++ *         bridge. This API should be only called while closing/unloading
++ *         or while suspending of the respective NetIP sub device driver
++ *         module. This API should not be called from the sub device driver
++ *         ISR and if it wants to switch to polling mode and wants to do
++ *         disable/enable interrupts it should do that by disabling/enabling
++ *         its source of interrupts. 
++ *  \param[in] intrpt - Enum netss_interrupt_t of NETIP interrupt. 
++ *  \return void.
++ **************************************************************************/
++void netss_interrupt_disable(netss_interrupt_t intrpt)
++{
++   unsigned long flags;
++
++   if(intrpt >= NETSS_INTERUPT_MAX)
++   {
++      printk(KERN_WARNING "Invalid NetIP interrupt %d\n", intrpt);
++      return;
++   }
++
++   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
++
++   __netss_interrupt_disable(intrpt);
++
++   spin_unlock_irqrestore(&pnetss_drv_data->irq_lock, flags);
+ }
+ EXPORT_SYMBOL(netss_interrupt_disable);
+ 
+ void netss_interrupt_ack(netss_interrupt_t intrpt)
+ {
+-   uint32_t reg_val;
+-   if(intrpt > NETSS_INTERUPT_MAX)
++   if(intrpt >= NETSS_INTERUPT_MAX)
+    {
+-      printk("Invalid NetIP interrupt %d\n", intrpt);
++      printk(KERN_WARNING "Invalid NetIP interrupt %d\n", intrpt);
+       return;
+    }
+-   reg_val = __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
+-   __raw_writel((reg_val & (1<<intrpt)), pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
++
++   __netss_interrupt_ack(intrpt);
++
+ }
+ EXPORT_SYMBOL(netss_interrupt_ack);
+ 
+@@ -465,7 +538,7 @@ static irqreturn_t net_subsystem_isr(int irq, void *dev_id)
+     }
+     /* Acknowledge the interrupts that are processed */
+     if(ack_intr != 0) {
+-        __raw_writel(reg_val|ack_intr, pnet_ss->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
++        __raw_writel(ack_intr, pnet_ss->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
+     }
+ 
+     ret = IRQ_HANDLED;
+diff --git a/include/linux/netip_subsystem.h b/include/linux/netip_subsystem.h
+index 7626e21..dd5da5e 100644
+--- a/include/linux/netip_subsystem.h
++++ b/include/linux/netip_subsystem.h
+@@ -200,11 +200,36 @@ typedef enum netss_service_id_t {
+ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_interrupt_info_t *irq_info);
+ bool netss_driver_ready(void);
+ int netss_device_get_info(netss_dev_t subdevice, netss_dev_info_t *mmio);
++/**************************************************************************/
++/*! \fn void netss_interrupt_enable(netss_interrupt_t intrpt)
++ **************************************************************************
++ *  \brief NetSS driver API to enable NET IP interrupts t to be seein in NET
++ *         IP bridge. This API should be only called while opening/loading
++ *         or while resuming of the respective NetIP sub device driver
++ *         module. This API should not be called from the sub device driver
++ *         ISR and if it wants to switch to polling mode and wants to do
++ *         disable/enable interrupts it should do that by disabling/enabling
++ *         its source of interrupts.
++ *  \param[in] intrpt - Enum netss_interrupt_t of NETIP interrupt. 
++ *  \return void.
++ **************************************************************************/
+ void netss_interrupt_enable(netss_interrupt_t intrpt);
++/**************************************************************************/
++/*! \fn void netss_interrupt_disable(netss_interrupt_t intrpt)
++ **************************************************************************
++ *  \brief NetSS driver API to enable NET IP interrupts t to be seein in NET
++ *         IP bridge. This API should be only called while closing/unloading
++ *         or while suspending of the respective NetIP sub device driver
++ *         module. This API should not be called from the sub device driver
++ *         ISR and if it wants to switch to polling mode and wants to do
++ *         disable/enable interrupts it should do that by disabling/enabling
++ *         its source of interrupts. 
++ *  \param[in] intrpt - Enum netss_interrupt_t of NETIP interrupt. 
++ *  \return void.
++ **************************************************************************/
+ void netss_interrupt_disable(netss_interrupt_t intrpt);
+ void netss_interrupt_ack(netss_interrupt_t intrpt);
+ unsigned int netss_subsystem_get_silicon_step(void);
+-
+ /**************************************************************************/
+ /*! \fn int netss_power_state_change_callback_register(netss_dev_t subdevice 
+                                  ,netss_power_state_callback_info_t *cbinfo)
+-- 
+2.10.1
+

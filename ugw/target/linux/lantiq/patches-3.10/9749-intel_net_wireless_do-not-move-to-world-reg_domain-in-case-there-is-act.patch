@@ -1,0 +1,151 @@
+From cfeb99aeabc1c24acdbd7725406e3a8070f44d88 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Sun, 28 Jan 2018 17:26:32 +0200
+Subject: [PATCH] do not move to world reg_domain in case there is active
+ ifaces
+
+implement new callback in cfg80211 and mac80211
+which checks with the driver whether all ifaces are idle or not
+if there is active ifaces, don't reset the regulatory domain
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ include/net/cfg80211.h    |  2 ++
+ include/net/mac80211.h    |  2 ++
+ net/mac80211/cfg.c        |  8 ++++++++
+ net/mac80211/driver-ops.h |  8 ++++++++
+ net/wireless/rdev-ops.h   |  8 ++++++++
+ net/wireless/sme.c        | 24 ++++++++++++++++++++++++
+ 6 files changed, 52 insertions(+)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index e7af6b9..f80a17c 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -2381,6 +2381,8 @@ struct cfg80211_ops {
+ 	int	(*set_ap_chanwidth)(struct wiphy *wiphy, struct net_device *dev,
+ 					struct cfg80211_chan_def *chandef);
+ 
++        bool    (*is_all_iface_idle)(struct wiphy *wiphy);
++
+ };
+ 
+ /*
+diff --git a/include/net/mac80211.h b/include/net/mac80211.h
+index e14e3e5..db993ad 100644
+--- a/include/net/mac80211.h
++++ b/include/net/mac80211.h
+@@ -2880,6 +2880,8 @@ struct ieee80211_ops {
+ 	int (*get_connection_alive)(struct ieee80211_hw *hw,
+ 				struct ieee80211_vif *vif);
+ 
++	bool (*is_all_iface_idle)(struct ieee80211_hw *hw);
++
+ #if IS_ENABLED(CONFIG_IPV6)
+ 	void (*ipv6_addr_change)(struct ieee80211_hw *hw,
+ 				 struct ieee80211_vif *vif,
+diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
+index f6807a6..05159c5 100644
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -2772,6 +2772,13 @@ static int ieee80211_start_radar_detection(struct wiphy *wiphy,
+ 	return 0;
+ }
+ 
++static bool ieee80211_is_all_iface_idle(struct wiphy *wiphy)
++{
++	struct ieee80211_local *local = wiphy_priv(wiphy);
++
++	return drv_is_all_iface_idle(local);
++}
++
+ static int ieee80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
+ 			     struct ieee80211_channel *chan, bool offchan,
+ 			     unsigned int wait, const u8 *buf, size_t len,
+@@ -3488,4 +3495,5 @@ struct cfg80211_ops mac80211_config_ops = {
+ 	.get_et_strings = ieee80211_get_et_strings,
+ 	.get_channel = ieee80211_cfg_get_channel,
+ 	.start_radar_detection = ieee80211_start_radar_detection,
++	.is_all_iface_idle = ieee80211_is_all_iface_idle,
+ };
+diff --git a/net/mac80211/driver-ops.h b/net/mac80211/driver-ops.h
+index 03cdfb8..d52c5b8 100644
+--- a/net/mac80211/driver-ops.h
++++ b/net/mac80211/driver-ops.h
+@@ -753,6 +753,14 @@ static inline int drv_set_antenna(struct ieee80211_local *local,
+ 	return ret;
+ }
+ 
++static inline bool drv_is_all_iface_idle(struct ieee80211_local *local)
++{
++	if (!local->ops->is_all_iface_idle)
++		return true;
++
++	return local->ops->is_all_iface_idle(&local->hw);
++}
++
+ static inline int drv_get_antenna(struct ieee80211_local *local,
+ 				  u32 *tx_ant, u32 *rx_ant)
+ {
+diff --git a/net/wireless/rdev-ops.h b/net/wireless/rdev-ops.h
+index 54bf444..f2e20fb 100644
+--- a/net/wireless/rdev-ops.h
++++ b/net/wireless/rdev-ops.h
+@@ -703,6 +703,14 @@ static inline int rdev_set_antenna(struct cfg80211_registered_device *rdev,
+ 	return ret;
+ }
+ 
++static inline bool rdev_is_all_iface_idle(struct cfg80211_registered_device *rdev)
++{
++	if (!rdev->ops->is_all_iface_idle)
++		return true;
++
++	return rdev->ops->is_all_iface_idle(&rdev->wiphy);
++}
++
+ static inline int rdev_get_antenna(struct cfg80211_registered_device *rdev,
+ 				   u32 *tx_ant, u32 *rx_ant)
+ {
+diff --git a/net/wireless/sme.c b/net/wireless/sme.c
+index 66ac420..265eec0 100644
+--- a/net/wireless/sme.c
++++ b/net/wireless/sme.c
+@@ -66,11 +66,35 @@ static bool cfg80211_is_all_idle(void)
+ 	return is_all_idle;
+ }
+ 
++static bool cfg80211_drv_is_all_idle(void)
++{
++	struct cfg80211_registered_device *rdev;
++	bool is_all_idle = true;
++
++	mutex_lock(&cfg80211_mutex);
++
++	list_for_each_entry(rdev, &cfg80211_rdev_list, list) {
++		cfg80211_lock_rdev(rdev);
++		if (!rdev_is_all_iface_idle(rdev))
++			is_all_idle = false;
++		cfg80211_unlock_rdev(rdev);
++	}
++
++	mutex_unlock(&cfg80211_mutex);
++
++	return is_all_idle;
++}
++
+ static void disconnect_work(struct work_struct *work)
+ {
+ 	if (!cfg80211_is_all_idle())
+ 		return;
+ 
++	/* Check whether all ifaces are idle with driver
++	 * as it might know better */
++	if (!cfg80211_drv_is_all_idle())
++		return;
++
+ 	regulatory_hint_disconnect();
+ }
+ 
+-- 
+2.10.1
+

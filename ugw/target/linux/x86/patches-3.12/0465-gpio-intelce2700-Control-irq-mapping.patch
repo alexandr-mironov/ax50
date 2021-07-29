@@ -1,0 +1,149 @@
+From 9c143515697c17e9b2983e9b045da491d169f6e4 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Mon, 22 Aug 2016 15:59:14 -0700
+Subject: [PATCH 465/639] gpio-intelce2700: Control irq mapping
+
+Previously gpio driver was using irq_domain_add_linear to add the gpio
+irq chip, letting the kernel do the irq mapping on its own, which was
+causing mapped gpio virq numbers conflicting with other pci/pcie devices
+on the platform. Now the gpio driver is changed to use irq_domain_add_si
+mple api to add the gpio irq chip, which allows the gpio driver to pass
+the first virq number that it wants the kernel to use to map its irq
+pins. And the gpio driver is using the first virq number as 256 to avoid
+any conflicts with other device irqs on the platform.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/gpio/gpio-intelce2700.c | 39 +++++++++++++++++++++++++++++----------
+ 1 file changed, 29 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/gpio/gpio-intelce2700.c b/drivers/gpio/gpio-intelce2700.c
+index 732cfc0..9d2880b 100644
+--- a/drivers/gpio/gpio-intelce2700.c
++++ b/drivers/gpio/gpio-intelce2700.c
+@@ -371,12 +371,13 @@ struct gpio_pad_info {
+ };
+ 
+ struct gpio_bank_pnp {
+-	char			       *name;
++	char			*name;
+ 	int                     base;
+-	int			            ngpio;
++	int                     irq_base;
++	int			ngpio;
+ 	struct gpio_pad_info	*pads_info;
+ 	struct intelce2700_gpio	*cg;
+-	char			        *community_name;
++	char			*community_name;
+ };
+ 
+ /* For invalid GPIO number(not found in GPIO list),
+@@ -652,15 +653,25 @@ static struct gpio_pad_info west_pads_info[] = {
+ };
+ 
+ #define CE2700_GPIO_SOUTHWEST_BASE (0)
+-#define CE2700_GPIO_NORTHEAST_BASE (CE2700_GPIO_SOUTHWEST_BASE + ((ARRAY_SIZE(southwest_pads_info)/10 + 2)*10))
+-#define CE2700_GPIO_NORTHWEST_BASE (CE2700_GPIO_NORTHEAST_BASE + ((ARRAY_SIZE(northeast_pads_info)/10 + 2)*10))
+-#define CE2700_GPIO_SOUTHEAST_BASE (CE2700_GPIO_NORTHWEST_BASE + ((ARRAY_SIZE(northwest_pads_info)/10 + 2)*10))
+-#define CE2700_GPIO_VIRTUAL_BASE   (CE2700_GPIO_SOUTHEAST_BASE + ((ARRAY_SIZE(southeast_pads_info)/10 + 2)*10))
+-#define CE2700_GPIO_WEST_BASE      (CE2700_GPIO_VIRTUAL_BASE   + ((ARRAY_SIZE(virtual_pads_info)/10 + 2)*10))
++#define CE2700_GPIO_NORTHEAST_BASE (CE2700_GPIO_SOUTHWEST_BASE + (ARRAY_SIZE(southwest_pads_info)))
++#define CE2700_GPIO_NORTHWEST_BASE (CE2700_GPIO_NORTHEAST_BASE + (ARRAY_SIZE(northeast_pads_info)))
++#define CE2700_GPIO_SOUTHEAST_BASE (CE2700_GPIO_NORTHWEST_BASE + (ARRAY_SIZE(northwest_pads_info)))
++#define CE2700_GPIO_VIRTUAL_BASE   (CE2700_GPIO_SOUTHEAST_BASE + (ARRAY_SIZE(southeast_pads_info)))
++#define CE2700_GPIO_WEST_BASE      (CE2700_GPIO_VIRTUAL_BASE   + (ARRAY_SIZE(virtual_pads_info)))
++
++#define CE2700_GPIO_SOUTHWEST_IRQBASE (256)
++#define CE2700_GPIO_NORTHEAST_IRQBASE (CE2700_GPIO_SOUTHWEST_IRQBASE + (ARRAY_SIZE(southwest_pads_info)))
++#define CE2700_GPIO_NORTHWEST_IRQBASE (CE2700_GPIO_NORTHEAST_IRQBASE + (ARRAY_SIZE(northeast_pads_info)))
++#define CE2700_GPIO_SOUTHEAST_IRQBASE (CE2700_GPIO_NORTHWEST_IRQBASE + (ARRAY_SIZE(northwest_pads_info)))
++#define CE2700_GPIO_VIRTUAL_IRQBASE   (CE2700_GPIO_SOUTHEAST_IRQBASE + (ARRAY_SIZE(southeast_pads_info)))
++#define CE2700_GPIO_WEST_IRQBASE      (CE2700_GPIO_VIRTUAL_IRQBASE   + (ARRAY_SIZE(virtual_pads_info)))
++
++
+ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 	{
+ 		.name = "GPO0",
+ 		.base = CE2700_GPIO_SOUTHWEST_BASE,
++		.irq_base = CE2700_GPIO_SOUTHWEST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(southwest_pads_info),
+ 		.pads_info = southwest_pads_info,
+ 		.community_name = "southwest",
+@@ -668,6 +679,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 	{
+ 		.name = "GPO1",
+ 		.base = CE2700_GPIO_NORTHEAST_BASE,
++		.irq_base = CE2700_GPIO_NORTHEAST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(northeast_pads_info),
+ 		.pads_info = northeast_pads_info,
+ 		.community_name = "northeast",
+@@ -675,6 +687,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 	{
+ 		.name = "GPO2",
+ 		.base = CE2700_GPIO_NORTHWEST_BASE,
++		.irq_base = CE2700_GPIO_NORTHWEST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(northwest_pads_info),
+ 		.pads_info = northwest_pads_info,
+ 		.community_name = "northwest",
+@@ -682,6 +695,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 	{
+ 		.name = "GPO3",
+ 		.base = CE2700_GPIO_SOUTHEAST_BASE,
++		.irq_base = CE2700_GPIO_SOUTHEAST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(southeast_pads_info),
+ 		.pads_info = southeast_pads_info,
+ 		.community_name = "southeast",
+@@ -689,6 +703,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 	{
+ 		.name = "GPO4",
+ 		.base = CE2700_GPIO_VIRTUAL_BASE,
++		.irq_base = CE2700_GPIO_VIRTUAL_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(virtual_pads_info),
+ 		.pads_info = virtual_pads_info,
+ 		.community_name = "virtual",
+@@ -696,6 +711,7 @@ static struct gpio_bank_pnp intelce2700_banks_pnp[] = {
+ 	{
+ 		.name = "GPO5",
+ 		.base = CE2700_GPIO_WEST_BASE,
++		.irq_base = CE2700_GPIO_WEST_IRQBASE,
+ 		.ngpio = ARRAY_SIZE(west_pads_info),
+ 		.pads_info = west_pads_info,
+ 		.community_name = "west",
+@@ -711,6 +727,7 @@ struct intelce2700_gpio {
+ 	struct gpio_pad_info	*pad_info;
+ 	struct irq_domain	*domain;
+ 	int			intr_lines[MAX_INTR_LINE_NUM];
++	int                     irq_base;
+ 	char			*community_name;
+ };
+ 
+@@ -1268,6 +1285,7 @@ static int intelce2700_gpio_irq_map(struct irq_domain *d, unsigned int virq,
+ 
+ static const struct irq_domain_ops intelce2700_gpio_irq_ops = {
+ 	.map = intelce2700_gpio_irq_map,
++	.xlate = irq_domain_xlate_twocell,
+ };
+ 
+ static int
+@@ -1296,6 +1314,7 @@ intelce2700_gpio_pnp_probe(struct pnp_dev *pdev, const struct pnp_device_id *id)
+ 			cg->pad_info = bank->pads_info;
+ 			cg->community_name = bank->community_name;
+ 			bank->cg = cg;
++			cg->irq_base = bank->irq_base;
+ 			break;
+ 		}
+ 	}
+@@ -1347,8 +1366,8 @@ intelce2700_gpio_pnp_probe(struct pnp_dev *pdev, const struct pnp_device_id *id)
+ 	for (i = 0; i < MAX_INTR_LINE_NUM; i++)
+ 		cg->intr_lines[i] = -1;
+ 
+-	cg->domain = irq_domain_add_linear(NULL,
+-			cg->chip.ngpio, &intelce2700_gpio_irq_ops, cg);
++	cg->domain = irq_domain_add_simple(dev->of_node,
++			cg->chip.ngpio, cg->irq_base, &intelce2700_gpio_irq_ops, cg);
+ 	if (!cg->domain) {
+ 		ret = -ENOMEM;
+ 		goto err;
+-- 
+2.10.1
+

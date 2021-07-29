@@ -1,0 +1,148 @@
+From bd88de9129c919cabb4f300ea1a796576811c9fe Mon Sep 17 00:00:00 2001
+From: "Sukerkar, Amol N" <amol.n.sukerkar@intel.com>
+Date: Mon, 26 Sep 2016 10:59:25 -0700
+Subject: [PATCH 486/639] Revert "netip_subsystem: fix ISR race conditions"
+
+This reverts commit cdd235827c2fcf0b2f051093c9ccb668bd523d0d.
+
+This fix causes some wifi_netdev commands from ARM to
+grab spinlock and never release it. This causes ATOM to
+be unresponsive and the recovery is power cycle. Until
+a proper fix is in place for ISR race, reverting this
+commit and filing a JIRA # PUMAWIFISW-99 to address
+the issue.
+
+Signed-off-by: Sukerkar, Amol N <amol.n.sukerkar@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c | 36 +++++---------------------
+ 1 file changed, 7 insertions(+), 29 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index eec1c99..532daf5 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -89,25 +89,19 @@ static unsigned int netss_get_reg_index(unsigned int irq)
+    return irq / NUM_ARM11_INTR_PER_REG;
+ }
+ 
+-static inline void __netss_interrupt_ack(netss_interrupt_t intrpt)
+-{
+-   __raw_writel((1<<intrpt), pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
+-}
+-
+ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_interrupt_info_t *irq_info)
+ {
+    unsigned int reg_indx = 0;
+    unsigned int irq_bit  = 0;
+    unsigned long flags;
+ 
++   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
+    if(intrpt > NETSS_INTERUPT_MAX)
+    {
+       printk("Registering for Invalid NETIP interrupt %d\n", intrpt);
++      spin_unlock(&pnetss_drv_data->irq_lock);
+       return;
+    }
+-
+-   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
+-
+    if(intrpt != NETSS_INTERUPT_ARM11)
+    {
+         pnetss_drv_data->irqs[intrpt].func = irq_info->func;
+@@ -125,7 +119,7 @@ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_
+             if(pnetss_drv_data->pending_interrupts & (1<<intrpt))
+             {
+                 irq_info->func(pnetss_drv_data->irq_num, irq_info->args);
+-                __netss_interrupt_ack(intrpt);
++                netss_interrupt_ack(intrpt);
+                 pnetss_drv_data->pending_interrupts &= ~(1<<intrpt);
+                 NETSS_DBG_PRINT("Cleared pending interrupt for device %d IIR %08x pending %08x\n", intrpt,
+                                  __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET),
+@@ -144,7 +138,7 @@ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_
+                  *For ARM11 interrupt bundle this might hvae got cleared by some other irq handle */
+                 if( __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET) & (1<<intrpt))
+                 {
+-                    __netss_interrupt_ack(intrpt);
++                    netss_interrupt_ack(intrpt);
+                 }
+                 pnetss_drv_data->pending_arm11_interrupts[reg_indx] &= ~(1 << irq_bit);
+                 NETSS_DBG_PRINT("Cleared pending interrupt for armm11 %d IIR %08x pending %08x\n", arm11_int_id,
+@@ -353,16 +347,11 @@ EXPORT_SYMBOL(netss_device_get_info);
+ 
+ void netss_interrupt_enable(netss_interrupt_t intrpt)
+ {
+-   unsigned long flags;
+-
+    if(intrpt > NETSS_INTERUPT_MAX)
+    {
+       printk("Invalid NetIP interrupt %d\n", intrpt);
+       return;
+    }
+-
+-   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
+-
+    if(!(pnetss_drv_data->ier_reg & (1 << intrpt))) {
+       pnetss_drv_data->ier_reg |= (1<<intrpt);
+       __raw_writel(pnetss_drv_data->ier_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IER_OFFSET);
+@@ -373,23 +362,16 @@ void netss_interrupt_enable(netss_interrupt_t intrpt)
+       __raw_writel(pnetss_drv_data->imr_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET);
+       NETSS_DBG_PRINT(KERN_INFO "Unmasking NetIP subdevice %d IMR reg = %x\n", __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET));
+    }
+-
+-   spin_unlock_irqrestore(&pnetss_drv_data->irq_lock, flags);
+ }
+ EXPORT_SYMBOL(netss_interrupt_enable);
+ 
+ void netss_interrupt_disable(netss_interrupt_t intrpt)
+ {
+-   unsigned long flags;
+-
+    if(intrpt > NETSS_INTERUPT_MAX)
+    {
+       printk("Invalid NetIP interrupt %d\n", intrpt);
+       return;
+    }
+-
+-   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
+-
+    if(pnetss_drv_data->ier_reg & (1 << intrpt)) {
+       pnetss_drv_data->ier_reg &= ~(1<<intrpt);
+       __raw_writel(pnetss_drv_data->ier_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IER_OFFSET);
+@@ -400,23 +382,19 @@ void netss_interrupt_disable(netss_interrupt_t intrpt)
+       __raw_writel(pnetss_drv_data->imr_reg, pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET);
+       NETSS_DBG_PRINT(KERN_INFO "Masking NetIP subdevice %d IMR reg = %x\n", __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IMR_OFFSET));
+    }
+-
+-   spin_unlock_irqrestore(&pnetss_drv_data->irq_lock, flags);
+ }
+ EXPORT_SYMBOL(netss_interrupt_disable);
+ 
+ void netss_interrupt_ack(netss_interrupt_t intrpt)
+ {
+    uint32_t reg_val;
+-
+    if(intrpt > NETSS_INTERUPT_MAX)
+    {
+       printk("Invalid NetIP interrupt %d\n", intrpt);
+       return;
+    }
+-
+-   __netss_interrupt_ack(intrpt);
+-
++   reg_val = __raw_readl(pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
++   __raw_writel((reg_val & (1<<intrpt)), pnetss_drv_data->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
+ }
+ EXPORT_SYMBOL(netss_interrupt_ack);
+ 
+@@ -487,7 +465,7 @@ static irqreturn_t net_subsystem_isr(int irq, void *dev_id)
+     }
+     /* Acknowledge the interrupts that are processed */
+     if(ack_intr != 0) {
+-        __raw_writel(ack_intr, pnet_ss->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
++        __raw_writel(reg_val|ack_intr, pnet_ss->bridge_reg_base + NETIP_BRIDGE_IIR_OFFSET);
+     }
+ 
+     ret = IRQ_HANDLED;
+-- 
+2.10.1
+

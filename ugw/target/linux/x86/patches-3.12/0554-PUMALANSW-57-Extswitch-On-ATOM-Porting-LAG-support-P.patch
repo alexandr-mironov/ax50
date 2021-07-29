@@ -1,0 +1,307 @@
+From 5b0e1bba1614efce0ca3caaa5f219c0cdbf73aac Mon Sep 17 00:00:00 2001
+From: opeyrik <oleg.peyrik@intel.com>
+Date: Thu, 15 Dec 2016 17:53:13 +0200
+Subject: [PATCH 554/639] PUMALANSW-57 - Extswitch On ATOM: Porting LAG support
+ (PUMAVOICESW-251)
+
+---
+ drivers/net/bonding/bond_main.c  |  44 +++++++++++++++-
+ drivers/net/bonding/bond_sysfs.c | 105 +++++++++++++++++++++++++++++++++++++++
+ drivers/net/bonding/bonding.h    |  19 +++++++
+ net/8021q/vlan_dev.c             |  24 +++++++++
+ 4 files changed, 190 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/bonding/bond_main.c b/drivers/net/bonding/bond_main.c
+index 5dcac31..8c724c3 100644
+--- a/drivers/net/bonding/bond_main.c
++++ b/drivers/net/bonding/bond_main.c
+@@ -423,6 +423,13 @@ static void bond_update_speed_duplex(struct slave *slave)
+ 	u32 slave_speed;
+ 	int res;
+ 
++	if (slave->man_link != -1)
++	{
++		slave->speed = slave->man_speed;
++		slave->duplex = slave->man_duplex;
++		return;
++	}
++
+ 	slave->speed = SPEED_UNKNOWN;
+ 	slave->duplex = DUPLEX_UNKNOWN;
+ 
+@@ -1399,6 +1406,27 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
+ 		goto err_undo_flags;
+ 	}
+ 	INIT_LIST_HEAD(&new_slave->list);
++
++	/* Create manual link params override sysfs */
++	new_slave->man_speed = SPEED_UNKNOWN;
++	new_slave->man_duplex = DUPLEX_UNKNOWN;
++	new_slave->man_link = -1; /* no define for unk */
++
++	sysfs_attr_init(&new_slave->man_linkprop.attr);
++	new_slave->man_linkprop.attr.name = kzalloc(strlen(slave_dev->name) + sizeof("_man_linkprop") + 1, GFP_KERNEL);
++	sprintf(new_slave->man_linkprop.attr.name, "%s_man_linkprop", slave_dev->name);
++
++	new_slave->man_linkprop.attr.mode = 0644;
++	new_slave->man_linkprop.show = bonding_show_man_linkprop;
++	new_slave->man_linkprop.store = bonding_store_man_linkprop;
++
++	res = sysfs_add_file_to_group(&bond_dev->dev.kobj, &new_slave->man_linkprop.attr, bond_dev->sysfs_groups[0]->name);
++	if (res)
++	{
++		pr_debug("Error %d calling sysfs_add_file_to_group\n", res);
++		goto err_free;
++	}
++
+ 	/*
+ 	 * Set the new_slave's queue_id to be zero.  Queue ID mapping
+ 	 * is set via sysfs or module option if desired.
+@@ -1714,6 +1742,8 @@ err_restore_mtu:
+ 	dev_set_mtu(slave_dev, new_slave->original_mtu);
+ 
+ err_free:
++	if (new_slave->man_linkprop.attr.name)
++		kfree(new_slave->man_linkprop.attr.name);
+ 	kfree(new_slave);
+ 
+ err_undo_flags:
+@@ -1912,6 +1942,9 @@ static int __bond_release_one(struct net_device *bond_dev,
+ 
+ 	slave_dev->priv_flags &= ~IFF_BONDING;
+ 
++	/* remove slave attribute from sysfs sysfs */
++	sysfs_remove_file_from_group(&bond_dev->dev.kobj, &slave->man_linkprop.attr, bond_dev->sysfs_groups[0]->name);
++	kfree(slave->man_linkprop.attr.name);
+ 	kfree(slave);
+ 
+ 	return 0;  /* deletion OK */
+@@ -2047,9 +2080,16 @@ static int bond_miimon_inspect(struct bonding *bond)
+ 	ignore_updelay = !bond->curr_active_slave ? true : false;
+ 
+ 	bond_for_each_slave(bond, slave) {
++
+ 		slave->new_link = BOND_LINK_NOCHANGE;
+ 
+-		link_state = bond_check_dev_link(bond, slave->dev, 0);
++		/* override, upcasting  */
++		if (slave->man_link != -1) {
++			link_state = slave->man_link ? BMSR_LSTATUS : 0;
++		}
++		else {
++			link_state = bond_check_dev_link(bond, slave->dev, 0);
++		}
+ 
+ 		switch (slave->link) {
+ 		case BOND_LINK_UP:
+@@ -2957,7 +2997,7 @@ static int bond_master_netdev_event(unsigned long event,
+ 	return NOTIFY_DONE;
+ }
+ 
+-static int bond_slave_netdev_event(unsigned long event,
++int bond_slave_netdev_event(unsigned long event,
+ 				   struct net_device *slave_dev)
+ {
+ 	struct slave *slave = bond_slave_get_rtnl(slave_dev);
+diff --git a/drivers/net/bonding/bond_sysfs.c b/drivers/net/bonding/bond_sysfs.c
+index b60f95b..5ef4ac8 100644
+--- a/drivers/net/bonding/bond_sysfs.c
++++ b/drivers/net/bonding/bond_sysfs.c
+@@ -1836,3 +1836,108 @@ void bond_prepare_sysfs_group(struct bonding *bond)
+ 	bond->dev->sysfs_groups[0] = &bonding_group;
+ }
+ 
++/* sysfs handlers */
++ssize_t bonding_show_man_linkprop(struct device *dev, struct device_attribute *attr,
++		char *buf)
++{
++	struct slave * slave;
++
++	printk(KERN_ERR"bonding_show_man_linkprop\n");
++
++	slave = container_of(attr, struct slave, man_linkprop);
++
++	return scnprintf(buf, (ssize_t)PAGE_SIZE, "%d %d %d\n", slave->man_link, slave->man_speed, slave->man_duplex);
++}
++
++ssize_t bonding_store_man_linkprop(struct device *dev, struct device_attribute *attr,
++		 const char *buf, size_t count)
++{
++	struct slave * slave;
++    int man_link;
++    int man_speed;
++    int man_duplex;
++    int link_changed;
++    int link_prev;
++    int prev_speed;
++    int prev_duplex;
++
++	slave = container_of(attr, struct slave, man_linkprop);
++
++	sscanf(buf,"%d %d %d", &man_link, &man_speed, &man_duplex);
++
++	link_prev = slave->man_link;
++	prev_speed = slave->man_duplex;
++	prev_duplex = man_duplex;
++	link_changed = (prev_speed != man_speed) || (prev_duplex != man_duplex);
++
++	slave->man_link   = man_link;
++	slave->man_speed  = man_speed;
++	slave->man_duplex = man_duplex;
++
++	switch(man_link) {
++	    case 1:
++	    	switch (link_prev) {
++	    	case 1: /* UP->UP */
++	    		if (link_changed) {
++	    			bond_slave_netdev_event(NETDEV_CHANGE, slave->dev);
++	    		}
++	    		break;
++
++	    	case -1: /* AUTODETECT->UP */
++			    bond_slave_netdev_event(NETDEV_UP, slave->dev);
++			    break;
++
++	    	case 0:  /* DOWN->UP */
++			    bond_slave_netdev_event(NETDEV_UP, slave->dev);
++			    break;
++
++	    	default: 
++	    		/* kernel overrun */
++                break;
++	    	}
++	    	break;
++
++	    case 0: /* ANY->DOWN */
++	    	if (link_prev != 0) {
++	    	    bond_slave_netdev_event(NETDEV_DOWN, slave->dev);
++	    	}
++	    	break;
++
++	    case -1:
++	    	switch (link_prev) {
++	    	case 1: /* UP->AUTODETECT */
++	    		if (IS_UP(slave->dev)) {
++	    		   bond_slave_netdev_event(NETDEV_CHANGE, slave->dev);
++	    		}
++	    		else
++	    		{
++		    	   bond_slave_netdev_event(NETDEV_DOWN, slave->dev);
++	    		}
++	    		break;
++
++	    	case 0: /* DOWN->AUTODETECT */
++	    		if (IS_UP(slave->dev)) {
++	    			bond_slave_netdev_event(NETDEV_UP, slave->dev);
++	    		}
++	    		break;
++
++	    	case -1: /* AUTODETECT->AUTODETECT */
++	    		break; /* nothing to do */
++
++	    	default:
++	    		/* kernel overrun */
++	      		break;
++	    	}
++	    	break;
++
++	    default:
++	    	/* illegal value. recover previous values */
++	    	slave->man_link = link_prev;
++	    	slave->man_speed  = prev_speed;
++	    	slave->man_duplex = prev_duplex;
++	    	break;
++
++	}
++	return count;
++}
++
+diff --git a/drivers/net/bonding/bonding.h b/drivers/net/bonding/bonding.h
+index 03cf3fd..36f6689 100644
+--- a/drivers/net/bonding/bonding.h
++++ b/drivers/net/bonding/bonding.h
+@@ -39,6 +39,12 @@
+ 	      ((((dev)->flags & IFF_UP) == IFF_UP)	&& \
+ 	       netif_running(dev)			&& \
+ 	       netif_carrier_ok(dev))
++/* TODO: Use the following macro for querying the slve UP state replacing the IS_UP macro
++ define IS_SLAVE_UP(slave)					   \
++	      (((((slave)->dev)->flags & IFF_UP) == IFF_UP)	&& \
++	       netif_running((slave)->dev)			&& \
++		   ((slave)->man_link == -1) ? netif_carrier_ok(dev)) | ((slave)->man_link == 1))
++*/
+ 
+ /*
+  * Checks whether slave is ready for transmit.
+@@ -210,6 +216,12 @@ struct slave {
+ #ifdef CONFIG_NET_POLL_CONTROLLER
+ 	struct netpoll *np;
+ #endif
++
++	struct device_attribute man_linkprop;
++
++	int man_speed;
++	int man_duplex;
++	int man_link;
+ };
+ 
+ /*
+@@ -457,6 +469,13 @@ void bond_debug_unregister(struct bonding *bond);
+ void bond_debug_reregister(struct bonding *bond);
+ const char *bond_mode_name(int mode);
+ 
++ssize_t bonding_store_man_linkprop(struct device *dev, struct device_attribute *attr,
++		 const char *buf, size_t count);
++ssize_t bonding_show_man_linkprop(struct device *dev, struct device_attribute *attr,
++		char *buf);
++
++int bond_slave_netdev_event(unsigned long event,
++				   struct net_device *slave_dev);
+ struct bond_net {
+ 	struct net *		net;	/* Associated network namespace */
+ 	struct list_head	dev_list;
+diff --git a/net/8021q/vlan_dev.c b/net/8021q/vlan_dev.c
+index 0c21361..71ff10d 100644
+--- a/net/8021q/vlan_dev.c
++++ b/net/8021q/vlan_dev.c
+@@ -71,6 +71,29 @@ static int vlan_dev_rebuild_header(struct sk_buff *skb)
+ static inline u16
+ vlan_dev_get_egress_qos_mask(struct net_device *dev, struct sk_buff *skb)
+ {
++#if defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL)
++	if (skb->ti_ds_traffic_prio)
++	{
++	    return ((VLAN_PRIO_MASK & (7)) << VLAN_PRIO_SHIFT);
++	}
++	else if (dev->priv_flags & IFF_BONDING)
++	{
++		return ((VLAN_PRIO_MASK & (2)) << VLAN_PRIO_SHIFT);
++	}
++	return ((VLAN_PRIO_MASK & (0)) << VLAN_PRIO_SHIFT);
++/* TODO: replace the above mapping with the following priority mapping:
++    if (IS_LACP(skb)) {
++
++	}
++	else if (skb->ti_ds_traffic_prio) {
++	    return ((VLAN_PRIO_MASK & (4)) << VLAN_PRIO_SHIFT);
++	}
++	else if (dev->priv_flags & IFF_BONDING) {
++		return ((VLAN_PRIO_MASK & (2)) << VLAN_PRIO_SHIFT);
++	}
++	return ((VLAN_PRIO_MASK & (0)) << VLAN_PRIO_SHIFT);
++*/
++#else
+ 	struct vlan_priority_tci_mapping *mp;
+ 
+ 	smp_rmb(); /* coupled with smp_wmb() in vlan_dev_set_egress_priority() */
+@@ -85,6 +108,7 @@ vlan_dev_get_egress_qos_mask(struct net_device *dev, struct sk_buff *skb)
+ 		mp = mp->next;
+ 	}
+ 	return 0;
++#endif /* CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL */
+ }
+ 
+ /*
+-- 
+2.10.1
+

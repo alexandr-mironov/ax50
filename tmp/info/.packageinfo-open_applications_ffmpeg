@@ -1,0 +1,166 @@
+Source-Makefile: package/feeds/open_applications/ffmpeg/Makefile
+Package: ffmpeg
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +libffmpeg-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: full
+Section: multimedia
+Category: Multimedia
+Title: FFmpeg program
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains the FFmpeg command line tool.
+http://ffmpeg.mplayerhq.hu/
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: ffprobe
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libffmpeg-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: full
+Section: multimedia
+Category: Multimedia
+Title: FFmpeg CLI media identifier
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains the FFprobe command line tool.
+http://ffmpeg.mplayerhq.hu/
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: ffserver
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +libffmpeg-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: full
+Section: multimedia
+Category: Multimedia
+Title:  streaming server
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains the FFmpeg streaming server.
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: libffmpeg-custom
+Menu: 1
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +zlib +libbz2 @DEVEL @!ALL +libopus +libspeex
+Conflicts: 
+Menu-Depends: 
+Provides: libffmpeg
+Build-Variant: custom
+Section: libs
+Category: Libraries
+Title: FFmpeg libraries (custom)
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains customized FFmpeg shared libraries.
+http://ffmpeg.mplayerhq.hu/
+Ted Hess <thess@kitschensync.net>
+@@
+Config:
+source "ugw/feeds_opensrc/packages/multimedia/ffmpeg/Config.in"
+@@
+
+Package: libffmpeg-full
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +zlib +libbz2 @BUILD_PATENTED
+Conflicts: 
+Menu-Depends: 
+Provides: libffmpeg
+Build-Variant: full
+Section: libs
+Category: Libraries
+Title: FFmpeg libraries (full)
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains full-featured FFmpeg shared libraries.
+http://ffmpeg.mplayerhq.hu/
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: libffmpeg-mini
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +zlib +libbz2 @BUILD_PATENTED
+Conflicts: 
+Menu-Depends: 
+Provides: libffmpeg
+Build-Variant: mini
+Section: libs
+Category: Libraries
+Title: FFmpeg libraries (mini)
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains minimal-featured FFmpeg shared libraries.
+http://ffmpeg.mplayerhq.hu/
+Ted Hess <thess@kitschensync.net>
+@@
+
+Package: libffmpeg-audio-dec
+Version: 2.6.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +zlib +libbz2 @DEVEL +libopus +libspeex
+Conflicts: 
+Menu-Depends: 
+Provides: libffmpeg
+Build-Variant: audio-dec
+Section: libs
+Category: Libraries
+Title: FFmpeg libraries (audio)
+Maintainer: Ted Hess <thess@kitschensync.net>
+Source: ffmpeg-2.6.2.tar.bz2
+License: LGPL-2.1+ GPL-2+ LGPL-3
+LicenseFiles: COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3
+Type: ipkg
+Description:  FFmpeg is a a software package that can record, convert and stream digital
+ audio and video in numerous formats.
+ .
+ This package contains FFmpeg shared libraries for audio decoding
+http://ffmpeg.mplayerhq.hu/
+Ted Hess <thess@kitschensync.net>
+@@
+
+

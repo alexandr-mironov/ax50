@@ -1,0 +1,190 @@
+From edda84cce048a99e2d24d6de0b5bfa8d6fec544c Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 22 Dec 2016 14:12:21 +0200
+Subject: [PATCH 560/639] cppi41 hw_mbox Atom adaptation
+
+---
+ arch/x86/pal_cppi41/Makefile                       |  3 +--
+ arch/x86/pal_cppi41/cppi41_hw_mbox_if.c            | 24 ++++++++--------------
+ arch/x86/pal_cppi41/pal_cppi41.c                   |  5 +++--
+ arch/x86/pp_init/puma7_pp_init.c                   |  7 +++++++
+ .../linux/avalanche/generic/cppi41_hw_mbox_if.h    |  7 +++++++
+ 5 files changed, 26 insertions(+), 20 deletions(-)
+
+diff --git a/arch/x86/pal_cppi41/Makefile b/arch/x86/pal_cppi41/Makefile
+index f70f5ec..1425e82 100644
+--- a/arch/x86/pal_cppi41/Makefile
++++ b/arch/x86/pal_cppi41/Makefile
+@@ -19,6 +19,7 @@
+ 
+ obj-$(CONFIG_PAL_CPPI41_APPCPU) := pal_cppi41.o
+ obj-$(CONFIG_PAL_CPPI41_APPCPU) += cru_ctrl.o
++obj-y += cppi41_hw_mbox_if.o
+ 
+ ccflags-y := -Werror \
+ 		-DCONFIG_X86_AVALANCHE_SOC \
+diff --git a/arch/x86/pal_cppi41/cppi41_hw_mbox_if.c b/arch/x86/pal_cppi41/cppi41_hw_mbox_if.c
+index c9912c5..5afdb26 100644
+--- a/arch/x86/pal_cppi41/cppi41_hw_mbox_if.c
++++ b/arch/x86/pal_cppi41/cppi41_hw_mbox_if.c
+@@ -105,7 +105,7 @@ static PAL_Handle cppi_hw_mobx_hnd = NULL;
+   * \brief initialize CPPI hw mailbox interface 
+   * \return 0 on succuss, non zero value otherwise 
+   */
+-static int __init __cppi41_hw_mbox_init(void)
++int cppi41_hw_mbox_init(void)
+ {
+     /* HW Mailbox checking and registeration */
+     if ( 0 != hwMbox_isReady() )
+@@ -127,7 +127,7 @@ static int __init __cppi41_hw_mbox_init(void)
+ 
+ 
+     /* HW Mailbox is ready, registering the callback */
+-    if(0 != hwMbox_registerRecvOpcode(HW_MBOX_MASTER_APP_CPU, cppi41_hw_mbox_callback,
++    if(0 != hwMbox_registerRecvOpcode(HW_MBOX_MASTER_NP_CPU, cppi41_hw_mbox_callback,
+                                       NPCPU_APPCPU_HW_MBOX_TAG_CPPI41_MBX, 0 ))
+     {
+         EPRINTK("hwMbox_registerRecvOpcode fails, Master = %d, Tag = %d",
+@@ -139,15 +139,13 @@ static int __init __cppi41_hw_mbox_init(void)
+ 
+     return 0;
+ }
+-//EXPORT_SYMBOL(cppi41_hw_mbox_init);
+-late_initcall(__cppi41_hw_mbox_init);
+-
++EXPORT_SYMBOL(cppi41_hw_mbox_init);
+ 
+ /*! \fn int cppi41_hw_mbox_deinit(void)
+   * \brief de initialize CPPI hw mailbox interface 
+   * \return 0 on succuss
+   */
+-static void __exit __cppi41_hw_mbox_deinit(void)
++void cppi41_hw_mbox_deinit(void)
+ {
+     DPRINTK("Unregister interface callback from hw mailbox driver");
+     /* TBD - unregister callback */
+@@ -155,9 +153,7 @@ static void __exit __cppi41_hw_mbox_deinit(void)
+     DPRINTK("Removing cppi hw mailbox interface");
+     PAL_cppi4Exit(NULL, CPPI41_DOMAIN_PP);
+ }
+-//EXPORT_SYMBOL(cppi41_hw_mbox_deinit);
+-module_exit(__cppi41_hw_mbox_deinit);
+-
++EXPORT_SYMBOL(cppi41_hw_mbox_deinit);
+ 
+ /*!
+  * \fn static int cppi41_hw_mbox_callback(hw_mbox_Masters_e commander, Uint8 *dataBuf, Uint32 dataLen, Uint32 *token) 
+@@ -181,12 +177,8 @@ static int cppi41_hw_mbox_callback(hw_mbox_Masters_e commander, Uint8 *dataBuf,
+ 
+     if (dataBuf == NULL)
+     {
+-        //failReply.failCode = CPPI41_HWMBOX_RET_CODE_CMD_ERROR;
+-        //hwMbox_sendReplyOpcode(HW_MBOX_MASTER_APP_CPU, &failReply, sizeof(failReply));
+-
+         EPRINTK("Received NULL pointer");
+         goto out_err;
+-    //    return 0;
+     }
+ 
+     /* the CMD ID MUST be the first word (32bits) in all CPPI mbox msg types! */
+@@ -212,7 +204,7 @@ static int cppi41_hw_mbox_callback(hw_mbox_Masters_e commander, Uint8 *dataBuf,
+                     AccChOpenReply.curPage = cpu_to_be32(AccChOpenReply.curPage);
+ 
+                     AccChOpenReply.cmd = cpu_to_be32(CPPI41_HWMBOX_CMD_ACC_CH_OPEN_REPLY);
+-                    hwMbox_sendReplyOpcode(HW_MBOX_MASTER_APP_CPU, &AccChOpenReply, sizeof(AccChOpenReply));
++                    hwMbox_sendReplyOpcode(HW_MBOX_MASTER_NP_CPU, &AccChOpenReply, sizeof(AccChOpenReply));
+                     return 0;
+                 }
+                 failReply.failCode = cpu_to_be32(CPPI41_HWMBOX_RET_CODE_CMD_ERROR);
+@@ -227,7 +219,7 @@ static int cppi41_hw_mbox_callback(hw_mbox_Masters_e commander, Uint8 *dataBuf,
+                 DPRINTK("calling cppi41_hw_mbox_acc_ch_close_handler");
+                 if(0 == cppi41_hw_mbox_acc_ch_close_handler(be32_to_cpu(AccChCloseMsg->accChHnd)))
+                 {
+-                    hwMbox_sendAckOpcode(HW_MBOX_MASTER_APP_CPU);
++                    hwMbox_sendAckOpcode(HW_MBOX_MASTER_NP_CPU);
+                     return 0;
+                 }
+                 failReply.failCode = cpu_to_be32(CPPI41_HWMBOX_RET_CODE_CMD_ERROR);
+@@ -242,7 +234,7 @@ static int cppi41_hw_mbox_callback(hw_mbox_Masters_e commander, Uint8 *dataBuf,
+ out_err:   
+     failReply.cmd = cpu_to_be32(CPPI41_HWMBOX_CMD_FAILED);
+  
+-    hwMbox_sendReplyOpcode(HW_MBOX_MASTER_APP_CPU, &failReply, sizeof(failReply));
++    hwMbox_sendReplyOpcode(HW_MBOX_MASTER_NP_CPU, &failReply, sizeof(failReply));
+     EPRINTK("Failed to handle incoming message");
+     
+     return 0;
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index 9cda5c3..2535fa8 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -91,6 +91,7 @@
+ #include <linux/avalanche/generic/pal_osProtect.h>
+ #include <linux/avalanche/generic/pal_osProtect_inline.h>
+ #include <linux/avalanche/generic/cppi41_hw_mbox_if.h>
++#include <linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h>
+ #include <linux/hw_mailbox.h>
+ /***************/
+ /**  Defines  **/
+@@ -590,7 +591,7 @@ PAL_Cppi4AccChHnd PAL_cppi4AccChOpen(PAL_Handle hnd, Cppi4AccumulatorCfg* accCfg
+     tmp = (Cppi41HwMboxAccChOpenReplyMsg_t *) &openAccChObj;
+     accChObj->curPage = be32_to_cpu( tmp->curPage);
+     DPRINTK("curPage=%d.", accChObj->curPage );
+-    accChObj->palCppi4Obj = (void *)tmp->accChHnd;
++    accChObj->palCppi4Obj = (void *)be32_to_cpu((unsigned int)(tmp->accChHnd));
+     DPRINTK("npcpuAddress=%d.", tmp->accChHnd );
+ 
+     DPRINTK("HW mailbox Received accChObj->initCfg.list.listBase after phys_to_virt=%p.", accChObj->initCfg.list.listBase);
+@@ -737,7 +738,7 @@ int PAL_cppi4AccChClose(PAL_Cppi4AccChHnd hnd, void *closeArgs)
+     accChObj = (PAL_Cppi4AccChObj *)hnd;
+     /*copy PAL_Cppi4AccChObj data to accumulator channel onject */
+     /* convert data since CPPI need ch_num for accumulator close  */
+-    adpHwMboxmessageObj.accChHnd =  (void *)accChObj->palCppi4Obj;  
++    adpHwMboxmessageObj.accChHnd =  (void *)cpu_to_be32((unsigned int)(accChObj->palCppi4Obj));  
+     DPRINTK("npcpuAddress=%d.", accChObj->palCppi4Obj );
+ 
+     adpHwMboxmessageObj.cmd = cpu_to_be32(CPPI41_HWMBOX_CMD_ACC_CH_CLOSE);
+diff --git a/arch/x86/pp_init/puma7_pp_init.c b/arch/x86/pp_init/puma7_pp_init.c
+index a0ba5f2..4a82da7 100644
+--- a/arch/x86/pp_init/puma7_pp_init.c
++++ b/arch/x86/pp_init/puma7_pp_init.c
+@@ -38,6 +38,7 @@
+ #include <linux/avalanche/puma7/puma7_cppi.h>
+ #include <linux/avalanche/puma7/puma7_cppi_prv.h>
+ #include <linux/avalanche/puma7/puma7.h>
++#include <linux/avalanche/generic/cppi41_hw_mbox_if.h>
+ #include <linux/avalanche/generic/avalanche_intc.h>
+ #include <linux/netdevice.h>
+ #include <linux/unistd.h>
+@@ -473,6 +474,12 @@ static int __init tx_comp_init(void)
+         goto tx_comp_exit;
+     }
+ 
++    if(cppi41_hw_mbox_init())
++    {
++        pr_err("%s(%d): Error - cppi41_hw_mbox_init failed!\n", __FUNCTION__, __LINE__);
++        goto tx_comp_exit;
++    }
++
+ tx_comp_exit:
+     return ret;
+ }
+diff --git a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+index 5d81a82..9784059 100644
+--- a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
++++ b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+@@ -116,4 +116,11 @@ typedef struct
+ } Cppi41HwMboxOffChipMemInfoReplyMsg_t;
+ #endif /* __CPPI41_HW_MBOX_IF_H__ */
+ 
++/*! \fn int cppi41_hw_mbox_init (void) 
++  * \brief initialize CPPI hw mailbox interface 
++  * \return 0 on succuss, non zero value otherwise 
++  */
++int cppi41_hw_mbox_init(void);
++void cppi41_hw_mbox_deinit(void);
++
+ bool  Cppi41HwMboxAccChangeEndianness(Cppi41HwMboxAccChOpenMsg_t *destCfgData, endianness_e endianity);
+-- 
+2.10.1
+

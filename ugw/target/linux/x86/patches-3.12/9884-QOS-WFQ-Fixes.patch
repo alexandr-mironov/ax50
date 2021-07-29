@@ -1,0 +1,170 @@
+# HG changeset patch
+# Parent 3063e4ac5165dc667a91bfe3972d5488398907e0
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -368,35 +368,32 @@ PP_QOS_SCH_MODE_e;
+  **************************************************************************/
+ typedef struct // former TI_PP_QOS_CLST_CFG
+ {
+-    AVALANCHE_PP_QOS_QUEUE_t    qos_q_cfg[ AVALANCHE_PP_QOS_CLST_MAX_QCNT ]; /* Configuration for all the queues associated with the cluster, arranged in order of priority (qos_q_cfg[0] being lower in priority than qos_q_cfg[1]) */
+-    Uint8                       qos_q_cnt;                /* Number of QOS queues in the cluster (1 to 8) */
++    AVALANCHE_PP_QOS_QUEUE_t    qos_q_cfg[AVALANCHE_PP_QOS_CLST_MAX_QCNT];      /* Configuration for all the queues associated with the cluster, arranged in order of priority (qos_q_cfg[0] being lower in priority than qos_q_cfg[1]) */
++    Uint8                       qos_q_cnt;                                      /* Number of QOS queues in the cluster (1 to 8) */
++    PP_QOS_SCH_MODE_e           sch_mode;                                       /* Scheduling mode */
+ 
+-    PP_QOS_SCH_MODE_e           sch_mode;                  /* Scheduling mode */
+- 
+     /*Strict Schedluing parameters */
+-    Uint32                      global_credit_bytes;      /* The amount of global bytes credit available to the next QOS queue in the cluster */
+-    Uint32                      max_global_credit_bytes;  /* The maximum amount of global credit allowed to carry over to the next  queue. */
++    Uint32                      global_credit_bytes;                            /* The amount of global bytes credit available to the next QOS queue in the cluster */
++    Uint32                      max_global_credit_bytes;                        /* The maximum amount of global credit allowed to carry over to the next  queue. */
++    Uint16                      global_credit_packets;                          /* The amount of global pkt credit available to the next QOS queue in the cluster */
++    Uint16                      max_global_credit_packets;                      /* The maximum amount of global credit allowed to carry over to the next  queue. */
+ 
+-    Uint16                      global_credit_packets;    /* The amount of global pkt credit available to the next QOS queue in the cluster */
+-    Uint16                      max_global_credit_packets; /* The maximum amount of global credit allowed to carry over to the next  queue. */
++    Uint32                      egr_congst_thrsh_bytes1;                        /* Egress Congestion Bytes Threshold 1 */
++    Uint32                      egr_congst_thrsh_bytes2;                        /* Egress Congestion Bytes Threshold 2 */
++    Uint32                      egr_congst_thrsh_bytes3;                        /* Egress Congestion Bytes Threshold 3 */
++    Uint32                      egr_congst_thrsh_bytes4;                        /* Egress Congestion Bytes Threshold 4 */
+ 
+-    Uint32                      egr_congst_thrsh_bytes1;  /* Egress Congestion Bytes Threshold 1 */
+-    Uint32                      egr_congst_thrsh_bytes2;  /* Egress Congestion Bytes Threshold 2 */
+-    Uint32                      egr_congst_thrsh_bytes3;  /* Egress Congestion Bytes Threshold 3 */
+-    Uint32                      egr_congst_thrsh_bytes4;  /* Egress Congestion Bytes Threshold 4 */
+-
+-    Uint16                      egr_congst_thrsh_packets1; /* Egress Congestion Pkts Threshold 1*/
+-    Uint16                      egr_congst_thrsh_packets2; /* Egress Congestion Pkts Threshold 2 */
+-    Uint16                      egr_congst_thrsh_packets3; /* Egress Congestion Pkts Threshold 3 */
+-    Uint16                      egr_congst_thrsh_packets4; /* Egress Congestion Pkts Threshold 4 */
+-
++    Uint16                      egr_congst_thrsh_packets1;                      /* Egress Congestion Pkts Threshold 1*/
++    Uint16                      egr_congst_thrsh_packets2;                      /* Egress Congestion Pkts Threshold 2 */
++    Uint16                      egr_congst_thrsh_packets3;                      /* Egress Congestion Pkts Threshold 3 */
++    Uint16                      egr_congst_thrsh_packets4;                      /* Egress Congestion Pkts Threshold 4 */
+     Uint8                       shaperClusters[4];
+ 
+     /* WFQ Scheduling parameters */
+-    Uint32                       line_rate_bps;              /* Line Rate  In bits per second. (i.e 1Gbps for RGMII)  */
+-    Uint32                       credit_per_iteration;       /* The Max bytes that can be transmitted per iteration. (this field is automatically configured from the line rate and iteration */
+-    Uint32                       sum_of_weights;               /* The total Weights that is configured to the cluster */
+-
++    Uint32                      line_rate_bps;                                  /* Line Rate  In bits per second. (i.e 1Gbps for RGMII)  */
++    Uint32                      credit_per_iteration;                           /* The Max bytes that can be transmitted per iteration. (this field is automatically configured from the line rate and iteration */
++    Uint32                      sum_of_weights;                                 /* The total Weights that is configured to the cluster */
++    Uint8                       remaining_credits;                              /* The remaining credits that the cluster have due to the division of total credits in the queues weights */
+ }
+ AVALANCHE_PP_QOS_CLST_CFG_t;
+ 
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -89,6 +89,7 @@
+ #define PP_QOS_Q_LIMITED_FLAG        (1<<3)
+ #define PP_QOS_Q_NO_QOS_FLAG         (1<<4)
+ #define PP_QOS_Q_WFQ_ENABELD_FLAG    (1<<5)
++#define PP_QOS_Q_WFQ_RC_ALLOWED      (1<<6)
+ 
+ 
+ #define PP_QOS_ITERATION_TICK_USEC   (25)
+@@ -204,15 +205,15 @@ typedef struct
+ 
+     Uint8                       flags;                      /* Bit 0 : Set if the cluster is working in WFQ scheduling mode. cleared when its strict scheduling mode */
+ 
+-    Uint8                       qos_q3;                     /* The queue index (0 to 127) of each QOS queue in the cluster listed in priority order */
++    Uint8                       qos_q0;                     /* The queue index (0 to 127) of each QOS queue in the cluster listed in priority order */
++    Uint8                       qos_q1;
+     Uint8                       qos_q2;
+-    Uint8                       qos_q1;
+-    Uint8                       qos_q0;
++    Uint8                       qos_q3;
+ 
++    Uint8                       qos_q4;
++    Uint8                       qos_q5;
++    Uint8                       qos_q6;
+     Uint8                       qos_q7;
+-    Uint8                       qos_q6;
+-    Uint8                       qos_q5;
+-    Uint8                       qos_q4;
+ 
+     Uint16                      egr_q1;                     /* The Queue index of every egress queue enumerated in Egress Queue Count */
+     Uint16                      egr_q0;
+@@ -268,46 +269,42 @@ PP_QOS_FW_QUEUE_t;
+ /*                                           WFQ Structures                                                                      */
+ /*                                                                                                                               */  
+ /*********************************************************************************************************************************/
+-typedef struct
++typedef struct __attribute__ ((aligned(64)))
+ {
++    Uint8  rc_cpi;                  /* the remaining credits to assign each queue in his turn according to the weights, NOT changed by the FW */
++    Uint8  rc_queue_num;            /* the current queue num that gets the remaining credits, USED only by FW internally */
++    Uint8  rc_queue_idx;            /* the current queue index that gets the remaining credits, USED only by FW internally */
++    Uint8  rc_queue_it_cnt;         /* the remaining number of iteration that the current queue will get the remaining credits, USED only by FW internally */
+ 
+-    Uint32                      wfq_info;                   /* Used in the FW for internal processing */
++    Uint32 credit_per_iteration;    /* The Max bytes that can be transmitted per iteration. Automatically configured from the line rate and iteration rate */
++    Uint16 leftover_credit;         /* Temporary variable, holding the total credit of all queues that are not utilizing their whole credit */
++    Uint16 act_Qs_weight_sum;       /* Temporary variable, holding sum of all queues that are active within some calculation scope. */
++    Uint16 qda_queue;               /* The queue which we activated QDA on. INVALID_QDA_QUEUE indicates that QDA wasn't activated on any on the cluster queues */
++#if defined(__BIG_ENDIAN_BITFIELD)
++    Uint8  egr_q_cnt:4,             /* The total number of egress queues in WFQ its always 1 */
++           qos_q_cnt:4;             /* The number of QOS queues in the cluster (1 to 9)      */
++#elif defined (__LITTLE_ENDIAN_BITFIELD)
++    Uint8  qos_q_cnt:4,             /* The number of QOS queues in the cluster (1 to 9) */
++           egr_q_cnt:4;             /* The total number of egress queues in WFQ its always 1 */
++#endif
++    Uint8  flags;                   /* Bit 0 : Set if the cluster is working in WFQ scheduling mode. cleared when its strict scheduling mode */
++    Uint8  qos_q0;                  /* The queue index (0 to 127) of each QOS queue in the cluster listed in priority order */
++    Uint8  qos_q1;
++    Uint8  qos_q2;
++    Uint8  qos_q3;
+ 
+-    Uint32                      credit_per_iteration;       /* The Max bytes that can be transmitted per iteration. Automatically configured from the line rate and iteration rate */
++    Uint8  qos_q4;
++    Uint8  qos_q5;
++    Uint8  qos_q6;
++    Uint8  qos_q7;
+ 
+-    Uint16                      leftover_credit;            /* Temporary variable, holding the total credit of all queues that are not utilizing their whole credit */
+-    Uint16                      act_Qs_weight_sum;          /* Temporary variable, holding sum of all queues that are active within some calculation scope. */
++    Uint16 egr_q1;                  /* The Queue index of every egress queue enumerated in Egress Queue Count only 1 Egress queue is valid in WFQ */
++    Uint16 egr_q0;
+ 
+-    Uint16                      qda_queue;                  /* The queue which we activated QDA on. INVALID_QDA_QUEUE indicates that QDA wasn't activated on any on the cluster queues */
+-    
+-#if defined(__BIG_ENDIAN_BITFIELD)
+-    Uint8       egr_q_cnt:4,              /* The total number of egress queues in WFQ its always 1 */
+-                qos_q_cnt:4;              /* The number of QOS queues in the cluster (1 to 9)      */
+-#elif defined (__LITTLE_ENDIAN_BITFIELD)
+-    Uint8       qos_q_cnt:4,              /* The number of QOS queues in the cluster (1 to 9) */
+-	            egr_q_cnt:4;              /* The total number of egress queues in WFQ its always 1 */
+-#endif
++    Uint16 egr_q3;
++    Uint16 egr_q2;
+ 
+-    Uint8                       flags;                      /* Bit 0 : Set if the cluster is working in WFQ scheduling mode. cleared when its strict scheduling mode */
+-
+-    Uint8                       qos_q3;                     /* The queue index (0 to 127) of each QOS queue in the cluster listed in priority order */
+-    Uint8                       qos_q2;
+-    Uint8                       qos_q1;
+-    Uint8                       qos_q0;
+-
+-    Uint8                       qos_q7;
+-    Uint8                       qos_q6;
+-    Uint8                       qos_q5;
+-    Uint8                       qos_q4;
+-
+-    Uint16                      egr_q1;                     /* The Queue index of every egress queue enumerated in Egress Queue Count only 1 Egress queue is valid in WFQ */
+-    Uint16                      egr_q0;
+-
+-    Uint16                      egr_q3;
+-    Uint16                      egr_q2;
+-
+-    Uint32                      egress_Q_pending_bytes;	  /* Number of pending bytes in the output queue  */
+-    Uint32                      reserve[7];               /* Not used for WFQ cluster TBD can indicate that this is wfq cluster  */
++    Uint32 egress_Q_pending_bytes;  /* Number of pending bytes in the output queue  */
+     
+ }
+ PP_QOS_FW_WFQ_CLST_CFG_t;

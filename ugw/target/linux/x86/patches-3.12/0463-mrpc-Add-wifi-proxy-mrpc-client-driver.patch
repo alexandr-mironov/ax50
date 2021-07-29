@@ -1,0 +1,497 @@
+From 78824baa36cd9a32217d5d2516756775261984de Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 21 Jul 2016 17:29:49 -0700
+Subject: [PATCH 463/639] mrpc: Add wifi proxy mrpc client driver
+
+Added wifi proxy client driver for the wifi mux driver to communicate
+with the wifi proxy server on ARM, to get the PID and VPID of wifi
+session.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/mrpc/Kconfig                  |   6 +
+ drivers/mrpc/core/Makefile            |   1 +
+ drivers/mrpc/core/wifi_proxy_client.c | 432 ++++++++++++++++++++++++++++++++++
+ include/linux/mrpc.h                  |   4 +
+ 4 files changed, 443 insertions(+)
+ create mode 100644 drivers/mrpc/core/wifi_proxy_client.c
+
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+index 4f0c325..9fd282d 100755
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -47,3 +47,9 @@ config MRPC_HIL_CMDS_CLIENT
+     help
+        Enable Puma7 HIL command handle MRPC between ATOM and ARM
+ 
++config MRPC_WIFI_PROXY_CLIENT
++    bool "ATOM to ARM wifi commands over HW Mailbox"
++    depends on MRPC
++    default n
++    help
++       Enable wifi MRPC between ATOM and ARM
+diff --git a/drivers/mrpc/core/Makefile b/drivers/mrpc/core/Makefile
+index b63e978..5c818d4 100644
+--- a/drivers/mrpc/core/Makefile
++++ b/drivers/mrpc/core/Makefile
+@@ -2,3 +2,4 @@ obj-$(CONFIG_MRPC) += mrpc.o
+ obj-$(CONFIG_MRPC_CONNTRACK_CLIENT) += conntrack_client.o
+ obj-$(CONFIG_MRPC_PP_CLIENT) += pp_client.o
+ obj-$(CONFIG_MRPC_HIL_CMDS_CLIENT) += hil_cmds_client.o
++obj-$(CONFIG_MRPC_WIFI_PROXY_CLIENT) += wifi_proxy_client.o
+diff --git a/drivers/mrpc/core/wifi_proxy_client.c b/drivers/mrpc/core/wifi_proxy_client.c
+new file mode 100644
+index 0000000..ea42763
+--- /dev/null
++++ b/drivers/mrpc/core/wifi_proxy_client.c
+@@ -0,0 +1,432 @@
++/*
++ *
++ * wifi_proxy_client.c
++ * Description:
++ * wifi_proxy over MRPC client driver
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++/************************************************/
++/**                    Includes                 */
++/************************************************/
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/slab.h>
++#include <linux/byteorder/generic.h>
++#include <linux/types.h>
++#include <linux/mutex.h>
++#include <linux/err.h>
++#include <linux/mrpc.h>
++
++#define WIFI_PROXY_MAX_PIDS         (4)
++#define WIFI_PROXY_MAX_VAPIDS       (50)
++#define WIFI_PROXY_INVALID_PID      (-1)
++#define MRPC_WIFI_PROXY_TIMEOUT_MS  (800)
++/* driver private database */
++struct wifi_proxy_private {
++	struct kobject *kobj;           /* kobj for sysfs */
++	struct mrpc_client *mrpc;       /* mrpc client handle */
++	int    pids[WIFI_PROXY_MAX_PIDS];
++	int    vpids[WIFI_PROXY_MAX_PIDS][WIFI_PROXY_MAX_VAPIDS];
++	int    DevID;
++	int    VapID;
++};
++
++enum wifi_dev_id {
++	WIFI_DEV_ID_0 = 0,
++	WIFI_DEV_ID_1,
++	WIFI_DEV_ID_2,
++	WIFI_DEV_ID_3,
++	WIFI_DEV_ID_MAX,
++} wifi_dev_id_e;
++
++enum wifi_vap_id {
++	WIFI_VAP_ID_0 = 0,
++	WIFI_VAP_ID_1,
++	WIFI_VAP_ID_2,
++	WIFI_VAP_ID_3,
++	WIFI_VAP_ID_MAX,
++} wifi_vap_id_e;
++
++struct wifi_proxy_args {
++	uint32_t devId;
++	uint32_t vapId;
++	uint32_t rate;
++	uint32_t pps;
++};
++
++enum wifi_mrpc_id {
++	WIFI_PROXY_PID_CREATE_PROC = 0,
++	WIFI_PROXY_PID_DELETE_PROC,
++	WIFI_PROXY_VAP_CREATE_PROC,
++	WIFI_PROXY_VAP_DELETE_PROC,
++	WIFI_PROXY_MAX_PROC,
++};
++
++static struct wifi_proxy_private *priv;
++
++static void wifi_proxy_initialize_pid_vpids(void)
++{
++	int i, j;
++
++	if (!priv)
++		return;
++
++	for (i = 0; i < WIFI_PROXY_MAX_PIDS; i++) {
++		priv->pids[i] = WIFI_PROXY_INVALID_PID;
++		for (j = 0; j < WIFI_PROXY_MAX_VAPIDS; j++)
++			priv->vpids[i][j] = WIFI_PROXY_INVALID_PID;
++	}
++
++}
++
++static int make_mrpc_call(enum wifi_mrpc_id proc_id,
++		struct wifi_proxy_args *args, int *reply)
++{
++	int ret, errorcode;
++	int repargs;
++	ret = mrpc_call(priv->mrpc, proc_id,
++			args, sizeof(struct wifi_proxy_args),
++			&repargs, sizeof(repargs),
++			MRPC_WIFI_PROXY_TIMEOUT_MS, &errorcode);
++	if (ret) {
++		*reply = -1;
++		pr_err("mrpc call proc %d failed ret = %d errorcode = %08X\n",
++				proc_id, ret, errorcode);
++	} else {
++		*reply = be32_to_cpu(repargs);
++		pr_debug("PROC ID %d Received Handle = %d\n", proc_id, repargs);
++	}
++	return ret;
++}
++int mrpc_wifi_proxy_pid_create(uint32_t DevID, int *pid_handle)
++{
++	struct  wifi_proxy_args args;
++	if (!priv || !pid_handle)
++		return -EINVAL;
++
++	pr_debug("call wifi_proxy_pid_create %u\n", DevID);
++
++	args.devId = cpu_to_be32(DevID);
++	/* Create new wifi_proxy pid according to devId,
++	 * return actual pid number to be placed in descriptor */
++	return make_mrpc_call(WIFI_PROXY_PID_CREATE_PROC, &args, pid_handle);
++}
++EXPORT_SYMBOL(mrpc_wifi_proxy_pid_create);
++
++int mrpc_wifi_proxy_vap_create(uint32_t DevID, uint32_t VapID,
++				uint32_t rate, uint32_t pps,
++				int *vpid_handle)
++{
++	struct  wifi_proxy_args args;
++	if (!priv || !vpid_handle)
++		return -EINVAL;
++	pr_debug("call wifi_proxy_vpid_create %u %u\n", DevID, VapID);
++
++	args.devId = cpu_to_be32(DevID);
++	args.vapId = cpu_to_be32(VapID);
++	args.rate  = cpu_to_be32(rate);
++	args.pps   = cpu_to_be32(pps);
++	/* Create new wifi_proxy pid according to devId,
++	 * return actual pid number to be placed in descriptor */
++	return make_mrpc_call(WIFI_PROXY_VAP_CREATE_PROC, &args, vpid_handle);
++}
++EXPORT_SYMBOL(mrpc_wifi_proxy_vap_create);
++
++int mrpc_wifi_proxy_pid_delete(uint32_t DevID, int *retCode)
++{
++	struct wifi_proxy_args args;
++	if (!priv || !retCode)
++		return -EINVAL;
++
++	pr_debug("call wifi_proxy_pid_delete %u\n", DevID);
++
++	args.devId = cpu_to_be32(DevID);
++	args.vapId = 0xFFFFFFFF;
++
++	return make_mrpc_call(WIFI_PROXY_PID_DELETE_PROC, &args, retCode);
++}
++EXPORT_SYMBOL(mrpc_wifi_proxy_pid_delete);
++
++int mrpc_wifi_proxy_vap_delete(uint32_t DevID, uint32_t VapID, int *retCode)
++{
++	struct wifi_proxy_args args;
++	if (!priv || !retCode)
++		return -EINVAL;
++
++	pr_debug("call wifi_proxy_vap_delete %u %u\n", DevID, VapID);
++
++	args.devId = cpu_to_be32(DevID);
++	args.vapId = cpu_to_be32(VapID);
++
++	return make_mrpc_call(WIFI_PROXY_VAP_DELETE_PROC, &args, retCode);
++}
++EXPORT_SYMBOL(mrpc_wifi_proxy_vap_delete);
++
++static ssize_t wifi_proxy_client_call(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf, size_t cnt)
++{
++	ssize_t ret;
++	int retCode;
++	enum wifi_mrpc_id proc_id;
++	unsigned long attribute_value;
++
++	ret = kstrtoul(buf, 0, &attribute_value);
++	if (ret != 0)
++		return ret;
++
++	proc_id = attribute_value;
++
++	if (!priv || proc_id >= WIFI_PROXY_MAX_PROC)
++		return -EINVAL;
++	switch (proc_id) {
++	case WIFI_PROXY_PID_CREATE_PROC:
++		if (priv->pids[priv->DevID] == WIFI_PROXY_INVALID_PID) {
++			ret = mrpc_wifi_proxy_pid_create(priv->DevID,
++					&priv->pids[priv->DevID]);
++		} else {
++			pr_info(
++			"Already Allocated PID DevID:Handle [%d:%d]\n",
++			priv->DevID,
++			priv->pids[priv->DevID]);
++		}
++		break;
++	case WIFI_PROXY_VAP_CREATE_PROC:
++		if (priv->pids[priv->DevID] != WIFI_PROXY_INVALID_PID) {
++			if (priv->vpids[priv->DevID][priv->VapID] ==
++					WIFI_PROXY_INVALID_PID)
++				ret = mrpc_wifi_proxy_vap_create(
++				priv->DevID, priv->VapID, 0, 0,
++				&priv->vpids[priv->DevID][priv->VapID]);
++			else
++				pr_info(
++				"Already Allocated VapID:Handle [%d]:[%d]\n",
++				priv->VapID,
++				priv->vpids[priv->DevID][priv->VapID]);
++		} else {
++			pr_info("Invalid DevID:Handle [%d:%d]\n",
++					priv->DevID,
++					priv->pids[priv->DevID]);
++		}
++		break;
++	case WIFI_PROXY_PID_DELETE_PROC:
++		if (priv->pids[priv->DevID] != WIFI_PROXY_INVALID_PID) {
++			ret = mrpc_wifi_proxy_pid_delete(priv->DevID, &retCode);
++			if (!ret)
++				priv->pids[priv->DevID] =
++					WIFI_PROXY_INVALID_PID;
++		} else {
++			pr_info("Invalid DevID:Handle [%d:%d]\n",
++					priv->DevID, priv->pids[priv->DevID]);
++		}
++		break;
++	case WIFI_PROXY_VAP_DELETE_PROC:
++		if (priv->pids[priv->DevID] != WIFI_PROXY_INVALID_PID &&
++			priv->vpids[priv->DevID][priv->VapID] !=
++					WIFI_PROXY_INVALID_PID) {
++			ret = mrpc_wifi_proxy_vap_delete(priv->DevID,
++					priv->VapID, &retCode);
++			if (!ret)
++				priv->vpids[priv->DevID][priv->VapID] =
++					WIFI_PROXY_INVALID_PID;
++		} else {
++			pr_info(
++			"Invalid DevID:Handle [%d:%d] VapiID:Handle [%d:%d]\n",
++			priv->DevID, priv->pids[priv->DevID],
++			priv->VapID,
++			priv->vpids[priv->DevID][priv->VapID]);
++		}
++		break;
++	default:
++		break;
++	}
++	if (!ret)
++		ret = cnt;
++	return ret;
++}
++
++static ssize_t pid_vpid_show(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf)
++{
++	int ret = 0, i, j;
++	char *ptr = buf;
++	char *end = buf + PAGE_SIZE;
++
++	if (!priv)
++		return -EINVAL;
++	if (!strncmp(attr->attr.name, "PIDS", 4)) {
++		for (i = 0; i < WIFI_PROXY_MAX_PIDS; i++)
++			ptr += scnprintf(ptr, (end-ptr), "%02d:%03d ",
++							i, priv->pids[i]);
++		ptr += scnprintf(ptr, (end-ptr), "\n");
++	} else if (!strncmp(attr->attr.name, "VPIDS", 6)) {
++		for (i = 0; i < WIFI_PROXY_MAX_PIDS; i++) {
++			ptr += scnprintf(ptr, (end-ptr),
++					"\nDevID-%02d:%3d\n", i,
++					priv->pids[i]);
++			for (j = 0; j < WIFI_PROXY_MAX_VAPIDS; j++) {
++				ptr += scnprintf(ptr, (end-ptr),
++						"%02d:%03d ",
++						j, priv->vpids[i][j]);
++			}
++		}
++		ptr += scnprintf(ptr, (end-ptr), "\n");
++	} else if (!strncmp(attr->attr.name, "DevID", 5)) {
++		ptr += scnprintf(buf, (end-ptr), "%d\n", priv->DevID);
++	} else if (!strncmp(attr->attr.name, "VapID", 5)) {
++		ptr += scnprintf(buf, (end-ptr), "%d\n", priv->VapID);
++	}
++	ret = ptr - buf;
++
++	return ret;
++}
++
++static ssize_t devid_vapid_store(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf, size_t cnt)
++{
++	int ret = 0;
++	unsigned long attribute_value;
++
++	ret = kstrtoul(buf, 0, &attribute_value);
++	if (ret != 0)
++		return ret;
++
++	if (!priv)
++		return -EINVAL;
++	if (!strncmp(attr->attr.name, "DevID", 5)) {
++		if (attribute_value < WIFI_PROXY_MAX_PIDS)
++			priv->DevID = attribute_value;
++		else
++			ret = -EINVAL;
++	} else if (!strncmp(attr->attr.name, "VapID", 5)) {
++		if (attribute_value < WIFI_PROXY_MAX_VAPIDS)
++			priv->VapID = attribute_value;
++		else
++			ret = -EINVAL;
++	}
++	if (!ret)
++		ret = cnt;
++	return ret;
++}
++
++
++static struct kobj_attribute client_call =
++	__ATTR(client_call, S_IWUSR, NULL, wifi_proxy_client_call);
++static struct kobj_attribute PIDS =
++	__ATTR(PIDS, S_IRUSR, pid_vpid_show, NULL);
++static struct kobj_attribute VPIDS =
++	__ATTR(VPIDS, S_IRUSR, pid_vpid_show, NULL);
++static struct kobj_attribute DevID =
++	__ATTR(DevID, S_IWUSR|S_IRUSR, pid_vpid_show, devid_vapid_store);
++static struct kobj_attribute VapID =
++	__ATTR(VapID, S_IWUSR|S_IRUSR, pid_vpid_show, devid_vapid_store);
++
++static struct attribute *wifi_proxy_attrs[] = {
++	&client_call.attr,
++	&PIDS.attr,
++	&VPIDS.attr,
++	&DevID.attr,
++	&VapID.attr,
++	NULL,
++};
++
++static struct attribute_group wifi_proxy_attrs_group = {
++	.attrs = wifi_proxy_attrs,
++};
++
++/**
++ * wifi_proxy_client_init
++ *
++ * This function is called when the wifi_proxy_client module is
++ * initialized.
++ * @return 0 for success, error code otherwise
++ */
++static __init int wifi_proxy_client_init(void)
++{
++	int ret;
++
++	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
++	if (!priv) {
++		pr_err("memory allocation failed");
++		return -ENOMEM;
++	}
++	priv->mrpc = mrpc_client_register(MRPC_RESERVED_ID_WIFI_PROXY_FUNC_CALL,
++			"Wifi Proxy");
++	if (!priv->mrpc) {
++		pr_err("failed to register wifi_proxy");
++		ret = -ENODEV;
++		goto out_free_mem;
++	}
++	priv->kobj = kobject_create_and_add("wifi_mrpc_client", NULL);
++	if (!priv->kobj) {
++		ret = -ENOMEM;
++		goto out_mrpc_unreg;
++	}
++	wifi_proxy_initialize_pid_vpids();
++	ret = sysfs_create_group(priv->kobj,
++				&wifi_proxy_attrs_group);
++	if (ret) {
++		pr_err("sysfs_create_group failed (ret=%d)", ret);
++		goto out_kobj_put;
++	}
++
++	return ret;
++
++out_kobj_put:
++	kobject_put(priv->kobj);
++out_mrpc_unreg:
++	ret = mrpc_client_unregister(priv->mrpc);
++out_free_mem:
++	kfree(priv);
++	return ret;
++}
++
++/**
++ * wifi_proxy_client_exit
++ *
++ * This function is called when the wifi_proxy_client module is
++ * removed.
++ * @return 0 for success error code otherwise
++ */
++static __exit int wifi_proxy_client_exit(void)
++{
++	int ret;
++	ret = mrpc_client_unregister(priv->mrpc);
++	sysfs_remove_group(priv->kobj, &wifi_proxy_attrs_group);
++	kfree(priv);
++	priv = NULL;
++	return ret;
++}
++
++module_init(wifi_proxy_client_init);
++module_exit(wifi_proxy_client_exit);
++
++MODULE_AUTHOR("Intel Corporation");
++MODULE_DESCRIPTION("wifi_proxy mrpc client");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.0");
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+index f49828c..7de084d 100644
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -80,6 +80,10 @@ enum {
+     MRPC_RESERVED_ID_HANDSHAKE,
+     MRPC_RESERVED_ID_CONNTRACK,
+     MRPC_RESERVED_ID_HILCMDS,
++    MRPC_RESERVED_ID_CPPI,
++#ifdef CONFIG_MRPC_WIFI_PROXY_CLIENT
++    MRPC_RESERVED_ID_WIFI_PROXY_FUNC_CALL,
++#endif
+     MRPC_RESERVED_ID_LAST,
+ };
+ 
+-- 
+2.10.1
+

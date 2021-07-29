@@ -1,0 +1,192 @@
+# HG changeset patch
+# Parent e82319a47a05c1af0958b50c562dca929fbbe4e6
+
+diff --git a/drivers/leds/ledtrig-netdev.c b/drivers/leds/ledtrig-netdev.c
+--- a/drivers/leds/ledtrig-netdev.c
++++ b/drivers/leds/ledtrig-netdev.c
+@@ -73,7 +73,7 @@
+ #define MODE_RX   4
+ 
+ struct led_netdev_data {
+-	rwlock_t lock;
++	spinlock_t lock;
+ 
+ 	struct timer_list timer;
+ 	struct notifier_block notifier;
+@@ -97,8 +97,6 @@ static void set_baseline_state(struct le
+ 
+ 	if ((trigger_data->mode & (MODE_TX | MODE_RX)) != 0 && trigger_data->link_up)
+ 		mod_timer(&trigger_data->timer, jiffies + trigger_data->interval);
+-	else
+-		del_timer(&trigger_data->timer);
+ }
+ 
+ static ssize_t led_device_name_show(struct device *dev,
+@@ -107,9 +105,9 @@ static ssize_t led_device_name_show(stru
+ 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+ 	struct led_netdev_data *trigger_data = led_cdev->trigger_data;
+ 
+-	read_lock(&trigger_data->lock);
++	spin_lock_bh(&trigger_data->lock);
+ 	sprintf(buf, "%s\n", trigger_data->device_name);
+-	read_unlock(&trigger_data->lock);
++	spin_unlock_bh(&trigger_data->lock);
+ 
+ 	return strlen(buf) + 1;
+ }
+@@ -127,8 +125,9 @@ static ssize_t led_device_name_store(str
+ 	if (size < 0 || size >= IFNAMSIZ)
+ 		return -EINVAL;
+ 
+-	write_lock(&trigger_data->lock);
++	spin_lock_bh(&trigger_data->lock);
+ 
++	del_timer_sync(&trigger_data->timer);	
+ 	strcpy(trigger_data->device_name, buf);
+ 	if (size > 0 && trigger_data->device_name[size-1] == '\n')
+ 		trigger_data->device_name[size-1] = 0;
+@@ -142,10 +141,9 @@ static ssize_t led_device_name_store(str
+ #endif
+ 		if (trigger_data->net_dev != NULL)
+ 			trigger_data->link_up = (dev_get_flags(trigger_data->net_dev) & IFF_LOWER_UP) != 0;
+-		set_baseline_state(trigger_data); /* updates LEDs, may start timers */
+ 	}
+-
+-	write_unlock(&trigger_data->lock);
++	set_baseline_state(trigger_data);
++	spin_unlock_bh(&trigger_data->lock);
+ 	return size;
+ }
+ 
+@@ -157,7 +155,7 @@ static ssize_t led_mode_show(struct devi
+ 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+ 	struct led_netdev_data *trigger_data = led_cdev->trigger_data;
+ 
+-	read_lock(&trigger_data->lock);
++	spin_lock_bh(&trigger_data->lock);
+ 
+ 	if (trigger_data->mode == 0) {
+ 		strcpy(buf, "none\n");
+@@ -171,7 +169,7 @@ static ssize_t led_mode_show(struct devi
+ 		strcat(buf, "\n");
+ 	}
+ 
+-	read_unlock(&trigger_data->lock);
++	spin_unlock_bh(&trigger_data->lock);
+ 
+ 	return strlen(buf)+1;
+ }
+@@ -212,10 +210,11 @@ static ssize_t led_mode_store(struct dev
+ 	if (new_mode == -1)
+ 		return -EINVAL;
+ 
+-	write_lock(&trigger_data->lock);
++	spin_lock_bh(&trigger_data->lock);
++	del_timer_sync(&trigger_data->timer);
+ 	trigger_data->mode = new_mode;
+ 	set_baseline_state(trigger_data);
+-	write_unlock(&trigger_data->lock);
++	spin_unlock_bh(&trigger_data->lock);
+ 
+ 	return size;
+ }
+@@ -228,9 +227,9 @@ static ssize_t led_interval_show(struct 
+ 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+ 	struct led_netdev_data *trigger_data = led_cdev->trigger_data;
+ 
+-	read_lock(&trigger_data->lock);
++	spin_lock_bh(&trigger_data->lock);
+ 	sprintf(buf, "%u\n", jiffies_to_msecs(trigger_data->interval));
+-	read_unlock(&trigger_data->lock);
++	spin_unlock_bh(&trigger_data->lock);
+ 
+ 	return strlen(buf) + 1;
+ }
+@@ -250,10 +249,11 @@ static ssize_t led_interval_store(struct
+ 
+ 	/* impose some basic bounds on the timer interval */
+ 	if (count == size && value >= 5 && value <= 10000) {
+-		write_lock(&trigger_data->lock);
++		spin_lock_bh(&trigger_data->lock);
++		del_timer_sync(&trigger_data->timer);
+ 		trigger_data->interval = msecs_to_jiffies(value);
+ 		set_baseline_state(trigger_data); // resets timer
+-		write_unlock(&trigger_data->lock);
++		spin_unlock_bh(&trigger_data->lock);
+ 		ret = count;
+ 	}
+ 
+@@ -272,8 +272,9 @@ static int netdev_trig_notify(struct not
+ 	if (evt != NETDEV_UP && evt != NETDEV_DOWN && evt != NETDEV_CHANGE && evt != NETDEV_REGISTER && evt != NETDEV_UNREGISTER)
+ 		return NOTIFY_DONE;
+ 
+-	write_lock(&trigger_data->lock);
++	spin_lock_bh(&trigger_data->lock);
+ 
++	del_timer_sync(&trigger_data->timer);
+ 	if (strcmp(dev->name, trigger_data->device_name))
+ 		goto done;
+ 
+@@ -298,7 +299,7 @@ static int netdev_trig_notify(struct not
+ 	set_baseline_state(trigger_data);
+ 
+ done:
+-	write_unlock(&trigger_data->lock);
++	spin_unlock_bh(&trigger_data->lock);
+ 	return NOTIFY_DONE;
+ }
+ 
+@@ -310,12 +311,11 @@ static void netdev_trig_timer(unsigned l
+ 	unsigned new_activity;
+ 	struct rtnl_link_stats64 temp;
+ 
+-	write_lock(&trigger_data->lock);
+ 
+ 	if (!trigger_data->link_up || !trigger_data->net_dev || (trigger_data->mode & (MODE_TX | MODE_RX)) == 0) {
+ 		/* we don't need to do timer work, just reflect link state. */
+ 		led_set_brightness(trigger_data->led_cdev, ((trigger_data->mode & MODE_LINK) != 0 && trigger_data->link_up) ? LED_FULL : LED_OFF);
+-		goto no_restart;
++		return;
+ 	}
+ 
+ 	dev_stats = dev_get_stats(trigger_data->net_dev, &temp);
+@@ -347,9 +347,6 @@ static void netdev_trig_timer(unsigned l
+ 
+ 	trigger_data->last_activity = new_activity;
+ 	mod_timer(&trigger_data->timer, jiffies + trigger_data->interval);
+-
+-no_restart:
+-	write_unlock(&trigger_data->lock);
+ }
+ 
+ static void netdev_trig_activate(struct led_classdev *led_cdev)
+@@ -361,7 +358,7 @@ static void netdev_trig_activate(struct 
+ 	if (!trigger_data)
+ 		return;
+ 
+-	rwlock_init(&trigger_data->lock);
++	spin_lock_init(&trigger_data->lock);
+ 
+ 	trigger_data->notifier.notifier_call = netdev_trig_notify;
+ 	trigger_data->notifier.priority = 10;
+@@ -412,16 +409,15 @@ static void netdev_trig_deactivate(struc
+ 		device_remove_file(led_cdev->dev, &dev_attr_mode);
+ 		device_remove_file(led_cdev->dev, &dev_attr_interval);
+ 
+-		write_lock(&trigger_data->lock);
+-
++		spin_lock_bh(&trigger_data->lock);
++		
++		del_timer_sync(&trigger_data->timer);
+ 		if (trigger_data->net_dev) {
+ 			dev_put(trigger_data->net_dev);
+ 			trigger_data->net_dev = NULL;
+ 		}
+ 
+-		write_unlock(&trigger_data->lock);
+-
+-		del_timer_sync(&trigger_data->timer);
++		spin_unlock_bh(&trigger_data->lock);
+ 
+ 		kfree(trigger_data);
+ 	}

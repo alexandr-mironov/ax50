@@ -1,0 +1,217 @@
+# HG changeset patch
+# Parent 7072554d10a5ff40bb69368dc27dc6ecb0c482c2
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1375,12 +1375,14 @@ typedef struct // former TI_PP_SESSION
+ #else
+     Uint8                   cluster;
+ #endif
+-    /* Flag which indicates if the session was for a ROUTER or BRIDGE
++    Uint8                   flags;
++     /* Flag which indicates if the session was for a ROUTER or BRIDGE
+      * This information is required because if the session is for the
+      * ROUTER the PDSP needs to ensure that all packets matching their
+      * session have their TTL decremented. On the other hand for BRIDGE
+      * sessions this is not do be done. */
+-    Uint8                   is_routable_session;
++                                    #define PP_IS_ROUTABLE_SESSION   0x1
++                                    #define PP_IS_IRREG_MOCA         0x2
+ #if PUMA7_OR_NEWER_SOC_TYPE
+     Uint8                   session_type;   /* Type: AVALANCHE_PP_SESSIONS_TYPE_e */
+ #else
+@@ -1408,8 +1410,6 @@ typedef struct // former TI_PP_SESSION
+     Uint32                  reserved1;
+     Uint32                  reserved2;
+     Uint32                  reserved3;
+-
+-    Uint8                   is_irreg_moca;
+ #endif
+ }
+ AVALANCHE_PP_SESSION_INFO_t;
+diff --git a/include/net/netfilter/nf_conntrack.h b/include/net/netfilter/nf_conntrack.h
+--- a/include/net/netfilter/nf_conntrack.h
++++ b/include/net/netfilter/nf_conntrack.h
+@@ -113,6 +113,10 @@ struct nf_conn {
+ 	/* These are my tuples; original and reply */
+ 	struct nf_conntrack_tuple_hash tuplehash[IP_CT_DIR_MAX];
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++    struct list_head pp_session_list_head;
++#endif /* CONFIG_TI_PACKET_PROCESSOR */
++
+ 	/* Have we seen traffic both ways yet? (bitset) */
+ 	unsigned long status;
+ 
+diff --git a/include/net/netfilter/nf_conntrack_tuple.h b/include/net/netfilter/nf_conntrack_tuple.h
+--- a/include/net/netfilter/nf_conntrack_tuple.h
++++ b/include/net/netfilter/nf_conntrack_tuple.h
+@@ -117,25 +117,6 @@ static inline void nf_ct_dump_tuple(cons
+ /* Connections have two entries in the hash table: one for each way */
+ struct nf_conntrack_tuple_hash {
+ 	struct hlist_nulls_node hnnode;
+-
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-
+-#if PUMA7_OR_NEWER_SOC_TYPE
+-#define    TI_PP_SESSION_CT_IDLE            0xA000
+-#define    TI_PP_SESSION_CT_TCP_UPDATE      0xB000
+-#define IS_TI_PP_SESSION_CT_INVALID(s)      ((s) >= TI_PP_SESSION_CT_IDLE)
+-#define IS_TI_PP_SESSION_CT_IDLE(s)         ((s) == TI_PP_SESSION_CT_IDLE)
+-#else
+-#define    TI_PP_SESSION_CT_IDLE            0x8000
+-#define    TI_PP_SESSION_CT_TCP_UPDATE      0x4000
+-#define IS_TI_PP_SESSION_CT_INVALID(s)      ((s) & 0xF000)
+-#define IS_TI_PP_SESSION_CT_IDLE(s)         ((s) & TI_PP_SESSION_CT_IDLE)
+-#endif
+-
+-    unsigned short        ti_pp_session_handle;
+-    unsigned short        ti_pp_sessions_count;
+-#endif /* CONFIG_TI_PACKET_PROCESSOR */
+-
+ 	struct nf_conntrack_tuple tuple;
+ };
+ 
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -30,6 +30,7 @@
+ #include <linux/kernel.h>
+ #include <linux/netdevice.h>
+ #include <linux/socket.h>
++#include <linux/list.h>
+ #include <linux/mm.h>
+ #include <linux/nsproxy.h>
+ #include <linux/rculist_nulls.h>
+@@ -806,17 +811,8 @@ redo:
+ #endif
+ 			){
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-				/* Check if the ORIGINAL Tuple is being accelerated? */
+-				if ((!IS_TI_PP_SESSION_CT_INVALID(ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle)) &&
+-						(1 == ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_sessions_count)) {
+-					ti_hil_pp_event(TI_CT_NETFILTER_DELETE_SESSION,
+-							(void *)ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle);
+-				}
+-				if ((!IS_TI_PP_SESSION_CT_INVALID(ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle)) &&
+-						(1 == ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_sessions_count)) {
+-					ti_hil_pp_event(TI_CT_NETFILTER_DELETE_SESSION,
+-							(void *)ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle);
+-				}
++                /* Flush PP sessions, delete all the pp sessions that corresponds to the conntrack */
++                ti_hil_pp_event(TI_CT_NETFILTER_DELETE_CONNTRACK_SESSIONS, (void *)ct);
+ #endif
+ 				break;
+ 			} else {
+@@ -933,11 +929,8 @@ static struct nf_conn *
+ 	}
+ #endif
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-    ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle = TI_PP_SESSION_CT_IDLE;
+-    ct->tuplehash[IP_CT_DIR_REPLY   ].ti_pp_session_handle = TI_PP_SESSION_CT_IDLE;
++    INIT_LIST_HEAD(&ct->pp_session_list_head);
+     ct->ti_pp_status_flag = 0;
+-    ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_sessions_count = 0;
+-    ct->tuplehash[IP_CT_DIR_REPLY   ].ti_pp_sessions_count = 0;
+ #endif /* CONFIG_TI_PACKET_PROCESSOR */
+ 	/* Because we use RCU lookups, we set ct_general.use to zero before
+ 	 * this is inserted in any list.
+diff --git a/net/netfilter/nf_conntrack_proto_tcp.c b/net/netfilter/nf_conntrack_proto_tcp.c
+--- a/net/netfilter/nf_conntrack_proto_tcp.c
++++ b/net/netfilter/nf_conntrack_proto_tcp.c
+@@ -869,31 +869,9 @@ static int tcp_packet(struct nf_conn *ct
+ 		    || (ct->proto.tcp.last_dir == dir
+ 		        && ct->proto.tcp.last_index == TCP_RST_SET)) {
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-                /* Check if the ORIGINAL Tuple is being accelerated? */
+-                if ((!IS_TI_PP_SESSION_CT_INVALID(ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle)) &&
+-                    (1 == ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_sessions_count))
+-                {
+-                    /* YES. There is no point in accelerating this; since the session will be deleted. */
+-#ifdef CONFIG_MACH_PUMA5
+-                    if (ti_ppm_delete_session (ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle, NULL) < 0)
+-                        printk ("ERROR: Unable to delete the ORIGINAL session\n");
+-#else
+-                    ti_hil_pp_event(TI_CT_NETFILTER_DELETE_SESSION, (void *)ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle);
+-#endif
+-                }
++			/* Flush PP sessions, delete all the pp sessions that corresponds to the conntrack */
++			ti_hil_pp_event(TI_CT_NETFILTER_DELETE_CONNTRACK_SESSIONS, (void *)ct);
+ 
+-                /* Check if the REPLY Tuple is being accelerated? */
+-                if ((!IS_TI_PP_SESSION_CT_INVALID(ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle)) &&
+-                    (1 == ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_sessions_count))
+-                {
+-                    /* YES. There is no point in accelerating this; since the session will be deleted. */
+-#ifdef CONFIG_MACH_PUMA5
+-                    if (ti_ppm_delete_session (ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle, NULL) < 0)
+-                        printk ("ERROR: Unable to delete the REPLY session\n");
+-#else
+-                    ti_hil_pp_event(TI_CT_NETFILTER_DELETE_SESSION, (void *)ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle);
+-#endif
+-                }
+ #endif /* CONFIG_TI_PACKET_PROCESSOR */
+ 			/* Attempt to reopen a closed/aborted connection.
+ 			 * Delete this connection and look up again. */
+@@ -1047,8 +1025,7 @@ static int tcp_packet(struct nf_conn *ct
+      * Check here to see if both of the sessions are not accelerated and if so be the case do the 
+      * window checking else skip it! */
+ 
+-    if (IS_TI_PP_SESSION_CT_IDLE(ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle) &&
+-        IS_TI_PP_SESSION_CT_IDLE(ct->tuplehash[IP_CT_DIR_REPLY   ].ti_pp_session_handle))
++    if (list_empty(&ct->pp_session_list_head))
+ #endif
+ 	{
+ 		if (!tcp_in_window(ct, &ct->proto.tcp, dir, index,
+@@ -1057,18 +1034,8 @@ static int tcp_packet(struct nf_conn *ct
+ 			return -NF_ACCEPT;
+ 		}
+     }
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-    else
+-    {
+-        if (ct->tuplehash[dir].ti_pp_session_handle == TI_PP_SESSION_CT_TCP_UPDATE)
+-        {
+-            ct->proto.tcp.seen[dir].td_end = 0;   
+-            ct->tuplehash[dir].ti_pp_session_handle = TI_PP_SESSION_CT_IDLE;
+-            tcp_in_window(ct, &ct->proto.tcp, dir, index,skb, dataoff, th, pf);
+-        }
+-    }
+-#endif
+-     in_window:
++
++    in_window:
+ 	/* From now on we have got in-window packets */
+ 	ct->proto.tcp.last_index = index;
+ 	ct->proto.tcp.last_dir = dir;
+diff --git a/net/netfilter/nf_conntrack_standalone.c b/net/netfilter/nf_conntrack_standalone.c
+--- a/net/netfilter/nf_conntrack_standalone.c
++++ b/net/netfilter/nf_conntrack_standalone.c
+@@ -250,24 +250,14 @@ static int ct_seq_show(struct seq_file *
+ #endif
+ 
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+-    if (ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle == 0xFFFF)
++    if (list_empty(&ct->pp_session_list_head))
+     {
+-    	if (seq_printf(s, "[ORG XXX] "))
++    	if (seq_printf(s, "** NO PP ACCELERATION **   "))
+ 	    	goto release;
+     }
+     else
+     {
+-    	if (seq_printf(s, "ORG %d ", ct->tuplehash[IP_CT_DIR_ORIGINAL].ti_pp_session_handle))
+-	    	goto release;
+-    }
+-    if (ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle == 0xFFFF)
+-    {
+-    	if (seq_printf(s, "[REPLY XXX] "))
+-	    	goto release;
+-    }
+-    else
+-    {
+-    	if (seq_printf(s, "REPLY %d ", ct->tuplehash[IP_CT_DIR_REPLY].ti_pp_session_handle))
++    	if (seq_printf(s, "** PP ACCELERATED **"))
+ 	    	goto release;
+     }
+ #endif /* CONFIG_TI_PACKET_PROCESSOR */
