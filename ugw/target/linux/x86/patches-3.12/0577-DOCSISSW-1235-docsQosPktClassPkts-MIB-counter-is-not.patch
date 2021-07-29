@@ -1,0 +1,28 @@
+From b0b4d3cbff3872e6ecd42ab8e525d29fc504736f Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Mon, 16 Jan 2017 12:25:03 +0200
+Subject: [PATCH 577/639] DOCSISSW-1235-docsQosPktClassPkts MIB counter is not
+ incremented - Atom fixes
+
+---
+ include/linux/ti_hil.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 92269e2..4378c38 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -60,8 +60,8 @@ struct hil_core_notifier_param
+  **************** General Macros to get and set PP events *****************
+  **************************************************************************/
+ 
+-#define TI_HIL_NETDEV_GET_EVENT(skb)                   TI_HIL_GET_PP_INFO_FLAGS(skb) >> TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET
+-#define TI_HIL_NETDEV_SET_EVENT(skb, f)                TI_HIL_ADD_PP_INFO_FLAGS(skb, ((f) << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET))
++#define TI_HIL_NETDEV_GET_EVENT(skb)                   (TI_HIL_GET_PP_INFO_FLAGS(skb) >> TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET)
++#define TI_HIL_NETDEV_SET_EVENT(skb, f)                (TI_HIL_ADD_PP_INFO_FLAGS(skb, ((f) << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET)))
+ 
+ /**************************************************************************
+  ****************************** Module Identifers *************************
+-- 
+2.10.1
+

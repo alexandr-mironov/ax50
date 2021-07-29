@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_applications/osgi/kf/Makefile
+Package: knopflerfish_osgi
+Version: 3.2.0
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_ltqcpe_platform_vr9 @PACKAGE_kmod-ltqcpe_nand
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: OSGi
+Maintainer: 
+Source: knopflerfish_osgi-3.2.0.tar.gz
+Type: ipkg
+Description: OSGi
+http://www.knopflerfish.org/releases/3.2.0/
+
+@@
+
+

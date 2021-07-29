@@ -1,0 +1,44 @@
+From 48c9e0f1d243d0e5b47d51afa7fcd818fb7c337e Mon Sep 17 00:00:00 2001
+From: Eric Ernst <eric.ernst@intel.com>
+Date: Thu, 4 Sep 2014 13:09:43 -0700
+Subject: [PATCH 601/639] Add probe_slot functionality to sdhci-acpi
+
+Adding probe_slot functionality, similar to what is available
+for PCI.
+
+Change-Id: I9faf011a3c518d991d9759c2e2fdc61150f356b1
+Signed-off-by: Eric Ernst <eric.ernst@intel.com>
+(cherry picked from commit 00232ae98e3b30861b764185e13d9ffee2db7497)
+
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/host/sdhci-acpi.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/mmc/host/sdhci-acpi.c b/drivers/mmc/host/sdhci-acpi.c
+index 657bb87..8119786 100644
+--- a/drivers/mmc/host/sdhci-acpi.c
++++ b/drivers/mmc/host/sdhci-acpi.c
+@@ -71,6 +71,7 @@ struct sdhci_acpi_slot {
+ 	unsigned int	caps2;
+ 	mmc_pm_flag_t	pm_caps;
+ 	unsigned int	flags;
++	int (*probe_slot) (struct platform_device *);
+ };
+ 
+ struct sdhci_acpi_host {
+@@ -396,6 +397,11 @@ static int sdhci_acpi_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	if (c->slot) {
++		if (c->slot->probe_slot) {
++			err = c->slot->probe_slot(pdev);
++			if (err)
++				goto err_free;
++		}
+ 		if (c->slot->chip) {
+ 			host->ops            = c->slot->chip->ops;
+ 			host->quirks        |= c->slot->chip->quirks;
+-- 
+2.10.1
+

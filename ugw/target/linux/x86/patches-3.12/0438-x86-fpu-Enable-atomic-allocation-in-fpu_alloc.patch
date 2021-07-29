@@ -1,0 +1,60 @@
+From e040298661dfe46e811c1b3b312ef54ced0afa15 Mon Sep 17 00:00:00 2001
+From: Andrei Danaila <andrei.danaila@intel.com>
+Date: Mon, 27 Jun 2016 10:46:40 -0700
+Subject: [PATCH 438/639] x86: fpu: Enable atomic allocation in fpu_alloc
+
+fpu_alloc() can be called from uninterruptible context as boilerplate
+for setting up the FPU due to SSE optimized compiler instructions.
+
+Since GFP_KERNEL instructs the allocator that the context may sleep
+the following panic can be produced:
+
+[  243.927028] BUG: sleeping function called from invalid context at mm/slab.c:3060
+[  243.935447] in_atomic(): 1, irqs_disabled(): 0, pid: 2551, name: mountd
+[  243.942975] CPU: 0 PID: 2551 Comm: mountd Tainted: P             3.12.17-intelce-standard #28
+[  243.952624] Hardware name: Intel Corporation PUMA 7 A2 PLATFORM/TBD, BIOS CGM2.86C.382359.R.1605201816 05/20/2016
+[  243.964210]  00000000 00000000 e400be90 c1ae4147 000009f7 e400beb4 c12a521d c1d4c9a8
+[  243.973274]  00000001 00000000 000009f7 e463c588 e463c270 e463c5f8 e400bef8 c135a220
+[  243.982310]  00000000 e408cf20 e408cf50 e400bf5c c12b2b98 e421c530 000000d0 e6dc0aac
+[  243.991293] Call Trace:
+[  243.994161]  [<c1ae4147>] dump_stack+0x4b/0x79
+[  243.999256]  [<c12a521d>] __might_sleep+0xfd/0x110
+[  244.004739]  [<c135a220>] kmem_cache_alloc+0x30/0x3c0
+[  244.010527]  [<c12b2b98>] ? load_balance+0x128/0x790
+[  244.016205]  [<c123fb10>] ? do_spurious_interrupt_bug+0x40/0x40
+[  244.022969]  [<c1247a41>] init_fpu+0x51/0x90
+[  244.027868]  [<c123ee7f>] math_state_restore+0x1f/0x180
+[  244.033833]  [<c123fb10>] ? do_spurious_interrupt_bug+0x40/0x40
+[  244.040574]  [<c123fb2b>] do_device_not_available+0x1b/0x30
+[  244.046921]  [<c1aed204>] error_code+0x6c/0x74
+[  244.052026]  [<fa873fd4>] ? DownTree+0x44/0xa0 [drv_mxp_core]
+[  244.058581]  [<fa874133>] tmrobj_clock+0xa3/0x170 [drv_mxp_core]
+[  244.065423]  [<c1282efe>] tasklet_action+0x7e/0x120
+[  244.070998]  [<c1283417>] __do_softirq+0xf7/0x230
+[  244.076381]  [<c1283320>] ? remote_softirq_receive+0x40/0x40
+[  244.082816]  <IRQ>  [<c1283668>] ? irq_exit+0x48/0xa0
+[  244.088640]  [<c1240675>] ? do_IRQ+0x95/0xb0
+
+Change the allocation flag from GFP_KERNEL to GFP_ATOMIC.
+
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ arch/x86/include/asm/fpu-internal.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/fpu-internal.h b/arch/x86/include/asm/fpu-internal.h
+index 18cd5ed..8a4976c 100644
+--- a/arch/x86/include/asm/fpu-internal.h
++++ b/arch/x86/include/asm/fpu-internal.h
+@@ -571,7 +571,7 @@ static inline int fpu_alloc(struct fpu *fpu)
+ {
+ 	if (fpu_allocated(fpu))
+ 		return 0;
+-	fpu->state = kmem_cache_alloc(task_xstate_cachep, GFP_KERNEL);
++	fpu->state = kmem_cache_alloc(task_xstate_cachep, GFP_ATOMIC);
+ 	if (!fpu->state)
+ 		return -ENOMEM;
+ 	WARN_ON((unsigned long)fpu->state & 15);
+-- 
+2.10.1
+

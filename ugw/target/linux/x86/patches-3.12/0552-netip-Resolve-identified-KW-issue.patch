@@ -1,0 +1,46 @@
+From 10cebd664737c2ba9dbfc88deb571c9404a19d1f Mon Sep 17 00:00:00 2001
+From: Andrei Danaila <andrei.danaila@intel.com>
+Date: Fri, 16 Dec 2016 12:03:30 -0800
+Subject: [PATCH 552/639] netip: Resolve identified KW issue
+
+Klockwork identified an issue wrt to an uninitialized stack variable
+which is being used:
+
+Original KW issue:
+
+14986 (System: 392400) arch/x86/pal_cppi41/pal_cppi41.c:457 UNINIT.STACK.MUST (1:Critical) Analyze
+'ptr_ch_cfg.Index' is used uninitialized in this function.
+  * pal_cppi41.c:425: 'ptr_ch_cfg.Index' is declared
+  * pal_cppi41.c:457: 'ptr_ch_cfg.Index' is used, but is uninitialized.
+Current status 'Analyze'
+
+---------------------------------------------------------------------------
+14987 (System: 392401) arch/x86/pal_cppi41/pal_cppi41.c:551 UNINIT.STACK.MUST (1:Critical) Analyze
+'ptr_ch_cfg.Index' is used uninitialized in this function.
+  * pal_cppi41.c:542: 'ptr_ch_cfg.Index' is declared
+  * pal_cppi41.c:551: 'ptr_ch_cfg.Index' is used, but is uninitialized.
+Current status 'Analyze'
+
+Resolve these issue by initializing the data structure to 0 upon definition.
+
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ arch/x86/pal_cppi41/pal_cppi41.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index 0039c60..0aa391e 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -422,7 +422,7 @@ PAL_Cppi4AccChHnd PAL_cppi4AccChOpen(PAL_Handle hnd, Cppi4AccumulatorCfg* accCfg
+     Uint32 cookie;
+     PAL_Cppi4AccChObj *accChObj;
+ #if PUMA7_OR_NEWER_SOC_TYPE
+-    AVALANCHE_PP_ACC_CH_INFO_t ptr_ch_cfg;
++    AVALANCHE_PP_ACC_CH_INFO_t ptr_ch_cfg = {0};
+     AVALANCHE_PP_RET_e rc;
+ #else
+     Uint32 i;
+-- 
+2.10.1
+

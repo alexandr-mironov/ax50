@@ -1,0 +1,203 @@
+#!/bin/sh /etc/rc.common
+
+START=50
+
+start_daemon() {
+	. /lib/functions/network.sh
+
+	local cfg="$1"
+
+	local atmdev
+	config_get atmdev "$cfg" atmdev 0
+
+	local unit
+	config_get unit "$cfg" unit 0
+
+	local vpi
+	config_get vpi "$cfg" vpi 8
+
+	local vci
+	config_get vci "$cfg" vci 35
+
+	local encaps
+	config_get encaps "$cfg" encaps
+
+	case "$encaps" in
+		1|vc) encaps=1;;
+		*) encaps=0;;
+	esac
+
+	local payload
+	config_get payload "$cfg" payload
+
+	case "$payload" in
+		0|routed) payload=0;;
+		*) payload=1;;
+	esac
+
+	local qos
+	config_get qos "$cfg" qos
+
+	local sendsize
+	config_get sendsize "$cfg" sendsize
+	
+	local found
+	
+	found=""
+	for device in /sys/class/atm/*; do
+		[ -d "$device" ] || break
+		[ "$(cat $device/atmindex)" = "$atmdev" ] || continue
+		found=1
+		break
+	done
+
+	[ -n "$found" ] || return
+
+	local iface;
+	found=""
+	for iface in $atm_units; do
+		if [ "$unit" = "$iface" ]; then
+			found=1;
+			break;
+		fi
+	done
+
+	[ -n "$found" ] && return
+	
+	local circuit="$atmdev.$vpi.$vci"
+	
+	network_defer_device "nas$unit"
+	
+	/usr/sbin/br2684ctl \
+		-c "$unit" -e "$encaps" -p "$payload" \
+		${qos:+-q "$qos"} ${sendsize:+-s "$sendsize"} \
+		-a "$circuit"
+	sleep 1
+
+	network_ready_device "nas$unit"
+
+	ifconfig "nas$unit" up
+}
+
+# Read /proc/net/atm/br2684 and convert multiple lines into single lines.
+get_atm_info()
+{
+	local _rt="
+"
+	local _atm_info=$(cat /proc/net/atm/br2684 2>/dev/null)
+	[ -n "$_atm_info" ] && {
+		atm_info=${_atm_info//$_rt}
+		atm_info=${atm_info//dev/${_rt}dev}
+		atm_info=${atm_info//,}
+	}
+} 
+
+check_atm_unit()
+{
+	local cfg="$1"
+
+	local atmdev
+	config_get atmdev "$cfg" atmdev
+
+	local unit
+	config_get unit "$cfg" unit
+
+	local vpi
+	config_get vpi "$cfg" vpi
+
+	local vci
+	config_get vci "$cfg" vci
+
+	local circuit="$atmdev.$vpi.$vci"
+	
+	local encaps
+	config_get encaps "$cfg" encaps
+
+	case "$encaps" in
+		1|vc) encaps=1;;
+		*) encaps=0;;
+	esac
+
+	local payload
+	config_get payload "$cfg" payload
+
+	case "$payload" in
+		0|routed) payload=0;;
+		*) payload=1;;
+	esac
+
+	# We compare all values except payload and qos
+	[ "$unit" = "$2" -a "$circuit" = "$3" -a "$encaps" = "$4" ] && nfound=1
+}
+
+# Compare /proc/net/atm/br2684 values with UCI section and delete mismatched ones.
+validate_and_delete_atm_bridges()
+{
+	local line iface circuit encaps payload info
+	local _rt="
+"
+	info="$atm_info"
+	
+	while [ -n "$info" ]; do
+		# Read line by line in a loop
+		line="${info/$_rt*}"
+		info="${info/$_rt/##$_rt}"
+		info="${info/*##$_rt}"
+		
+		[ -z "$line" ] && continue
+		
+		nfound=""
+	
+		[ -n "$line" ] && {
+			iface="${line/:*}"; iface="${iface/dev }";
+		
+			circuit="${line/*vcc }"; circuit="${circuit/:*}"
+		
+			encaps="${line/*encaps=}"; encaps="${encaps/ *}"
+			encaps="${encaps/ *}"
+		
+			case "$encaps" in
+				VC) encaps=1;;
+				*) encaps=0;;
+			esac
+		
+			payload="${line/*payload=}"; payload="${payload/ *}"
+		
+			case "$payload" in
+				routed) payload=0;;
+				*) payload=1;;
+			esac
+
+			config_foreach check_atm_unit atm-bridge ${iface:3} $circuit $encaps $payload
+
+			if [ -z "$nfound" ] || [ -n "$1" -a "$1" = "all" ]; then
+				ifconfig $iface down
+				usleep 10000
+				/usr/sbin/br2684ctl -k ${iface:3}
+			else
+				atm_units="$atm_units ${iface:3}"
+			fi
+		}
+
+		[ "$info" = "$line" ] && break;
+	done
+}
+
+start() {
+	get_atm_info
+	config_load network
+	validate_and_delete_atm_bridges
+	config_foreach start_daemon atm-bridge
+}
+
+stop() {
+	get_atm_info
+	config_load network
+	validate_and_delete_atm_bridges all
+}
+
+reload() {
+	start
+	true
+}
+

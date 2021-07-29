@@ -1,0 +1,26 @@
+From d36c2a4ba15e753219d69af7b678cbd92b903847 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 1 Jan 2017 13:33:08 +0200
+Subject: [PATCH 564/639] Error handling - free memory
+
+---
+ arch/x86/pal_cppi41/pal_cppi41.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index 2535fa8..9b55923 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -530,8 +530,8 @@ PAL_Cppi4AccChHnd PAL_cppi4AccChOpen(PAL_Handle hnd, Cppi4AccumulatorCfg* accCfg
+     /*copy accCfg data to accumulator channel onject */
+     if(!accCfg->list.listBase)
+     {
+-
+         EPRINTK("NULL pointer reference. for accCfg.list.base");
++        kfree(accChObj);
+         return NULL;
+     }
+ 
+-- 
+2.10.1
+

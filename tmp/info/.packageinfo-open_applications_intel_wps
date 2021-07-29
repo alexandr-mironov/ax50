@@ -1,0 +1,21 @@
+Source-Makefile: package/feeds/open_applications/intel_wps/Makefile
+Package: WscRefImpl_Intel
+Menu: 1
+Version: 1_0_6-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libopenssl
+Section: net
+Category: Network
+Title: Intel-WPS
+Maintainer: 
+Source: WscRefImpl_Intel_1_0_6.tar.gz
+Type: ipkg
+Description:   Intel WSC package, implementing WPS functionality
+http://www.intel
+
+@@
+
+

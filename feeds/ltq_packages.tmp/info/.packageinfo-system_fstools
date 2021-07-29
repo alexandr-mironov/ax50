@@ -1,0 +1,46 @@
+Source-Makefile: feeds/ltq_packages/system/fstools/Makefile
+Package: fstools
+Menu: 1
+Version: 2015-05-24-09027fc86babc3986027a0e677aca1b6999a9e14
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +ubox +NAND_SUPPORT:ubi-utils
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: OpenWrt filesystem tools
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: fstools-2015-05-24-09027fc86babc3986027a0e677aca1b6999a9e14.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: OpenWrt filesystem tools
+John Crispin <blogic@openwrt.org>
+@@
+Config:
+	config FSTOOLS_UBIFS_EXTROOT
+		depends on PACKAGE_fstools
+		depends on NAND_SUPPORT
+		bool "Support extroot functionality with UBIFS"
+		default y
+		help
+			This option makes it possible to use extroot functionality if the root filesystem resides on an UBIFS partition
+@@
+
+Package: block-mount
+Version: 2015-05-24-09027fc86babc3986027a0e677aca1b6999a9e14
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +ubox +libubox +libuci
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: Block device mounting and checking
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: fstools-2015-05-24-09027fc86babc3986027a0e677aca1b6999a9e14.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: Block device mounting and checking
+John Crispin <blogic@openwrt.org>
+@@
+
+

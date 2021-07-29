@@ -1,0 +1,40 @@
+Source-Makefile: feeds/ltq_packages/pjsip/Makefile
+Package: pjsip-oss
+Version: 1.14.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuuid BROKEN
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: oss
+Build-Depends: TARGET_lantiq_xway:kmod-ltq-tapi TARGET_lantiq_xway:kmod-ltq-vmmc TARGET_lantiq_xrx200:kmod-ltq-tapi TARGET_lantiq_xrx200:kmod-ltq-vmmc TARGET_lantiq_falcon:kmod-ltq-tapi TARGET_lantiq_falcon:kmod-ltq-vmmc
+Section: lib
+Category: Libraries
+Title: pjsip-oss
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: pjproject-1.14.2.tar.bz2
+Type: ipkg
+Description: pjsip-oss
+http://www.pjsip.org/
+John Crispin <blogic@openwrt.org>
+@@
+
+Package: pjsip-ltq-tapi
+Version: 1.14.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuuid @(TARGET_lantiq_falcon||TARGET_lantiq_xway||TARGET_lantiq_xrx200) +TARGET_lantiq_xway:kmod-ltq-tapi +TARGET_lantiq_xway:kmod-ltq-vmmc +TARGET_lantiq_xrx200:kmod-ltq-tapi +TARGET_lantiq_xrx200:kmod-ltq-vmmc +TARGET_lantiq_falcon:kmod-ltq-tapi +TARGET_lantiq_falcon:kmod-ltq-vmmc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: ltq-tapi
+Build-Depends: TARGET_lantiq_xway:kmod-ltq-tapi TARGET_lantiq_xway:kmod-ltq-vmmc TARGET_lantiq_xrx200:kmod-ltq-tapi TARGET_lantiq_xrx200:kmod-ltq-vmmc TARGET_lantiq_falcon:kmod-ltq-tapi TARGET_lantiq_falcon:kmod-ltq-vmmc
+Section: lib
+Category: Libraries
+Title: pjsip-ltq-tapi
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: pjproject-1.14.2.tar.bz2
+Type: ipkg
+Description: pjsip-ltq-tapi
+http://www.pjsip.org/
+John Crispin <blogic@openwrt.org>
+@@
+
+

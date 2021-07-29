@@ -1,0 +1,38 @@
+Source-Makefile: feeds/ltq_packages/libs/uclient/Makefile
+Package: libuclient
+Version: 2015-04-14-81fdb8fdf1470e1c7bf3124ff20d17feaeb519ee
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ustream-ssl
+Section: libs
+Category: Libraries
+Title: HTTP/1.1 client library
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uclient-2015-04-14-81fdb8fdf1470e1c7bf3124ff20d17feaeb519ee.tar.gz
+License: ISC
+Type: ipkg
+Description: HTTP/1.1 client library
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: uclient-fetch
+Version: 2015-04-14-81fdb8fdf1470e1c7bf3124ff20d17feaeb519ee
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuclient
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ustream-ssl
+Section: net
+Category: Network
+Title: Tiny wget replacement using libuclient
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uclient-2015-04-14-81fdb8fdf1470e1c7bf3124ff20d17feaeb519ee.tar.gz
+License: ISC
+Type: ipkg
+Description: Tiny wget replacement using libuclient
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

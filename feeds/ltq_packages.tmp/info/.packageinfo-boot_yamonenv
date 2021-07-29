@@ -1,0 +1,19 @@
+Source-Makefile: feeds/ltq_packages/boot/yamonenv/Makefile
+Package: yamonenv
+Version: 20051022-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_au1000
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: YAMON configuration utility
+Maintainer: Florian Fainelli <florian@openwrt.org>
+Source: yamonenv_gruen.4g__20051022.tar.gz
+Type: ipkg
+Description: YAMON configuration utility
+http://meshcube.org/nylon/stable/sources/
+Florian Fainelli <florian@openwrt.org>
+@@
+
+

@@ -1,0 +1,77 @@
+From ca7119fe7b59e72869897222d29dd6a8dda5094d Mon Sep 17 00:00:00 2001
+From: "Sukerkar, Amol N" <amol.n.sukerkar@intel.com>
+Date: Fri, 26 Aug 2016 10:33:42 -0700
+Subject: [PATCH 470/639] net: lpal_api DRV_REGISTER function should not depend
+ on spinlock
+
+DRV_REGISTER function call eventually makes MRPC call which
+uses a mutex. Due to this, there is a crash since MRPC implementation
+does not support atomic calls. Since, spinlock is needed only for the
+global table, changed the code to protect only that global table.
+
+Signed-off-by: Sukerkar, Amol N <amol.n.sukerkar@intel.com>
+---
+ drivers/net/lpal_api/lpal_directpath.c | 34 +++++++++++++---------------------
+ 1 file changed, 13 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/net/lpal_api/lpal_directpath.c b/drivers/net/lpal_api/lpal_directpath.c
+index 926700c..8dd9f2e 100644
+--- a/drivers/net/lpal_api/lpal_directpath.c
++++ b/drivers/net/lpal_api/lpal_directpath.c
+@@ -132,8 +132,6 @@ int32_t ppa_directpath_register_dev_ex(PPA_SUBIF *subif, PPA_NETIF *netif,
+ 			return PPA_INVALID;
+ 
+ 		spin_lock_bh(&g_lpal_dp_lock);
+-
+-#ifndef USBNET_DEV_TEST
+ 		/* first check whether the interface already added
+ 		 * into PPA directpath or not
+ 		 */
+@@ -152,31 +150,25 @@ int32_t ppa_directpath_register_dev_ex(PPA_SUBIF *subif, PPA_NETIF *netif,
+ 				return PPA_SUCCESS;
+ 			}
+ 		}
+-#endif /* USBNET_DEV_TEST */
++		spin_unlock_bh(&g_lpal_dp_lock);
++
+ 		ret = DRV_REGISTER(subif, netif, pDirectpathCb, &if_id, flags);
+ 		if (ret == PPA_SUCCESS) {
+ 			LPAL_PRINT("Reg. PortId:[%d] subif:[%d] if_id:[%d]\n",
+ 				   subif->port_id, subif->subif, if_id);
+-			/* Required only for physical port */
+-			if (subif->subif == -1) {
+-				tmp_flags =
+-				    ppa_drv_g_ppe_directpath_data[if_id].
+-				    flags | PPE_DIRECTPATH_DATA_ENTRY_VALID |
+-				    PPE_DIRECTPATH_DATA_RX_ENABLE;
+-				ppa_drv_g_ppe_directpath_data[if_id].flags =
+-				    tmp_flags;
+-			} else {
++
++			spin_lock_bh(&g_lpal_dp_lock);
++			if (subif->subif != -1)
+ 				LPAL_PRINT("Registered subif :[%d]\n",
+-					   subif->subif);
+-				tmp_flags =
+-				    ppa_drv_g_ppe_directpath_data[if_id].
+-				    flags | PPE_DIRECTPATH_DATA_ENTRY_VALID |
+-				    PPE_DIRECTPATH_DATA_RX_ENABLE;
+-				ppa_drv_g_ppe_directpath_data[if_id].flags =
+-				    tmp_flags;
+-			}
++					   	subif->subif);
++			tmp_flags = ppa_drv_g_ppe_directpath_data[if_id].flags
++				| PPE_DIRECTPATH_DATA_ENTRY_VALID
++				| PPE_DIRECTPATH_DATA_RX_ENABLE;
++
++			ppa_drv_g_ppe_directpath_data[if_id].flags =
++			    tmp_flags;
++			spin_unlock_bh(&g_lpal_dp_lock);
+ 		}
+-		spin_unlock_bh(&g_lpal_dp_lock);
+ 
+ 		LPAL_PRINT("Exit - DP Register\n");
+ 		return ret;
+-- 
+2.10.1
+

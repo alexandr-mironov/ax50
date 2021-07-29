@@ -1,0 +1,30 @@
+From 7f3bf6f127ee27a613b26dda40e95bd389d18ff4 Mon Sep 17 00:00:00 2001
+From: Denis <dennis.begun@intel.com>
+Date: Sun, 26 Feb 2017 14:28:18 +0200
+Subject: [PATCH 615/639] PKTPROSSW-289: Added support for adaptive session
+ deletion based on number of open sessions
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 7ddb9d9..94c5047 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1871,12 +1871,6 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_set_classification_mode(PP_CLASSIFICAT
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_support_bp_frag(Uint8 EnDis);
+ extern PP_CLASSIFICATION_MODE_e avalanche_pp_get_classification_mode( void );
+ 
+-/* Session cache deletion thresholds */
+-// TODO why defining these here has no effect and is not seen by pp_fw_download.c??
+-//#define SESSION_CACHE_DEFAULT_DEL_THRESHOLDS_ENABLE 0
+-//#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_LOW     1000
+-//#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_HIGH    1200
+-
+ extern AVALANCHE_PP_RET_e avalanche_pp_cache_del_thresholds_enable(Uint8);
+ extern AVALANCHE_PP_RET_e avalanche_pp_cache_del_thresholds_set(Uint16, Uint16);
+ #endif
+-- 
+2.10.1
+

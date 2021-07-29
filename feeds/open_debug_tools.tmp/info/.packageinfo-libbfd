@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_debug_tools/libbfd/Makefile
+Package: objdump
+Version: 2.24.0-2014.09
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +zlib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: devel
+Category: Development
+Title: objdump
+Maintainer: 
+Source: binutils-linaro-2.24.0-2014.09.tar.xz
+Type: ipkg
+Description: objdump
+
+@@
+
+

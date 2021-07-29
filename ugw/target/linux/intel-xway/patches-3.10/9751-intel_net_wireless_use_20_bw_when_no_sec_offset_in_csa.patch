@@ -1,0 +1,25 @@
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index 0a96fbe..654d3f5 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -1165,17 +1165,10 @@ ieee80211_sta_process_chanswitch(struct ieee80211_sub_if_data *sdata,
+ 
+ 	if (!beacon && sec_chan_offs) {
+ 		secondary_channel_offset = sec_chan_offs->sec_chan_offs;
+-	} else if (beacon && ht_oper) {
+-		secondary_channel_offset =
+-			ht_oper->ht_param & IEEE80211_HT_PARAM_CHA_SEC_OFFSET;
+ 	} else if (!(ifmgd->flags & IEEE80211_STA_DISABLE_HT)) {
+-		/*
+-		 * If it's not a beacon, HT is enabled and the IE not present,
+-		 * it's 20 MHz, 802.11-2012 8.5.2.6:
+-		 *	This element [the Secondary Channel Offset Element] is
+-		 *	present when switching to a 40 MHz channel. It may be
+-		 *	present when switching to a 20 MHz channel (in which
+-		 *	case the secondary channel offset is set to SCN).
++		/* If the secondary channel offset IE is not present,
++		 * we can't know what's the post-CSA offset, so the
++		 * best we can do is use 20MHz.
+ 		 */
+ 		secondary_channel_offset = IEEE80211_HT_PARAM_CHA_SEC_NONE;
+ 	}

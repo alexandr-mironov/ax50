@@ -1,0 +1,62 @@
+IPQoS patch required to strip off vlan tag
+
+diff --git a/net/8021q/vlan_core.c b/net/8021q/vlan_core.c
+--- a/net/8021q/vlan_core.c
++++ b/net/8021q/vlan_core.c
+@@ -13,9 +13,23 @@ bool vlan_do_receive(struct sk_buff **sk
+ 	struct net_device *vlan_dev;
+ 	struct vlan_pcpu_stats *rx_stats;
+ 
++#ifdef CONFIG_VLAN_8021Q_COPY_TO_EXTMARK
++    u16 vlan_tci = skb->vlan_tci;
++    u32 vid = vlan_id;
++    u32 vprio = (vlan_tci >> 13);
++    SET_DATA_FROM_MARK_OPT(skb->extmark, VLANID_MASK, VLANID_START_BIT_POS, vid);
++    SET_DATA_FROM_MARK_OPT(skb->extmark, VPRIO_MASK, VPRIO_START_BIT_POS, vprio);
++#endif
++
+ 	vlan_dev = vlan_find_dev(skb->dev, vlan_proto, vlan_id);
+-	if (!vlan_dev)
+-		return false;
++	if (!vlan_dev) {
++#ifdef VLAN_DEBUG
++		printk("%s: ERROR: No net_device for VID: %i on dev: %s [%i]\n",
++				__FUNCTION__, (unsigned int)(vlan_id), skb->dev->name, skb->dev->ifindex);
++#endif
++
++	return false;
++	}
+ 
+ 	skb = *skbp = skb_share_check(skb, GFP_ATOMIC);
+ 	if (unlikely(!skb))
+diff --git a/net/Kconfig b/net/Kconfig
+--- a/net/Kconfig
++++ b/net/Kconfig
+@@ -207,6 +207,27 @@ config BRIDGE_NETFILTER
+ 
+ 	  If unsure, say N.
+ 
++config VLAN_8021Q
++        tristate "802.1Q VLAN Support"
++
++config VLAN_8021Q_COPY_TO_EXTMARK
++	bool "Will copy 8021Q vlan-id and vlan-prio into extmark"
++	depends on VLAN_8021Q && NETWORK_EXTMARK
++	help
++	Select this to copy 8021Q valn-id and vlan-prio into extmark.
++
++	If unsure, say N.
++
++config VLAN_8021Q_GVRP
++	bool "GVRP (GARP VLAN Registration Protocol) support"
++	depends on VLAN_8021Q
++	select GARP
++	help
++	Select this to enable GVRP end-system support. GVRP is used for
++	automatic propagation of registered VLANs to switches.
++
++          If unsure, say N.
++
+ source "net/netfilter/Kconfig"
+ source "net/ipv4/netfilter/Kconfig"
+ source "net/ipv6/netfilter/Kconfig"

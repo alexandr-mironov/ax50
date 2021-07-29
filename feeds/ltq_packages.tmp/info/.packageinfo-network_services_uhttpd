@@ -1,0 +1,102 @@
+Source-Makefile: feeds/ltq_packages/network/services/uhttpd/Makefile
+Package: uhttpd
+Submenu: Web Servers/Proxies
+Version: 2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ustream-ssl
+Section: net
+Category: Network
+Title: uHTTPd - tiny, single threaded HTTP server
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uhttpd-2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d.tar.gz
+License: ISC
+Type: ipkg
+Description:  uHTTPd is a tiny single threaded HTTP server with TLS, CGI and Lua
+ support. It is intended as a drop-in replacement for the Busybox
+ HTTP daemon.
+Felix Fietkau <nbd@openwrt.org>
+@@
+Config:
+  config PACKAGE_uhttpd_debug
+    bool "Build with debug messages"
+    default n
+@@
+
+Package: uhttpd-mod-tls
+Submenu: Web Servers/Proxies
+Version: 2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread uhttpd +PACKAGE_uhttpd-mod-tls_polarssl:libustream-polarssl +PACKAGE_uhttpd-mod-tls_cyassl:libustream-cyassl +PACKAGE_uhttpd-mod-tls_openssl:libustream-openssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ustream-ssl
+Section: net
+Category: Network
+Title: uHTTPd - tiny, single threaded HTTP server (TLS plugin)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uhttpd-2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d.tar.gz
+License: ISC
+Type: ipkg
+Description:  The TLS plugin adds HTTPS support to uHTTPd.
+Felix Fietkau <nbd@openwrt.org>
+@@
+Config:
+  choice
+    depends on PACKAGE_uhttpd-mod-tls
+    prompt "TLS Provider"
+    default PACKAGE_uhttpd-mod-tls_polarssl
+
+    config PACKAGE_uhttpd-mod-tls_polarssl
+      bool "PolarSSL"
+
+    config PACKAGE_uhttpd-mod-tls_cyassl
+      bool "CyaSSL"
+
+    config PACKAGE_uhttpd-mod-tls_openssl
+      bool "OpenSSL"
+  endchoice
+@@
+
+Package: uhttpd-mod-lua
+Submenu: Web Servers/Proxies
+Version: 2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread uhttpd +liblua
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ustream-ssl
+Section: net
+Category: Network
+Title: uHTTPd - tiny, single threaded HTTP server (Lua plugin)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uhttpd-2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d.tar.gz
+License: ISC
+Type: ipkg
+Description:  The Lua plugin adds a CGI-like Lua runtime interface to uHTTPd.
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: uhttpd-mod-ubus
+Submenu: Web Servers/Proxies
+Version: 2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread uhttpd +libubus +libblobmsg-json
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ustream-ssl
+Section: net
+Category: Network
+Title: uHTTPd - tiny, single threaded HTTP server (ubus plugin)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uhttpd-2015-09-07-993cace15114a0f06f720f34a4748ab54b695f0d.tar.gz
+License: ISC
+Type: ipkg
+Description:  The ubus plugin adds a HTTP/JSON RPC proxy for ubus and publishes the
+ session.* namespace and procedures.
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

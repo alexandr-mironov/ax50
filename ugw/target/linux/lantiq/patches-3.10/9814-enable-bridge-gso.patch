@@ -1,0 +1,19 @@
+# HG changeset patch
+# Parent 7955def63d1202d6dd94e2993b5b9f0169eb1b89
+
+diff --git a/net/bridge/br_if.c b/net/bridge/br_if.c
+--- a/net/bridge/br_if.c
++++ b/net/bridge/br_if.c
+@@ -393,6 +393,12 @@ int br_add_if(struct net_bridge *br, str
+ 
+ 	list_add_rcu(&p->list, &br->port_list);
+ 
++/*Indivisual device should set it, not part of bridge
++retain the SG flag at bridge to support the devices with SG*/
++/*	dev->features |= (NETIF_F_SOFT_FEATURES | NETIF_F_SG);*/
++
++	br->dev->features |= (NETIF_F_SOFT_FEATURES | NETIF_F_SG);
++
+ 	netdev_update_features(br->dev);
+ 
+ 	spin_lock_bh(&br->lock);

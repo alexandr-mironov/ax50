@@ -1,0 +1,56 @@
+From e26f5318cf48898103238d26519da5cbc0802f7c Mon Sep 17 00:00:00 2001
+From: vulsmike <mikelis.vuls@intel.com>
+Date: Fri, 23 Feb 2018 13:00:04 +0200
+Subject: [PATCH 35/36] he_bss_color_per_bss
+
+---
+ include/net/cfg80211.h | 2 ++
+ net/wireless/nl80211.c | 5 +++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 55a6fdf..f33ebbd 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -1082,6 +1082,7 @@ struct mpath_info {
+  * 	(u16 = opmode, -1 = do not change)
+  * @p2p_ctwindow: P2P CT Window (-1 = no change)
+  * @p2p_opp_ps: P2P opportunistic PS (-1 = no change)
++ * @he_bss_color: The BSS Color field whose value is the BSS color of the BSS corresponding to the AP which transmitted this element
+  */
+ struct bss_parameters {
+ 	int use_cts_prot;
+@@ -1092,6 +1093,7 @@ struct bss_parameters {
+ 	int ap_isolate;
+ 	int ht_opmode;
+ 	s8 p2p_ctwindow, p2p_opp_ps;
++	u8 he_bss_color;
+ };
+ 
+ /**
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index a5b8cf2..fb8e827 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -366,6 +366,7 @@ static const struct nla_policy nl80211_policy[NL80211_ATTR_MAX+1] = {
+ 	[NL80211_ATTR_VHT_CAPABILITY] = { .len = NL80211_VHT_CAPABILITY_LEN },
+ 	[NL80211_ATTR_HE_CAPABILITY] = { .type = NLA_BINARY,
+ 						.len = NL80211_HE_CAPABILITY_MAX_LEN },
++	[NL80211_ATTR_HE_BSS_COLOR] = { .type = NLA_U8 },
+ 	[NL80211_ATTR_SCAN_FLAGS] = { .type = NLA_U32 },
+ 	[NL80211_ATTR_P2P_CTWINDOW] = { .type = NLA_U8 },
+ 	[NL80211_ATTR_P2P_OPPPS] = { .type = NLA_U8 },
+@@ -4527,6 +4528,10 @@ static int nl80211_set_bss(struct sk_buff *skb, struct genl_info *info)
+ 			return -EINVAL;
+ 	}
+ 
++	if (info->attrs[NL80211_ATTR_HE_BSS_COLOR]) {
++	    params.he_bss_color = nla_get_u8(info->attrs[NL80211_ATTR_HE_BSS_COLOR]);
++	}
++
+ 	if (!rdev->ops->change_bss)
+ 		return -EOPNOTSUPP;
+ 
+-- 
+2.10.1
+

@@ -1,0 +1,37 @@
+From a2b150e576dc2d22663fd5b81815761750a67bc5 Mon Sep 17 00:00:00 2001
+From: Utkarsh Patel <utkarsh.h.patel@intel.com>
+Date: Wed, 26 Oct 2016 16:42:53 -0700
+Subject: [PATCH 507/639] x86: changed cougarmountain codename references
+
+changed cougarmountain codename references with intel puma7 ATOMOSSW-326
+
+Signed-off-by: Utkarsh Patel <utkarsh.h.patel@intel.com>
+---
+ arch/x86/kernel/iosf_mbi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/iosf_mbi.c b/arch/x86/kernel/iosf_mbi.c
+index ad1cd24..4a1b8bc 100644
+--- a/arch/x86/kernel/iosf_mbi.c
++++ b/arch/x86/kernel/iosf_mbi.c
+@@ -30,7 +30,7 @@
+ #define PCI_DEVICE_ID_BAYTRAIL		0x0F00
+ #define PCI_DEVICE_ID_BRASWELL		0x2280
+ #define PCI_DEVICE_ID_QUARK_X1000	0x0958
+-#define PCI_DEVICE_ID_COUGAR_MTN 	0x2B80
++#define PCI_DEVICE_ID_INTEL_PUMA7	0x2B80
+ 
+ static DEFINE_SPINLOCK(iosf_mbi_lock);
+ 
+@@ -293,7 +293,7 @@ static const struct pci_device_id iosf_mbi_pci_ids[] = {
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_BAYTRAIL) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_BRASWELL) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_QUARK_X1000) },
+-	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_COUGAR_MTN) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_PUMA7) },
+ 	{ 0, },
+ };
+ MODULE_DEVICE_TABLE(pci, iosf_mbi_pci_ids);
+-- 
+2.10.1
+

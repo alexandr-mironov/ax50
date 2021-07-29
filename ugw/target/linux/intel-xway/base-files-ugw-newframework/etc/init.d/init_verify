@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2007 OpenWrt.org
+# Copyright (C) 2011 Lantiq
+
+START=100
+
+start() {
+	if [ -f /mnt/factory_config_in_progress ];then
+		errorhd_cmd -s factorycfg -H "crash_during_factorycfg"
+		sleep 30
+		/usr/sbin/factorycfg.sh
+	fi
+}

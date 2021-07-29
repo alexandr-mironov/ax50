@@ -1,0 +1,13 @@
+diff --git a/toolchain/gcc/Config.in b/toolchain/gcc/Config.in
+index 0c55048f3f..be2bd0e6a5 100644
+--- a/toolchain/gcc/Config.in
++++ b/toolchain/gcc/Config.in
+@@ -37,7 +37,7 @@ config EXTRA_GCC_CONFIG_OPTIONS
+ config SSP_SUPPORT
+ 	bool
+ 	prompt "Enable Stack-Smashing Protection support" if TOOLCHAINOPTS
+-	default n
++	default y
+ 	help
+ 	    Enable Stack-Smashing Protection support
+ 

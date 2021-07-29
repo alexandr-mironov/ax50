@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_applications/mns_1905/Makefile
+Package: mns_1905
+Menu: 1
+Version: 1.0.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +librt +libpthread +libpcap +libopenssl +libcrypto
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Intel
+Title: MNS 1905
+Maintainer: Intel Co.
+Source: 
+Type: ipkg
+Description: 	MNS 1905
+http://www.intel.com
+Intel Co.
+@@
+
+

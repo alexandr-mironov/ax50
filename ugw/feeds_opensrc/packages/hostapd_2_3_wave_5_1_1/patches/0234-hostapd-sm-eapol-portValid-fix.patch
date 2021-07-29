@@ -1,0 +1,11 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/wpa_auth.c hostapd-2.6/src/ap/wpa_auth.c
+--- hostapd-2.6-orig/src/ap/wpa_auth.c	2017-06-20 10:29:56.969903951 +0300
++++ hostapd-2.6/src/ap/wpa_auth.c	2017-06-20 10:31:04.631368227 +0300
+@@ -1872,7 +1872,6 @@ SM_STATE(WPA_PTK, AUTHENTICATION2)
+ {
+ 	SM_ENTRY_MA(WPA_PTK, AUTHENTICATION2, wpa_ptk);
+ 
+-	wpa_auth_set_eapol(sm->wpa_auth, sm->addr, WPA_EAPOL_portValid, 0);
+ 	wpa_group_ensure_init(sm->wpa_auth, sm->group);
+ 	sm->ReAuthenticationRequest = FALSE;
+ 

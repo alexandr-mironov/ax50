@@ -1,0 +1,53 @@
+From d13bd4c4ab291c6c87bb5085d8f60ebff57b9101 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Wed, 8 Mar 2017 11:51:52 +0200
+Subject: [PATCH 612/639] Update dates, define base AQM queue
+
+---
+ include/linux/avalanche/puma7/puma7_cppi.h          | 8 +++++---
+ include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h | 2 +-
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/include/linux/avalanche/puma7/puma7_cppi.h b/include/linux/avalanche/puma7/puma7_cppi.h
+index 184a80d..3718e92 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi.h
++++ b/include/linux/avalanche/puma7/puma7_cppi.h
+@@ -11,7 +11,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014 Intel Corporation.
++  Copyright(c) 2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -118,9 +118,11 @@ extern Uint8 *PalCppiDsg2qmgrNames[PAL_CPPI_DSG_QMGR_TOTAL_Q_COUNT];
+ #define PAL_CPPI41_SR_QPDSP_QOS_Q_BASE                      PAL_CPPI_PP_QMGR_G1_QOS_Q_BASE
+ #define PAL_CPPI41_SR_DOCSIS_TX_QPDSP_QOS_Q_BASE            PAL_CPPI_PP_QMGR_G1_QOS_US_Q_BASE
+ #define PAL_CPPI41_SR_DOCSIS_TX_QPDSP_QOS_Q_LAST            PAL_CPPI_PP_QMGR_G1_QOS_US_Q_LAST
++#define PAL_CPPI_PP_QMGR_G2_AQM_US_BE_BASE                  PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_HI_Q_NUM
++#define PAL_CPPI_PP_QMGR_G2_AQM_US_BE_LAST                  PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_LOW_Q_NUM
+ 
+-#define IS_QOS_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G1, PAL_CPPI_PP_QMGR_G1_QOS_Q_BASE))           && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G1, PAL_CPPI_PP_QMGR_G1_QOS_Q_LAST)) )
+-#define IS_AQM_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE0_HI_Q_NUM))  && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE15_LOW_Q_NUM)) )
++#define IS_QOS_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G1, PAL_CPPI_PP_QMGR_G1_QOS_Q_BASE))       && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G1, PAL_CPPI_PP_QMGR_G1_QOS_Q_LAST)) )
++#define IS_AQM_Q(q) ((q >= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE_BASE))   && (q <= PAL_CPPI_NETDEV_BUILD_Q_INFO(PAL_CPPI_PP_QMGR_G2, PAL_CPPI_PP_QMGR_G2_AQM_US_BE_LAST)) )
+ 
+ #define PAL_CPPI41_SR_DOCSIS_MGMT_RX_FD_HOST_DESC_SIZE      PAL_CPPI_PP_QMGR_GLOBAL_DEFAULT_DESC_SIZE
+ #define PAL_CPPI41_SR_DOCSIS_MGMT_TX_FD_HOST_DESC_SIZE      PAL_CPPI_PP_QMGR_GLOBAL_DEFAULT_DESC_SIZE
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+index 63a2f29..1c2c2bb 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+@@ -5,7 +5,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014-2016 Intel Corporation.
++  Copyright(c) 2014-2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+-- 
+2.10.1
+

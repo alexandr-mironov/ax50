@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/open_applications/vsftpd/Makefile
+Package: vsftpd
+Submenu: File Transfer
+Version: 3.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: A fast and secure FTP server
+Maintainer: Cezary Jackiewicz <cezary@eko.one.pl>
+Source: vsftpd-3.0.0.tar.gz
+Type: ipkg
+Description: A fast and secure FTP server
+http://vsftpd.beasts.org/
+Cezary Jackiewicz <cezary@eko.one.pl>
+@@
+
+

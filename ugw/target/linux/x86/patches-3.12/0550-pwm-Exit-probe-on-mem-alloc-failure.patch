@@ -1,0 +1,45 @@
+From 73acd03d4d8723099c3df99139f1a87ec2759fd7 Mon Sep 17 00:00:00 2001
+From: Pawan Gupta <pawan.kumarx.gupta@intel.com>
+Date: Fri, 16 Dec 2016 11:26:35 -0800
+Subject: [PATCH 550/639] pwm: Exit probe on mem alloc failure
+
+This fixes klockwork issue:
+62181 (System: 398538) drivers/pwm/pwm-intelce2700/pwm-intelce2700.c:259
+NPD.CHECK.MUST (1:Critical) Analyze
+Pointer 'pwm' checked for NULL at line 256 will be dereferenced at line 259.
+  * pwm-intelce2700.c:256: 'pwm' is checked for NULL.
+  * pwm-intelce2700.c:256: !pwm is true
+  * pwm-intelce2700.c:259: 'pwm' is explicitly dereferenced.
+
+Signed-off-by: Pawan Gupta <pawan.kumarx.gupta@intel.com>
+---
+ drivers/pwm/pwm-intelce2700/pwm-intelce2700.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c b/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c
+index 9449d30..da6bcf0 100644
+--- a/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c
++++ b/drivers/pwm/pwm-intelce2700/pwm-intelce2700.c
+@@ -253,8 +253,10 @@ int intelce2700_pwm_probe(struct platform_device *pdev)
+ 
+ 	pwm = kzalloc(sizeof(struct intelce2700_pwm_chip), GFP_KERNEL);
+ 
+-	if (!pwm)
++	if (!pwm) {
+ 		ret = -ENOMEM;
++		goto out;
++	}
+ 
+ 	pwm->chip.ops = &intelce2700_pwm_ops;
+ 	pwm->chip.base = PWM_CHAN1_IDX;
+@@ -353,6 +355,7 @@ unmap_mem:
+ 		iounmap(boot_cfg);
+ free_mem:
+ 	kfree(pwm);
++out:
+ 	return ret;
+ }
+ 
+-- 
+2.10.1
+

@@ -1,0 +1,47 @@
+From 94658382c47af0950485bf0adc3e04889381db5d Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 1 Jan 2017 17:53:53 +0200
+Subject: [PATCH 566/639] TOE rx direct kernel changes
+
+---
+ net/ipv4/ip_input.c | 1 +
+ net/ipv4/route.c    | 5 +++--
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/net/ipv4/ip_input.c b/net/ipv4/ip_input.c
+index 06b47cf..b96beab 100644
+--- a/net/ipv4/ip_input.c
++++ b/net/ipv4/ip_input.c
+@@ -259,6 +259,7 @@ int ip_local_deliver(struct sk_buff *skb)
+ 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN, skb, skb->dev, NULL,
+ 		       ip_local_deliver_finish);
+ }
++EXPORT_SYMBOL(ip_local_deliver);
+ 
+ static inline bool ip_rcv_options(struct sk_buff *skb)
+ {
+diff --git a/net/ipv4/route.c b/net/ipv4/route.c
+index ae001e8..594f608 100644
+--- a/net/ipv4/route.c
++++ b/net/ipv4/route.c
+@@ -1427,14 +1427,15 @@ static void rt_set_nexthop(struct rtable *rt, __be32 daddr,
+ #endif
+ }
+ 
+-static struct rtable *rt_dst_alloc(struct net_device *dev,
+-				   bool nopolicy, bool noxfrm, bool will_cache)
++struct rtable *rt_dst_alloc(struct net_device *dev,
++			    bool nopolicy, bool noxfrm, bool will_cache)
+ {
+ 	return dst_alloc(&ipv4_dst_ops, dev, 1, DST_OBSOLETE_FORCE_CHK,
+ 			 (will_cache ? 0 : (DST_HOST | DST_NOCACHE)) |
+ 			 (nopolicy ? DST_NOPOLICY : 0) |
+ 			 (noxfrm ? DST_NOXFRM : 0));
+ }
++EXPORT_SYMBOL(rt_dst_alloc);
+ 
+ /* called in rcu_read_lock() section */
+ static int ip_route_input_mc(struct sk_buff *skb, __be32 daddr, __be32 saddr,
+-- 
+2.10.1
+

@@ -1,0 +1,70 @@
+Source-Makefile: feeds/open_applications/ubus/Makefile
+Package: libubus
+Version: 2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: OpenWrt RPC client library
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ubus-2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e.tar.gz
+License: LGPL-2.1
+Type: ipkg
+Description: OpenWrt RPC client library
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: libubus-lua
+Version: 2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubus +liblua
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Lua binding for the OpenWrt RPC client
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ubus-2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e.tar.gz
+License: LGPL-2.1
+Type: ipkg
+Description: Lua binding for the OpenWrt RPC client
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: ubus
+Version: 2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubus +libblobmsg-json +ubusd
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: OpenWrt RPC client utility
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ubus-2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e.tar.gz
+License: LGPL-2.1
+Type: ipkg
+Description: OpenWrt RPC client utility
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: ubusd
+Version: 2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: OpenWrt RPC daemon
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ubus-2015-05-25-f361bfa5fcb2daadf3b160583ce665024f8d108e.tar.gz
+License: LGPL-2.1
+Type: ipkg
+Description: OpenWrt RPC daemon
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

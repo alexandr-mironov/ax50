@@ -1,0 +1,59 @@
+# HG changeset patch
+# Parent 243024bec5a058c574ce242c372b54fb25396793
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -164,6 +164,7 @@ typedef enum
+     PDSP_TDOX_CONFIGURE_PARAMS          = 0x83,
+     PDSP_TDOX_SET_SUPPRESSION           = 0x84,
+     PDSP_TDOX_CMD_SET_RECORD            = 0x85,
++    PDSP_TDOX_CONFIGURE_SUPPRESSION     = 0x86,
+ 
+     // Moca Commands
+     PDSP_MOCA_SET_PADDING                = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1590,11 +1590,11 @@ typedef struct
+     Uint32      Prefetcher_descriptors_starvation;
+     Uint32      Prefetcher_res1;
+     Uint32      Prefetcher_res2;
+-    Uint32      Prefetcher_res3;
+-    Uint32      Prefetcher_res4;
+-    Uint32      Prefetcher_res5;
+ 
+     /* TurboDOX */
++    Uint32      TurboDOX_not_progressing_acks; // borrowed from Prefetcher for debugging, can be returned if required
++    Uint32      TurboDOX_ack_supp_limit_time_reached; // borrowed from Prefetcher for debugging, can be returned if required
++    Uint32      TurboDOX_ack_supp_limit_packets_reached; // borrowed from Prefetcher for debugging, can be returned if required
+     Uint32      TurboDOX_rx_pkts;
+     Uint32      TurboDOX_pkts_frwrd_to_next_hop;
+     Uint32      TurboDOX_pkts_frwrd_to_qos;
+@@ -1602,10 +1602,9 @@ typedef struct
+     Uint32      TurboDOX_qulified_pkts;
+     Uint32      TurboDOX_non_qulified_pkts;
+     Uint32      TurboDOX_suppressed_pkts;
+-    //Uint32      TurboDOX_res8; Taken for ReSequencer usage
+-    Uint32      ReSequencer_host_rx_pkts;
+ 
+     /* ReSequencer */
++    Uint32      ReSequencer_host_rx_pkts; // borrowed from TurboDOX
+     Uint32      ReSequencer_rx_pkts;
+     Uint32      ReSequencer_discarded_pkts;
+     Uint32      ReSequencer_match_seq_num_pkts;
+@@ -1930,6 +1929,7 @@ AVALANCHE_PP_EVENT_e;
+ typedef AVALANCHE_PP_RET_e  (* AVALANCHE_EVENT_HANDLER_t)   ( AVALANCHE_PP_EVENT_e  event, Uint32  param1, Uint32 param2 );
+ 
+ extern AVALANCHE_PP_RET_e   avalanche_pp_set_ack_suppression        ( Uint8     enDis );
++extern AVALANCHE_PP_RET_e   avalanche_pp_configure_ack_suppression  ( Uint8 maxPackets, Uint32 maxTime );
+ extern AVALANCHE_PP_RET_e   avalanche_pp_set_traffic_prioritization_mode ( Uint8     priorityMode);
+ 
+ extern AVALANCHE_PP_RET_e   avalanche_pp_event_handler_register     ( Uint32 *  handle_event_handler, AVALANCHE_EVENT_HANDLER_t   handler );
+@@ -2479,6 +2479,7 @@ typedef     struct
+     Uint16  syncQThreshold;
+     Uint8   bAccRateLimitActive;
+     Uint8   mocaPaddingMode;
++    Uint32  tdoxAckSuppressionEn;
+ #ifndef CONFIG_ARM_AVALANCHE_SOC
+ 	Uint32	ppIrqNum;
+ 	Uint32	atomIntcStatusSetRegAddr;

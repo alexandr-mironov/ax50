@@ -1,0 +1,12 @@
+#!/bin/sh
+
+ucitrack_add_init()
+{
+        local id=$(uci add ucitrack $1)
+        uci set ucitrack.${id}.init="$2"
+}
+
+ucitrack_add_init network br2684ctl
+uci commit
+
+exit 0

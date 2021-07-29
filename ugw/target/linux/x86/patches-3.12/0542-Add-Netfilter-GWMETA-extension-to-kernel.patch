@@ -1,0 +1,65 @@
+From eaeb4e843f1f82e3579cfa2fe32ed6329ecbc355 Mon Sep 17 00:00:00 2001
+From: "Michael L. Walker" <michael.l.walker@intel.com>
+Date: Tue, 13 Dec 2016 09:38:35 -0700
+Subject: [PATCH 542/639] Add Netfilter GWMETA extension to kernel
+
+Symptom: Need to allow iptables rules to bypass PP acceleration
+RootCause: This patch was previously in rdkb-compat layer
+Resolution: Add GWMETA extension to kernel
+---
+ net/netfilter/xt_GWMETA.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/net/netfilter/xt_GWMETA.c b/net/netfilter/xt_GWMETA.c
+index 3e92f6e..6eabce5 100644
+--- a/net/netfilter/xt_GWMETA.c
++++ b/net/netfilter/xt_GWMETA.c
+@@ -71,11 +71,11 @@
+ /* Define macros to convert to/from HIL endian-ness */
+ /* If HIL is running on Atom, no need to do byte swap */
+ #ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
+-    #define htoppl(val) val
+-    #define pptohl(val) val
++    #define cpu_to_hil32(val) val
++    #define hil_to_cpu32(val) val
+ #else
+-    #define htoppl(val) htonl(val)
+-    #define pptohl(val) ntohl(val)
++    #define cpu_to_hil32(val) cpu_to_be32(val)
++    #define hil_to_cpu32(val) be32_to_cpu(val)
+ #endif
+ 
+ static unsigned int
+@@ -88,23 +88,23 @@ do_target_job(struct sk_buff *skb, const struct xt_action_param *par)
+     if (info->type == XT_GW_META)
+     {
+         DEBUGP( DEBUG_LEVEL " %s: mark with i %x \n", __FUNCTION__, info->gwmask);
+-        host_val = pptohl(skb->ti_gw_meta);
++        host_val = hil_to_cpu32(skb->ti_gw_meta);
+         host_val |= info->gwmask;
+-        skb->ti_gw_meta = htoppl(host_val);
++        skb->ti_gw_meta = cpu_to_hil32(host_val);
+     }
+     else if (info->type == XT_GW_DIS_PP)
+     {
+         /*DISABLE PP */
+-        host_val = pptohl(SKB_GET_PP_INFO_P(skb)->flags);
++        host_val = hil_to_cpu32(SKB_GET_PP_INFO_P(skb)->flags);
+         host_val |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
+-        SKB_GET_PP_INFO_P(skb)->flags = htoppl(host_val);
++        SKB_GET_PP_INFO_P(skb)->flags = cpu_to_hil32(host_val);
+     }
+     else if (info->type == XT_GW_EN_PP)
+     {
+         /*ENABLE PP */
+-        host_val = pptohl(SKB_GET_PP_INFO_P(skb)->flags);
++        host_val = hil_to_cpu32(SKB_GET_PP_INFO_P(skb)->flags);
+         host_val &= ~(TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+-        SKB_GET_PP_INFO_P(skb)->flags = htoppl(host_val);
++        SKB_GET_PP_INFO_P(skb)->flags = cpu_to_hil32(host_val);
+     }
+ 
+     return XT_CONTINUE;
+-- 
+2.10.1
+

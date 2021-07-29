@@ -1,0 +1,44 @@
+Source-Makefile: feeds/open_applications/ntpclient/Makefile
+Package: ntpclient
+Submenu: Time Synchronization
+Version: 2007_365-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: NTP (Network Time Protocol) client
+Maintainer: 
+Source: ntpclient_2007_365.tar.gz
+Type: ipkg
+Description: 	NTP client for setting system time from NTP servers.
+http://doolittle.icarus.com/ntpclient/
+
+@@
+Config:
+   	menu "overwrite package version"
+		depends on PACKAGE_ntpclient
+	config ntpclient_USE_CUSTOM_VERSION
+		depends on PACKAGE_ntpclient
+		bool "Use custom package version"
+		default n
+	config ntpclient_CUSTOM_VERSION
+		depends on ntpclient_USE_CUSTOM_VERSION
+		string "ntpclient version as string (default version: 2007_365)"
+		default "2007_365"
+	endmenu
+   	menu "custom source directory"
+		depends on PACKAGE_ntpclient
+	config ntpclient_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_ntpclient
+		bool "Use custom source directory"
+		default n
+	config ntpclient_CUSTOM_SOURCE_DIR
+		depends on ntpclient_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/../../../wlnsw/wireline_sw_linux24/open_ntpclient"
+	endmenu
+@@
+
+

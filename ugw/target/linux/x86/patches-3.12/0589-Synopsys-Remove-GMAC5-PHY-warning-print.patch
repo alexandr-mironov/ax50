@@ -1,0 +1,38 @@
+From 384ef1ca817d51458f5906a012838054bda59913 Mon Sep 17 00:00:00 2001
+From: "Vital Yep, Marco A" <marco.a.vital.yep@intel.com>
+Date: Thu, 26 Jan 2017 10:48:11 -0700
+Subject: [PATCH 589/639] [Synopsys] Remove GMAC5 PHY warning print
+
+Issue: PKTPROSSW-247
+System Impact: Error message constantly spamming Atom terminal.
+Root Cause: An alert message is printed in the GMAC5 driver if a PHY is
+            not detected while querying the interface settings.
+Resolution: Removed the error message since it doesn't have any functional
+            impact and a PHY is not available in the default case when the
+            GMAC5 is connected to the GMAC4.
+Attestation: I confirm that I understand the authorized content and license
+             obligations listed in the IP Plan(s) for the SDK release and I
+             have delivered content in accordance with those IP Plan(s): Yes.
+Reviewers: Jillela Emmanuel, Sukerkar Amol, Poole Bryce, Devaraj Priyadarshini,
+           Tabul Amihay, Shalom Avi1, Muthumani Suresh
+
+Signed-off-by: Vital Yep, Marco A <marco.a.vital.yep@intel.com>
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_ethtool.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_ethtool.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_ethtool.c
+index 8279a4e..6344849 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_ethtool.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_ethtool.c
+@@ -505,7 +505,6 @@ static int DWC_ETH_QOS_getsettings(struct net_device *dev,
+ 		cmd->port = PORT_OTHER;
+ 	} else {
+ 		if (pdata->phydev == NULL) {
+-			printk(KERN_ALERT "%s: PHY is not registered\n", dev->name);
+ 			return -ENODEV;
+ 		}
+ 
+-- 
+2.10.1
+

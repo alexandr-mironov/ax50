@@ -1,0 +1,90 @@
+From 73e2b657837d7fa2fe1edba5fb2eaee0a66caf30 Mon Sep 17 00:00:00 2001
+From: iemergi <idan.emergi@intel.com>
+Date: Thu, 30 Mar 2017 15:29:24 +0300
+Subject: [PATCH 626/639] PUMARTSYS-1278: CLONE - [sched_delayed] sched: RT
+ throttling activated
+
+Fixing Root cause of original issue.
+Due to current implementation of ATOM NET-IP interrupts handler
+we are exposed to interrupt misses, once missed ATOM will never
+recover and will not receive netip interrupts.
+Specifically when pp driver on ATOM miss an interrupt it will cause
+in ARM looping for ever on IRQ58 handler.
+
+Signed-off-by: iemergi <idan.emergi@intel.com>
+---
+ arch/x86/NetIP_SubSystem/avalanche_intc.c            | 2 +-
+ include/linux/avalanche/generic/avalanche_pdsp_api.h | 9 +++++----
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 4 ++++
+ include/linux/avalanche/puma7/puma7.h                | 1 +
+ 4 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/avalanche_intc.c b/arch/x86/NetIP_SubSystem/avalanche_intc.c
+index cc90321..d0cd40e 100755
+--- a/arch/x86/NetIP_SubSystem/avalanche_intc.c
++++ b/arch/x86/NetIP_SubSystem/avalanche_intc.c
+@@ -42,12 +42,12 @@
+ #include <linux/netip_subsystem.h>
+ #include "netip_subsystem_defs.h"
+ #include <linux/avalanche/generic/avalanche_intc.h>
++#include <linux/avalanche/puma7/puma7.h>
+ 
+ /***************/
+ /**  Defines  **/
+ /***************/
+ 
+-#define ATOM_INTC_BASE 0xF00E0000 
+ #define INTC_SET_BIT_0                ( 0x00000001 )    
+ #define HOST_ARM_IRQ_NUM             ( 1 )  /* ARM nIRQ Number */
+ #define NUM_SYS_INTS_PER_REG         ( 4 )
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index 660ffd2..796e22b 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -152,11 +152,12 @@ typedef enum
+     PDSP_RECYCLER_SANITY_STOP_CMD    = 0x84,
+ 
+     // Session Cache Commands
+-    PDSP_SESSION_CACHE_SESSION_CMD  = 0x83,
+-    PDSP_SESSION_CACHE_FLUSH_ALL    = 0x84,
+-    PDSP_SESSION_CACHE_SESSION_TIMEOUT  = 0x85,
+-    PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_SET = 0x86,
++    PDSP_SESSION_CACHE_SESSION_CMD               = 0x83,
++    PDSP_SESSION_CACHE_FLUSH_ALL                 = 0x84,
++    PDSP_SESSION_CACHE_SESSION_TIMEOUT           = 0x85,
++    PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_SET    = 0x86,
+     PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_ENABLE = 0x87,
++    PDSP_SESSION_CACHE_INTC_IRQ                  = 0x88,
+ 
+     // tDox Commands
+     PDSP_TDOX_CONFIGURE_PARAMS          = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index f3f3eff..afdfe7a 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -2376,6 +2376,10 @@ typedef     struct
+     Uint16  syncQThreshold;
+     Uint8   bAccRateLimitActive;
+     Uint8   mocaPaddingMode;
++#ifndef CONFIG_ARM_AVALANCHE_SOC
++	Uint32	ppIrqNum;
++	Uint32	atomIntcStatusSetRegAddr;
++#endif
+ }avalanche_pp_db_address_param_t;
+ 
+ /***************** Sanity manager api *******************/
+diff --git a/include/linux/avalanche/puma7/puma7.h b/include/linux/avalanche/puma7/puma7.h
+index 577e02c..a7148a6 100644
+--- a/include/linux/avalanche/puma7/puma7.h
++++ b/include/linux/avalanche/puma7/puma7.h
+@@ -84,6 +84,7 @@
+ #define AVALANCHE_GBE4_ADDR                         ((0xF0310000))
+ #define AVALANCHE_GBE5_ADDR                         ((0xF0314000))
+ #define AVALANCHE_MOCA_ADDR                         ((0xFF800000))
++#define ATOM_INTC_BASE 								((0xF00E0000))
+ 
+ #define AVALANCHE_PFI_REGS                          (IO_ADDRESS(0xF0210000))
+ #define AVALANCHE_PFI_WIN_REGS                      (IO_ADDRESS(0xF0210400))
+-- 
+2.10.1
+

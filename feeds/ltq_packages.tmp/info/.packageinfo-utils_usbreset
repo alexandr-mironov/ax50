@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/utils/usbreset/Makefile
+Package: usbreset
+Version: 4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Utility to send a USB port reset to a USB device
+Maintainer: Jo-Philipp Wich <xm@subsignal.org>
+Source: 
+Type: ipkg
+Description:  This package contains the small usbreset utility which
+ can be used to send a USB port reset to a USB device -
+ useful for debugging or to force re-detection of particular
+ devices.
+Jo-Philipp Wich <xm@subsignal.org>
+@@
+
+

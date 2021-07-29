@@ -1,0 +1,36 @@
+Source-Makefile: package/feeds/open_applications/libwebsockets/Makefile
+Package: libwebsockets
+Version: 2014-07-06-c1fdd10ff887994622f6f8a9534d4ab5c320c86d
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +zlib +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: libwebsockets (libraries)
+Maintainer: 
+Source: libwebsockets-2014-07-06-c1fdd10ff887994622f6f8a9534d4ab5c320c86d.tar.gz
+Type: ipkg
+Description: 	libwebsockets
+	This package contains libwebsocket libraries
+
+@@
+
+Package: libwebsockets-examples
+Version: 2014-07-06-c1fdd10ff887994622f6f8a9534d4ab5c320c86d
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread libwebsockets
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: libwebsockets (examples)
+Maintainer: 
+Source: libwebsockets-2014-07-06-c1fdd10ff887994622f6f8a9534d4ab5c320c86d.tar.gz
+Type: ipkg
+Description: 	libwebsockets examples
+	This package contains libwebsockets examples
+
+@@
+
+

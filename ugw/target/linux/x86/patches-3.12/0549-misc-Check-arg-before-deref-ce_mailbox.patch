@@ -1,0 +1,43 @@
+From d3f01215d8cd4036df550c2bba9811fa29a5375e Mon Sep 17 00:00:00 2001
+From: Pawan Gupta <pawan.kumarx.gupta@intel.com>
+Date: Fri, 16 Dec 2016 11:02:27 -0800
+Subject: [PATCH 549/639] misc: Check arg before deref ce_mailbox
+
+This adds arg check before dereferencing. This fixes klockwork issue
+29057 in ce_mailbox function mbx_unlocked_ioctl().
+
+62157 (System: 29057)drivers/misc/ce_mailbox.c:229 NPD.CHECK.MIGHT
+(1:Critical) Analyze
+Pointer 'arg' checked for NULL at line 215 may be dereferenced at line 229.
+  * ce_mailbox.c:215: 'arg' is checked for NULL.
+  * ce_mailbox.c:215: arg!=0 is false
+  * ce_mailbox.c:215: (arg!=0) && (copy_from_user( &mbx_usr_info,
+  	(struct npcpu_appcpu_mbx_user* )arg,
+	sizeof(struct npcpu_appcpu_mbx_user) ) ) is false
+  * ce_mailbox.c:229: 'arg' is dereferenced by passing argument 1 to
+	function 'copy_to_user'.
+
+Signed-off-by: Pawan Gupta <pawan.kumarx.gupta@intel.com>
+---
+ drivers/misc/ce_mailbox.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/misc/ce_mailbox.c b/drivers/misc/ce_mailbox.c
+index 9e353d7..ec07479 100644
+--- a/drivers/misc/ce_mailbox.c
++++ b/drivers/misc/ce_mailbox.c
+@@ -226,7 +226,10 @@ static long mbx_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned lon
+                                    NPCPU_APPCPU_HW_MBOX_TAG_RPC, 0x1);
+                          err = npcpu_appcpu_mbx_receive_specific_callback();
+                            if(mbx_usr_info.isParamRequired) {
+-                               if (copy_to_user((struct npcpu_appcpu_mbx_user *)arg,&mbx_usr_info,sizeof(struct npcpu_appcpu_mbx_user)))
++                               if (arg &&
++				   copy_to_user((struct npcpu_appcpu_mbx_user *)arg,
++						&mbx_usr_info,
++						sizeof(struct npcpu_appcpu_mbx_user)))
+                                        return -EFAULT;
+                          }
+                          break;
+-- 
+2.10.1
+

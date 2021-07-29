@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_applications/ragel/Makefile
+Package: ragel
+Version: 6.9-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Types: host
+Section: puma7
+Category: Intel
+Title: ragel
+Maintainer: 
+Source: ragel-6.9.tar.gz
+Type: ipkg
+Description:     ragel host tool
+
+@@
+
+

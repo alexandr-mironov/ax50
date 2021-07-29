@@ -1,0 +1,65 @@
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -5557,6 +5557,7 @@ const char * event_to_string(enum wpa_ev
+ 
+ /* Convert chan_width to a string for logging and control interfaces */
+ const char * channel_width_to_string(enum chan_width width);
++const char * channel_width_to_string2(enum chan_width width);
+ 
+ int ht_supported(const struct hostapd_hw_modes *mode);
+ int vht_supported(const struct hostapd_hw_modes *mode);
+--- a/src/drivers/driver_common.c
++++ b/src/drivers/driver_common.c
+@@ -114,6 +114,26 @@ const char * channel_width_to_string(enu
+ }
+ 
+ 
++const char * channel_width_to_string2(enum chan_width width)
++{
++  switch (width) {
++  case CHAN_WIDTH_20_NOHT:
++  case CHAN_WIDTH_20:
++    return "20";
++  case CHAN_WIDTH_40:
++    return "40";
++  case CHAN_WIDTH_80:
++    return "80";
++  case CHAN_WIDTH_80P80:
++    return "80+80";
++  case CHAN_WIDTH_160:
++    return "160";
++  default:
++    return "unknown";
++  }
++}
++
++
+ int ht_supported(const struct hostapd_hw_modes *mode)
+ {
+ 	if (!(mode->flags & HOSTAPD_MODE_FLAG_HT_INFO_KNOWN)) {
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -3869,7 +3869,22 @@ void wpa_supplicant_event(void *ctx, enu
+ 							&data->dfs_event);
+ 		break;
+ #endif /* NEED_AP_MLME */
+-#endif /* CONFIG_AP */
++#else /* not CONFIG_AP */
++  case EVENT_CH_SWITCH:
++    if (!data || !wpa_s->current_ssid)
++      break;
++
++    wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CHANNEL_SWITCH
++      "freq=%d ht_enabled=%d ch_offset=%d ch_width=%s cf1=%d cf2=%d dfs_chan=%d",
++      data->ch_switch.freq,
++      data->ch_switch.ht_enabled,
++      data->ch_switch.ch_offset,
++      channel_width_to_string2(data->ch_switch.ch_width),
++      data->ch_switch.cf1,
++      data->ch_switch.cf2,
++      ieee80211_is_dfs(data->ch_switch.freq));
++    break;
++#endif /* not CONFIG_AP */
+ 	case EVENT_RX_MGMT: {
+ 		u16 fc, stype;
+ 		const struct ieee80211_mgmt *mgmt;

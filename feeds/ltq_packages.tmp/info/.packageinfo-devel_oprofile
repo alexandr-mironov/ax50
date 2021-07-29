@@ -1,0 +1,40 @@
+Source-Makefile: feeds/ltq_packages/devel/oprofile/Makefile
+Package: oprofile
+Version: 0.9.9-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpopt +kmod-oprofile +libstdcpp +objdump +librt @(!TARGET_uml||BROKEN)
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: binutils
+Section: devel
+Category: Development
+Title: OProfile System Profiler
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: oprofile-0.9.9.tar.gz
+License: GPL-2.0+
+Type: ipkg
+Description:  A transparent low-overhead system-wide profiler.
+http://oprofile.sourceforge.net
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: oprofile-utils
+Version: 0.9.9-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread oprofile
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: binutils
+Section: devel
+Category: Development
+Title: OProfile System Profiler (extra utilities)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: oprofile-0.9.9.tar.gz
+License: GPL-2.0+
+Type: ipkg
+Description: OProfile System Profiler (extra utilities)
+http://oprofile.sourceforge.net
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

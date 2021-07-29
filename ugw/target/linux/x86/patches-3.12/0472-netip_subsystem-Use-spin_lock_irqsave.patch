@@ -1,0 +1,41 @@
+From dd9ad674316631d7a4a4d465c931c106fef26736 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 1 Sep 2016 16:31:36 -0700
+Subject: [PATCH 472/639] netip_subsystem: Use spin_lock_irqsave
+
+NetIP subsystem driver was using spin_lock without saving irq flags in
+the netss_interrupt_register API. Changing the spin locking to the safer
+version spin_lock_irqsave.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index a8e8fed..532daf5 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -93,8 +93,9 @@ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_
+ {
+    unsigned int reg_indx = 0;
+    unsigned int irq_bit  = 0;
++   unsigned long flags;
+ 
+-   spin_lock(&pnetss_drv_data->irq_lock);
++   spin_lock_irqsave(&pnetss_drv_data->irq_lock, flags);
+    if(intrpt > NETSS_INTERUPT_MAX)
+    {
+       printk("Registering for Invalid NETIP interrupt %d\n", intrpt);
+@@ -146,7 +147,7 @@ void netss_interrupt_register(netss_interrupt_t intrpt, int arm11_int_id, netss_
+             }
+         }
+     }
+-    spin_unlock(&pnetss_drv_data->irq_lock);
++    spin_unlock_irqrestore(&pnetss_drv_data->irq_lock, flags);
+ }
+ 
+ EXPORT_SYMBOL(netss_interrupt_register);
+-- 
+2.10.1
+

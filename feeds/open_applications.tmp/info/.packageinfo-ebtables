@@ -1,0 +1,42 @@
+Source-Makefile: feeds/open_applications/ebtables/Makefile
+Package: ebtables
+Version: 2.0.9-2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-ltqcpe_ebtables
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Ethernet bridge firewall administration utility
+Maintainer: 
+Source: ebtables-v2.0.9-2.tar.gz
+Type: ipkg
+Description: 	The ebtables program is a filtering tool for a bridging firewall. The
+	filtering is focussed on the Link Layer Ethernet frame fields. Apart
+	from filtering, it also gives the ability to alter the Ethernet MAC
+	addresses and implement a brouter.
+http://ebtables.sourceforge.net/
+
+@@
+
+Package: ebtables-utils
+Version: 2.0.9-2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-ltqcpe_ebtables
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: ebtables save/restore utilities
+Maintainer: 
+Source: ebtables-v2.0.9-2.tar.gz
+Type: ipkg
+Description: 		The ebtables program is a filtering tool for a bridging firewall. The
+	filtering is focussed on the Link Layer Ethernet frame fields. Apart
+	from filtering, it also gives the ability to alter the Ethernet MAC
+	addresses and implement a brouter.
+http://ebtables.sourceforge.net/
+
+@@
+
+

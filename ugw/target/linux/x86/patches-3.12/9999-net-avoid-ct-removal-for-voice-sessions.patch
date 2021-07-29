@@ -1,0 +1,25 @@
+patch to avoid removal of conntrack for voice session
+
+diff --git a/net/ipv4/udp.c b/net/ipv4/udp.c
+--- a/net/ipv4/udp.c
++++ b/net/ipv4/udp.c
+@@ -111,6 +111,9 @@
+ #include <trace/events/skb.h>
+ #include <net/busy_poll.h>
+ #include "udp_impl.h"
++#if defined(CONFIG_LTQ_UDP_REDIRECT) || defined(CONFIG_LTQ_UDP_REDIRECT_MODULE)
++#include <linux/udp_redirect.h>
++#endif
+ 
+ struct udp_table udp_table __read_mostly;
+ EXPORT_SYMBOL(udp_table);
+@@ -1453,6 +1456,9 @@ int udp_queue_rcv_skb(struct sock *sk, s
+ 	 */
+ 	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb))
+ 		goto drop;
++#if defined(CONFIG_LTQ_UDP_REDIRECT) || defined(CONFIG_LTQ_UDP_REDIRECT_MODULE)
++	if (!(sk != NULL && sk->sk_user_data == UDP_REDIRECT_MAGIC))
++#endif
+ 	nf_reset(skb);
+ 
+ 	if (static_key_false(&udp_encap_needed) && up->encap_type) {

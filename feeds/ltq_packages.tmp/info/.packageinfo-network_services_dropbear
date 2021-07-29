@@ -1,0 +1,43 @@
+Source-Makefile: feeds/ltq_packages/network/services/dropbear/Makefile
+Package: dropbear
+Version: 2015.67-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Base system
+Title: Small SSH2 client/server
+Maintainer: 
+Source: dropbear-2015.67.tar.bz2
+License: MIT
+LicenseFiles: LICENSE libtomcrypt/LICENSE libtommath/LICENSE
+Type: ipkg
+Description:  A small SSH2 server/client designed for small memory environments.
+http://matt.ucc.asn.au/dropbear/
+
+@@
+Config:
+	source "package/network/services/dropbear/Config.in"
+@@
+
+Package: dropbearconvert
+Version: 2015.67-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Utility for converting SSH keys
+Maintainer: 
+Source: dropbear-2015.67.tar.bz2
+License: MIT
+LicenseFiles: LICENSE libtomcrypt/LICENSE libtommath/LICENSE
+Type: ipkg
+Description: Utility for converting SSH keys
+http://matt.ucc.asn.au/dropbear/
+
+@@
+
+

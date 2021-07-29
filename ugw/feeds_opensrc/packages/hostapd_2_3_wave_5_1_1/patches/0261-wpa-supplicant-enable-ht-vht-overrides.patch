@@ -1,0 +1,16 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/wpa_supplicant/.config hostapd-2.6/wpa_supplicant/.config
+--- hostapd-2.6-orig/wpa_supplicant/.config	2017-09-08 12:03:14.761229659 +0300
++++ hostapd-2.6/wpa_supplicant/.config	2017-09-08 12:04:35.010176114 +0300
+@@ -179,10 +179,10 @@ CONFIG_SMARTCARD=y
+ #CONFIG_PCSC=y
+ 
+ # Support HT overrides (disable HT/HT40, mask MCS rates, etc.)
+-#CONFIG_HT_OVERRIDES=y
++CONFIG_HT_OVERRIDES=y
+ 
+ # Support VHT overrides (disable VHT, mask MCS rates, etc.)
+-#CONFIG_VHT_OVERRIDES=y
++CONFIG_VHT_OVERRIDES=y
+ 
+ # Development testing
+ #CONFIG_EAPOL_TEST=y

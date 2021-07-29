@@ -1,0 +1,57 @@
+Source-Makefile: package/feeds/open_debug_tools/oprofile/Makefile
+Package: oprofile
+Version: 0.9.4-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpopt +kmod-oprofile +libstdcpp +objdump @+BUSYBOX_CONFIG_DIRNAME @+BUSYBOX_CONFIG_ID @+BUSYBOX_CONFIG_SEQ
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: binutils libtool libintl libiconv
+Section: devel
+Category: Development
+Title: OProfile System Profiler
+Maintainer: 
+Source: oprofile-0.9.4.tar.gz
+Type: ipkg
+Description:  A transparent low-overhead system-wide profiler.
+http://oprofile.sourceforge.net
+
+@@
+
+Package: oprofile-utils
+Version: 0.9.4-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread oprofile
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: binutils libtool libintl libiconv
+Section: devel
+Category: Development
+Title: OProfile System Profiler (extra utilities)
+Maintainer: 
+Source: oprofile-0.9.4.tar.gz
+Type: ipkg
+Description: OProfile System Profiler (extra utilities)
+http://oprofile.sourceforge.net
+
+@@
+
+Package: kmod-oprofile
+Submenu: Other modules
+Version: <LINUX_VERSION>+0.9.4-2
+Depends: @KERNEL_PROFILING
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: binutils libtool libintl libiconv
+Section: kernel
+Category: Kernel modules
+Title: OProfile profiling support
+Maintainer: 
+Source: oprofile-0.9.4.tar.gz
+Type: ipkg
+Kernel-Config: CONFIG_OPROFILE @!LINUX_2_6
+Description:   Kernel module for support for oprofile system profiling.
+
+@@
+
+

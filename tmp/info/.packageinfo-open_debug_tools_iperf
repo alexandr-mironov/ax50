@@ -1,0 +1,42 @@
+Source-Makefile: package/feeds/open_debug_tools/iperf/Makefile
+Package: iperf
+Version: 2.0.5-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Internet Protocol bandwidth measuring tool (with single thread support)
+Maintainer: 
+Source: iperf-2.0.5.tar.gz
+Type: ipkg
+Description:  Iperf is a modern alternative for measuring TCP and UDP bandwidth
+ performance, allowing the tuning of various parameters and
+ characteristics.
+ This package is built with single thread support.
+http://sourceforge.net/projects/iperf/
+
+@@
+
+Package: iperf-mt
+Version: 2.0.5-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Internet Protocol bandwidth measuring tool (with multithread support)
+Maintainer: 
+Source: iperf-2.0.5.tar.gz
+Type: ipkg
+Description:  Iperf is a modern alternative for measuring TCP and UDP bandwidth
+ performance, allowing the tuning of various parameters and
+ characteristics.
+ This package is built with multithread support.
+http://sourceforge.net/projects/iperf/
+
+@@
+
+

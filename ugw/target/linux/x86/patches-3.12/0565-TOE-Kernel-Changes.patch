@@ -1,0 +1,106 @@
+From 2c0fe9e873e408a96c9f0c3264204b55258d9471 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 1 Jan 2017 17:51:58 +0200
+Subject: [PATCH 565/639] TOE Kernel Changes
+
+---
+ net/core/dev.c | 70 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 69 insertions(+), 1 deletion(-)
+
+diff --git a/net/core/dev.c b/net/core/dev.c
+index 64a5274..8633b7a 100755
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2808,6 +2808,66 @@
+ }
+ EXPORT_SYMBOL(dev_loopback_xmit);
+ 
++static int (*toe_receive_skb_hook)(struct sk_buff *skb) = NULL;
++static int (*toe_dev_queue_xmit_hook)(struct sk_buff *skb) = NULL;
++
++#define TOE_RECEIVE_SKB_HOOK 0
++#define TOE_DEV_QUEUE_XMIT_HOOK 1
++
++int toe_hook_register(int hooknum, int (*hook_fn)(struct sk_buff *))
++{
++	if (hooknum == TOE_DEV_QUEUE_XMIT_HOOK) {
++		if (unlikely(toe_dev_queue_xmit_hook)) {
++			pr_warning("%s:%d: toe_dev_queue_xmit_hook already registered!\n", __func__, __LINE__);
++			return -EPERM;
++		}
++
++		toe_dev_queue_xmit_hook = hook_fn;
++		
++		pr_info("%s:%d: toe_ingress_hook function registered (=%p)\n",
++			__func__, __LINE__, hook_fn);
++	} else {
++		if (unlikely(toe_receive_skb_hook)) {
++			pr_warning("%s:%d: toe_receive_skb_hook already registered!\n", __func__, __LINE__);
++			return -EPERM;
++		}
++
++		toe_receive_skb_hook = hook_fn;
++		
++		pr_info("%s:%d: toe_egress_hook function registered (=%p)\n",
++			__func__, __LINE__, hook_fn);
++	}
++	return 0;
++}
++EXPORT_SYMBOL(toe_hook_register);
++
++int toe_hook_unregister(int hooknum)
++{
++	if (hooknum == TOE_DEV_QUEUE_XMIT_HOOK) {
++		if (unlikely(!toe_dev_queue_xmit_hook)) {
++			pr_warning("%s:%d: toe_dev_queue_xmit_hook not registered!\n", __func__, __LINE__);
++			return -EPERM;
++		}
++
++		toe_dev_queue_xmit_hook = NULL;
++
++		pr_info("%s:%d: toe_dev_queue_xmit_hook function unregistered\n",
++			__func__, __LINE__);
++	} else {
++		if (unlikely(!toe_receive_skb_hook)) {
++			pr_warning("%s:%d: toe_receive_skb_hook not registered!\n", __func__, __LINE__);
++			return -EPERM;
++		}
++
++		toe_receive_skb_hook = NULL;
++
++		pr_info("%s:%d: toe_receive_skb_hook function unregistered\n",
++			__func__, __LINE__);
++	}
++	return 0;
++}
++EXPORT_SYMBOL(toe_hook_unregister);
++
+ /**
+  *	dev_queue_xmit - transmit a buffer
+  *	@skb: buffer to transmit
+@@ -2840,6 +2900,9 @@
+ 	struct Qdisc *q;
+ 	int rc = -ENOMEM;
+ 
++	if (toe_dev_queue_xmit_hook && toe_dev_queue_xmit_hook(skb))
++		dev = skb->dev;
++
+ 	skb_reset_mac_header(skb);
+ 
+ 	/* Disable soft irqs for various locks below. Also
+@@ -3542,6 +3605,12 @@
+ 	pt_prev = NULL;
+ 
+ another_round:
++
++	if (toe_receive_skb_hook && toe_receive_skb_hook(skb)) {
++		ret = NET_RX_SUCCESS;
++		goto out;
++	}
++
+ 	skb->skb_iif = skb->dev->ifindex;
+ 
+ 	__this_cpu_inc(softnet_data.processed);
+-- 
+2.10.1
+

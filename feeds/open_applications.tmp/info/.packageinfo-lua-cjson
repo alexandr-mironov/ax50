@@ -1,0 +1,22 @@
+Source-Makefile: feeds/open_applications/lua-cjson/Makefile
+Package: lua-cjson
+Submenu: Lua
+Version: 2.1.0-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +lua
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: lang
+Category: Languages
+Title: Lua CJSON parser
+Maintainer: Dirk Chang <dirk@kooiot.com>
+Source: lua-cjson-2.1.0.tar.gz
+License: MIT
+LicenseFiles: LICENSE
+Type: ipkg
+Description:   Lua CJSON is a fast JSON encoding/parsing module for Lua.
+https://github.com/mpx/lua-cjson
+Dirk Chang <dirk@kooiot.com>
+@@
+
+

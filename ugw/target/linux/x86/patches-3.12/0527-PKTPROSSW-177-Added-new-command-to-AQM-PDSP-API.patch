@@ -1,0 +1,24 @@
+From e85cdcc7a123074d62050e01e32d83e44b17fac0 Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Tue, 22 Nov 2016 11:52:04 +0200
+Subject: [PATCH 527/639] PKTPROSSW-177: Added new command to AQM PDSP API
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index fe17e89..d2939d9 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -162,6 +162,7 @@ typedef enum
+     // AQMC Commands
+     PDSP_AQMC_ADD_MC_MEMBER              = 0x83,
+     PDSP_AQMC_DEL_MC_MEMBER              = 0x84,
++    PDSP_AQMC_SET_AQM_BYPASS_MODE        = 0x85,
+ 
+ #ifdef CONFIG_WIFI_PROXY
+     //Wifi TX commands
+-- 
+2.10.1
+

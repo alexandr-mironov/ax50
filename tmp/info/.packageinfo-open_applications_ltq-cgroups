@@ -1,0 +1,65 @@
+Source-Makefile: package/feeds/open_applications/ltq-cgroups/Makefile
+Package: kmod-ltq-cgroup-support
+Submenu: Lantiq
+Version: <LINUX_VERSION>+2.0.1-1
+Depends: 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Lantiq Control Group Support
+Maintainer: 
+Source: 
+Type: ipkg
+Kernel-Config: CONFIG_CGROUPS=y CONFIG_RESOURCE_COUNTERS=y CONFIG_MEMCG=y CONFIG_MEMCG_KMEM=y CONFIG_CGROUP_SCHED=y CONFIG_FAIR_GROUP_SCHED=y CONFIG_MM_OWNER=y CONFIG_CONNECTOR=y CONFIG_PROC_EVENTS=y
+Description:  Enables kernel settings for Control Group Support
+
+@@
+
+Package: ltq-cgroups
+Menu: 1
+Version: 2.0.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-ltq-cgroup-support
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: ltq-cgroups
+Category: Lantiq
+Title: ltq-cgroups is used for classifying the tasks based on the priority.
+Maintainer: Lantiq Deutschland GmbH
+Source: 
+Type: ipkg
+Description:  This package contains an utility to classsify the tasks based on the priorities.
+Lantiq Deutschland GmbH
+@@
+Config:
+	menu "CGroup affinity features"
+		depends on PACKAGE_ltq-cgroups
+		source "ugw/feeds_opensrc/packages/ltq-cgroups/config/Config.in"
+	endmenu
+	menu "overwrite package version"
+		depends on PACKAGE_ltq-cgroups
+	config ltq-cgroups_USE_CUSTOM_VERSION
+		depends on PACKAGE_ltq-cgroups
+		bool "Use custom package version"
+		default n
+	config ltq-cgroups_CUSTOM_VERSION
+		depends on ltq-cgroups_USE_CUSTOM_VERSION
+		string "ltq-cgroups version as string (default version: 2.0.1)"
+		default "2.0.1"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_ltq-cgroups
+	config ltq-cgroups_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_ltq-cgroups
+		bool "Use custom source directory"
+		default n
+	config ltq-cgroups_CUSTOM_SOURCE_DIR
+		depends on ltq-cgroups_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default ""
+	endmenu
+@@
+
+

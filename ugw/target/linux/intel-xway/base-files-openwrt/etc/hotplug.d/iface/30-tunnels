@@ -1,0 +1,14 @@
+[ "$ACTION" == "ifup" ] && {
+	proto=$(uci get network.$INTERFACE.proto)
+	[ "$proto" == "gre" ] || [ "$proto" == "grev6" ] && {
+		tunipaddr=$(uci get network.$INTERFACE.tunipaddr)
+		tunnetmask=$(uci get network.$INTERFACE.tunnetmask)
+		[ "$proto" == "grev6" ] && {
+			ip addr add $tunipaddr dev grev6-$INTERFACE
+			ip route add $tunnetmask dev grev6-$INTERFACE
+		} || {
+			ip addr add $tunipaddr dev gre-$INTERFACE
+			ip route add $tunnetmask dev gre-$INTERFACE
+		}
+	}
+}

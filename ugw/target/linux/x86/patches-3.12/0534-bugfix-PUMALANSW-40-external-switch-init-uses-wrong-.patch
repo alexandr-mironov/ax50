@@ -1,0 +1,25 @@
+From 9f10f40d067d2b4f9d808b37396690fc8aa05bc3 Mon Sep 17 00:00:00 2001
+From: opeyrik <oleg.peyrik@intel.com>
+Date: Thu, 1 Dec 2016 14:08:20 +0200
+Subject: [PATCH 534/639] bugfix/PUMALANSW-40 - external switch init uses wrong
+ HW_MBOX tag
+
+---
+ include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h b/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+index c8796e0..bdc0111 100755
+--- a/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
++++ b/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+@@ -87,6 +87,7 @@ typedef enum npcpu_appcpu_hw_mbox_tags
+     NPCPU_APPCPU_HW_MBOX_TAG_DATAPIPE_MBX,
+     NPCPU_APPCPU_HW_MBOX_TAG_WIFI_MBX,
+     NPCPU_APPCPU_HW_MBOX_TAG_DPI_MBX,
++    NPCPU_APPCPU_HW_MBOX_TAG_EXTSWITCH,
+     NPCPU_APPCPU_HW_LAST_ENTRY
+ } npcpu_appcpu_hw_mbox_tags_e;
+ 
+-- 
+2.10.1
+

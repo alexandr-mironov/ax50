@@ -1,0 +1,36 @@
+Source-Makefile: package/feeds/open_debug_tools/pecostat/Makefile
+Package: kmod-pecostat
+Submenu: Other modules
+Version: <LINUX_VERSION>+2.0.2-1
+Depends: @!TARGET_lantiq_xrx500 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: pecostat Kernel Support
+Maintainer: 
+Source: pecostat34BE.tgz
+Type: ipkg
+Description:   Kernel support to pecostat for accessing MIPS_34K and 24K HW performance counters
+
+@@
+
+Package: pecostat
+Version: 2.0.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-pecostat
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Access MIPS_34K and 24K HW performance counters
+Maintainer: MIPS.com
+Source: pecostat34BE.tgz
+Type: ipkg
+Description:   This package contains pecostat which is used for accessing MIPS_34K and 24K HW performance counters.
+http://www.mips.com
+MIPS.com
+@@
+
+

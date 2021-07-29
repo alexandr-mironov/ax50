@@ -1,0 +1,36 @@
+# HG changeset patch
+# Parent c5f517ed2f01b435e0a42cbfe8f5c09f06ae42a2
+
+diff --git a/net/netfilter/xt_extmark.c b/net/netfilter/xt_extmark.c
+--- a/net/netfilter/xt_extmark.c
++++ b/net/netfilter/xt_extmark.c
+@@ -15,6 +15,9 @@
+ 
+ #include <linux/netfilter/xt_extmark.h>
+ #include <linux/netfilter/x_tables.h>
++#include <linux/netfilter/nf_conntrack_common.h>
++#include <net/netfilter/nf_conntrack.h>
++
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Marc Boucher <marc@mbsi.ca>");
+@@ -28,8 +31,19 @@ static unsigned int
+ extmark_tg(struct sk_buff *skb, const struct xt_action_param *par)
+ {
+ 	const struct xt_extmark_tginfo2 *info = par->targinfo;
++	enum ip_conntrack_info ctinfo;
++	struct nf_conn *ct;
+ 
+ 	skb->extmark = (skb->extmark & ~info->mask) ^ info->extmark;
++
++	/* this provides framework to disable acceleration for a particular conntrack 
++	   if some bits are set. It will take effect only if the corresponding 
++	   iptable rules are added */
++	if (skb->extmark & ACCELSEL_MASK && (ct = nf_ct_get(skb, &ctinfo))) {
++		ct->ti_pp_status_flag |= TI_PP_BYPASS;
++		TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
++	}
++
+ 	return XT_CONTINUE;
+ }
+ 

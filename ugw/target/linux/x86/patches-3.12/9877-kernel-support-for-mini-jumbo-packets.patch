@@ -1,0 +1,25 @@
+# HG changeset patch
+# Parent 3a282ca3abb795cbbd623c704d57889b3802329c
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -2189,6 +2190,8 @@
+     struct wifi_proxy_tx_ch_t   tx_ch;
+     struct wifi_proxy_rx_ch_t   rx_ch;
+     wifi_dev_mode_e             mode;
++    __u8                        headRoom;
++    __u16                       payload;
+     __u8                        seq_num;
+ };
+ 
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -498,6 +498,7 @@ typedef enum PAL_CPPI_PP_DESC_REGIONs
+ /* Descriptors information - count, size and base address if internal */
+ #define PAL_CPPI_PP_QMGR_GLOBAL_DEFAULT_DESC_SIZE                                           64
+ #define PAL_CPPI_PP_START_OF_PACKET_OFFSET                                                  128
++#define PAL_CPPI_PP_START_HEADROOM_OFFSET                                                   (PAL_CPPI_PP_START_OF_PACKET_OFFSET - AVALNCHE_PP_WRAP_HEADER_MAX_LEN)
+ 
+ #define PAL_CPPI_PP_PACKET_RAM_SHARED_FD_BASE                                               (IO_ADDRESS(0xF9060000))
+ #ifdef CONFIG_MACH_PUMA7_FPGA

@@ -1,0 +1,22 @@
+Source-Makefile: package/feeds/open_applications/mwan3/Makefile
+Package: mwan3
+Submenu: Routing and Redirection
+Version: 1.6-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +ip +ipset +iptables +iptables-mod-conntrack-extra +iptables-mod-ipopt +@BUSYBOX_CONFIG_HEAD +@BUSYBOX_CONFIG_PGREP
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Multiwan hotplug script with connection tracking support
+Maintainer: Jeroen Louwes <jeroen.louwes@gmail.com>
+Source: 
+License: GPLv2
+Type: ipkg
+Description: Hotplug script which makes configuration of multiple WAN interfaces simple
+and manageable. With loadbalancing/failover support for up to 250 wan
+interfaces, connection tracking and an easy to manage traffic ruleset.
+Jeroen Louwes <jeroen.louwes@gmail.com>
+@@
+
+

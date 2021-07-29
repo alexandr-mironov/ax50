@@ -1,0 +1,23 @@
+# HG changeset patch
+# Parent ffbac945d4bbd970c772dd08684082f1aaaec696
+
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -126,7 +126,7 @@
+ 
+ /* Rate(in Mbps) * 1M) / iteration per second / 8(bits in byte) */
+ #define PP_QOS_KBIT_RATE_DIV_TO_CREDIT(x, divider)          (((x) * 1000) / (PP_QOS_ITERATION_PER_SECOND/divider) / 8 )
+-#define PP_QOS_KILO_BIT_RATE_TO_IT_DIVIDER(x)               (((x) % 1000 == 0) ? PP_QOS_IT_DIVIDER_DEFAULT_VAL : PP_QOS_IT_DIVIDER_ENABLE_VAL)
++#define PP_QOS_KILO_BIT_RATE_TO_IT_DIVIDER(x)               ((x > PP_QOS_RATE_LIMIT_IT_DIV_ENABLE)? PP_QOS_IT_DIVIDER_DEFAULT_VAL : PP_QOS_IT_DIVIDER_ENABLE_VAL)
+ #define PP_QOS_MEGA_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)       ((Uint32)(((Uint64)((x) * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
+ #define PP_QOS_KILO_BIT_PER_SEC_TO_IT_CREDIT_BYTES_WFQ(x)   ((Uint32)(((Uint64)((x) * 1000 * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
+ #define PP_QOS_KILO_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)       (PP_QOS_KBIT_RATE_DIV_TO_CREDIT(x, PP_QOS_KILO_BIT_RATE_TO_IT_DIVIDER(x)))
+@@ -137,6 +137,7 @@
+ 
+ #define PP_QOS_MIN_VAL_FOR_MAX_GLOBAL_CREDIT_BYTS           (MAX_IP_PACKET_SIZE * 2)
+ #define PP_QOS_MIN_VAL_FOR_MAX_GLOBAL_CREDIT_PKT            (32)
++#define PP_QOS_IT_CREDIT_BYTES_TO_RATE_IN_KBIT(x,divider)   (((PP_QOS_ITERATION_PER_SECOND/divider) * x * 8) /1000)
+ 
+ static inline int floor_x_by_y(int x, int y) {
+ 	if ( y==0 )

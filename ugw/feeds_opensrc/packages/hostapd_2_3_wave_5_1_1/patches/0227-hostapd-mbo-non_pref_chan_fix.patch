@@ -1,0 +1,50 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/sta_info.c hostapd-2.6/src/ap/sta_info.c
+--- hostapd-2.6-orig/src/ap/sta_info.c	2017-05-22 11:34:44.702986755 +0300
++++ hostapd-2.6/src/ap/sta_info.c	2017-05-22 11:36:00.779477556 +0300
+@@ -1335,18 +1335,23 @@ void ap_sta_set_authorized(struct hostap
+ 		pos += ret;
+ 
+ 		for (info = sta->non_pref_chan; info; info = info->next) {
+-			ret = os_snprintf(pos, end - pos, " non_pref_chan=%u:%u:%u:",
+-							  info->op_class, info->pref, info->reason_code);
++			ret = os_snprintf(pos, end - pos, " non_pref_chan=%u:",
++							  info->op_class);
+ 			if (os_snprintf_error(end - pos, ret))
+ 				break;
+ 			pos += ret;
+ 			for (i = 0; i < info->num_channels; i++) {
+ 				ret = os_snprintf(pos, end - pos, "%u%s", info->channels[i],
+-						i + 1 < info->num_channels ? "," : " ");
++						i + 1 < info->num_channels ? "," : ":");
+ 				if (os_snprintf_error(end - pos, ret))
+ 					break;
+ 				pos += ret;
+ 			}
++		  ret = os_snprintf(pos, end - pos, "%u:%u ",
++						    info->pref, info->reason_code);
++		  if (os_snprintf_error(end - pos, ret))
++			  break;
++		  pos += ret;
+ 		}
+ #endif
+  		
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/wnm_ap.c hostapd-2.6/src/ap/wnm_ap.c
+--- hostapd-2.6-orig/src/ap/wnm_ap.c	2017-05-22 11:34:44.705986695 +0300
++++ hostapd-2.6/src/ap/wnm_ap.c	2017-05-22 11:36:00.779477556 +0300
+@@ -593,6 +593,7 @@ static void report_notification_req(stru
+ 						  info->op_class);
+ 		if (os_snprintf_error(end - pos, ret))
+ 			break;
++		pos += ret;
+ 		for (i = 0; i < info->num_channels; i++) {
+ 			ret = os_snprintf(pos, end - pos, "%u%s", info->channels[i],
+ 					i + 1 < info->num_channels ? "," : ":");
+@@ -600,7 +601,7 @@ static void report_notification_req(stru
+ 				break;
+ 			pos += ret;
+ 		}
+-		ret = os_snprintf(pos, end - pos, "%u:%u",
++		ret = os_snprintf(pos, end - pos, "%u:%u ",
+ 						  info->pref, info->reason_code);
+ 		if (os_snprintf_error(end - pos, ret))
+ 			break;

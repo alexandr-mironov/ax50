@@ -1,0 +1,21 @@
+Source-Makefile: feeds/open_applications/usb-modeswitch-data/Makefile
+Package: usb-modeswitch-data
+Version: 20110805-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread usb-modeswitch
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: USB ModeSwitch - Dongle configuration database
+Maintainer: 
+Source: usb-modeswitch-data-20110805.tar.bz2
+Type: ipkg
+Description:   Configuration database for usb-modeswitch.
+  Contains definitions for many USB devices required to
+  autoswitch "flip flop" gear.
+http://packages.debian.org/de/sid/usb-modeswitch-data
+
+@@
+
+

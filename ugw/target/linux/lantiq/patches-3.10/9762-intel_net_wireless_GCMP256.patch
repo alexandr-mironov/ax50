@@ -1,0 +1,39 @@
+From 35a8f214bd872e90740696d5733a2862ed002af4 Mon Sep 17 00:00:00 2001
+From: vulsmike <mikelis.vuls@intel.com>
+Date: Fri, 23 Feb 2018 13:00:02 +0200
+Subject: [PATCH 34/36] GCMP256
+
+---
+ include/linux/ieee80211.h     | 2 +-
+ include/uapi/linux/wireless.h | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/ieee80211.h b/include/linux/ieee80211.h
+index e71dfce..451e8f6 100644
+--- a/include/linux/ieee80211.h
++++ b/include/linux/ieee80211.h
+@@ -2046,7 +2046,7 @@ enum ieee80211_sa_query_action {
+ #define WLAN_CIPHER_SUITE_WEP104	0x000FAC05
+ #define WLAN_CIPHER_SUITE_AES_CMAC	0x000FAC06
+ #define WLAN_CIPHER_SUITE_GCMP		0x000FAC08
+-
++#define WLAN_CIPHER_SUITE_GCMP_256  0x000FAC09
+ #define WLAN_CIPHER_SUITE_SMS4		0x00147201
+ 
+ /* AKM suite selectors */
+diff --git a/include/uapi/linux/wireless.h b/include/uapi/linux/wireless.h
+index c1592e3..82029d8 100644
+--- a/include/uapi/linux/wireless.h
++++ b/include/uapi/linux/wireless.h
+@@ -624,6 +624,8 @@
+ #define IW_ENCODE_ALG_CCMP	3
+ #define IW_ENCODE_ALG_PMK	4
+ #define IW_ENCODE_ALG_AES_CMAC	5
++#define IW_ENCODE_ALG_GCMP	6
++#define IW_ENCODE_ALG_GCMP_256	7
+ /* struct iw_encode_ext ->ext_flags */
+ #define IW_ENCODE_EXT_TX_SEQ_VALID	0x00000001
+ #define IW_ENCODE_EXT_RX_SEQ_VALID	0x00000002
+-- 
+2.10.1
+

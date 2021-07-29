@@ -1,0 +1,84 @@
+From b6f5491ff2333a5c62149ebc6d3a9b70ad6812e7 Mon Sep 17 00:00:00 2001
+From: omerefrx <omerx.efrat@intel.com>
+Date: Thu, 10 Aug 2017 19:29:02 +0300
+Subject: [PATCH] Add mac80211 get_connection_alive callback which asks the
+ driver (if supported) whether or not data was passed (tx or rx) from last
+ check.
+
+---
+ include/net/mac80211.h    |  3 +++
+ net/mac80211/driver-ops.h | 14 ++++++++++++++
+ net/mac80211/mlme.c       | 11 +++++++++++
+ 3 files changed, 28 insertions(+)
+
+diff --git a/include/net/mac80211.h b/include/net/mac80211.h
+index 8991c1e..020ad40 100644
+--- a/include/net/mac80211.h
++++ b/include/net/mac80211.h
+@@ -2923,6 +2923,9 @@ struct ieee80211_ops {
+ 
+ 	void (*restart_complete)(struct ieee80211_hw *hw);
+ 
++	int (*get_connection_alive)(struct ieee80211_hw *hw,
++				struct ieee80211_vif *vif);
++
+ #if IS_ENABLED(CONFIG_IPV6)
+ 	void (*ipv6_addr_change)(struct ieee80211_hw *hw,
+ 				 struct ieee80211_vif *vif,
+diff --git a/net/mac80211/driver-ops.h b/net/mac80211/driver-ops.h
+index b3ea11f..4858c9b 100644
+--- a/net/mac80211/driver-ops.h
++++ b/net/mac80211/driver-ops.h
+@@ -1044,6 +1044,20 @@ static inline void drv_restart_complete(struct ieee80211_local *local)
+ 	trace_drv_return_void(local);
+ }
+ 
++static inline int drv_get_connection_alive(struct ieee80211_local *local,
++			      struct ieee80211_sub_if_data *sdata)
++{
++	int ret;
++
++	check_sdata_in_driver(sdata);
++
++	ret = local->ops->get_connection_alive(&local->hw, &sdata->vif);
++
++	trace_drv_return_int(local, ret);
++
++	return ret;
++}
++
+ static inline void
+ drv_set_default_unicast_key(struct ieee80211_local *local,
+ 			    struct ieee80211_sub_if_data *sdata,
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index 34a8c5f3..d4086b3 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -2108,6 +2108,7 @@ static void ieee80211_mgd_probe_ap(struct ieee80211_sub_if_data *sdata,
+ 				   bool beacon)
+ {
+ 	struct ieee80211_if_managed *ifmgd = &sdata->u.mgd;
++	struct ieee80211_local *local = sdata->local;
+ 	bool already = false;
+ 
+ 	if (!ieee80211_sdata_running(sdata))
+@@ -2133,6 +2134,16 @@ static void ieee80211_mgd_probe_ap(struct ieee80211_sub_if_data *sdata,
+ 		ieee80211_cqm_rssi_notify(&sdata->vif,
+ 					  NL80211_CQM_RSSI_BEACON_LOSS_EVENT,
+ 					  GFP_KERNEL);
++	} else {
++		if (local->ops->get_connection_alive) {
++			if (drv_get_connection_alive(local, sdata)) {
++				mod_timer(&ifmgd->conn_mon_timer,
++						round_jiffies_up(jiffies +
++								IEEE80211_CONNECTION_IDLE_TIME));
++				mutex_unlock(&sdata->local->mtx);
++				goto out;
++			}
++		}
+ 	}
+ 
+ 	/*
+-- 
+2.10.1
+

@@ -1,0 +1,24 @@
+# HG changeset patch
+# Parent 9abddea22f676787e5ad4bf190fd29b4fee46eba
+
+diff --git a/include/uapi/Kbuild b/include/uapi/Kbuild
+--- a/include/uapi/Kbuild
++++ b/include/uapi/Kbuild
+@@ -12,3 +12,4 @@ header-y += video/
+ header-y += drm/
+ header-y += xen/
+ header-y += scsi/
++header-y += net/
+diff --git a/include/uapi/net/Kbuild b/include/uapi/net/Kbuild
+new file mode 100644
+--- /dev/null
++++ b/include/uapi/net/Kbuild
+@@ -0,0 +1,8 @@
++# UAPI Header export list
++header-y += gsw_types.h
++header-y += uapi_lantiq_ethsw.h
++header-y += uapi_lantiq_ethsw_api.h
++header-y += uapi_lantiq_ethsw_flow.h
++header-y += uapi_lantiq_gsw.h
++header-y += uapi_lantiq_gsw_api.h
++header-y += uapi_lantiq_gsw_flow.h

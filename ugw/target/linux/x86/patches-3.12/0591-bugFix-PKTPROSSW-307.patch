@@ -1,0 +1,44 @@
+From 36d8bf01461c51f55fff99f2f2ad365db44de1ff Mon Sep 17 00:00:00 2001
+From: tshapira <tal.shapira@intel.com>
+Date: Thu, 2 Feb 2017 11:38:34 +0200
+Subject: [PATCH 591/639] bugFix/PKTPROSSW-307
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index b06ebd2..f5e2fc7 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -807,6 +807,9 @@ typedef enum
+     PP_LOOKUP_FIELD_FLAGS_VLAN2                 = 0x02
+ }PP_LOOKUP_FIELD_FLAGS_e;
+ 
++#define ICMP_ECHO_REQUEST      (1<<0)       /* Identical to the classifier flags */
++#define ICMP_ECHO_REPLY        (1<<1)       /* Identical to the classifier flags */
++
+ typedef struct
+ {
+     Uint8       PID;                    /* Type: PP_PID_NUM_e                                    */
+@@ -1080,7 +1083,8 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_WIFI_PID                            0x40
+                                 #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x80
+                                 #define AVALANCHE_PP_EGRESS_MULTICAST                           0x100
+-    Uint8                       reserved;
++                                #define AVALANCHE_PP_EGRESS_ICMP                                0x200                        
++    Uint8                       reserved
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+ 
+@@ -2346,6 +2350,7 @@ typedef     struct
+     Uint8   mocaPaddingMode;
+ }avalanche_pp_db_address_param_t;
+ 
++/***************** Sanity manager api *******************/
+ typedef struct
+ {
+     Uint8* pktDataIngressDevName;
+-- 
+2.10.1
+

@@ -1,0 +1,87 @@
+# HG changeset patch
+# Parent e0c8510e9ee1b05729d9bfbd75942f4360975834
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -156,8 +156,6 @@ typedef enum
+     PDSP_SESSION_CACHE_SESSION_CMD               = 0x83,
+     PDSP_SESSION_CACHE_FLUSH_ALL                 = 0x84,
+     PDSP_SESSION_CACHE_SESSION_TIMEOUT           = 0x85,
+-    PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_SET    = 0x86,
+-    PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_ENABLE = 0x87,
+     PDSP_SESSION_CACHE_INTC_IRQ                  = 0x88,
+ 
+     // tDox Commands
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -785,13 +785,7 @@ typedef enum
+ #endif
+ 
+ /* Session cache deletion thresholds */
+-#ifdef CONFIG_SESS_TIMEOUT_BY_THRESH
+-#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  1
+-#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_LOW     100
+-#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_HIGH    1500
+-#else
+ #define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  0
+-#endif
+ 
+ 
+ typedef enum
+@@ -1356,13 +1350,11 @@ typedef struct // former TI_PP_SESSION
+      * successful creation of the session. */
+     Uint32                  session_handle;
+ 
+-#if defined(PUMA6_SOC_TYPE) && PUMA6_SOC_TYPE
+     /* Session Timeout indicates the number of micro-seconds of inactivity
+      * after which the PP generates an event to the host. The field if set
+      * to 0 indicates that the session needs to be configured permanently
+      * and is not subject to IDLE based timeouts. */
+     Uint32                  session_timeout;
+-#endif
+ 
+     /* Flag which indicates the priority of the session.
+      * With the introduction of QoS this will play an important part.
+@@ -1405,9 +1397,9 @@ typedef struct // former TI_PP_SESSION
+ 
+     AVALANCHE_PP_SESSION_TDOX_STATS_t   tdox_stats;
+ #else
+-    /* Added 12 bytes as reserved until Atom sync */
+-    Uint32                  reserved1;
+-    Uint32                  reserved2;
++    Uint32                  timeout_count;
++    Uint32                  packet_count_at_timeout;
++    /* Added 4 bytes as reserved until Atom sync */
+     Uint32                  reserved3;
+ #endif
+ }
+@@ -1958,10 +1950,6 @@ extern AVALANCHE_PP_RET_e    avalanche_p
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_classification_mode(PP_CLASSIFICATION_MODE_e);
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_support_bp_frag(Uint8 EnDis);
+ extern PP_CLASSIFICATION_MODE_e avalanche_pp_get_classification_mode( void );
+-#ifdef CONFIG_SESS_TIMEOUT_BY_THRESH
+-extern AVALANCHE_PP_RET_e avalanche_pp_sess_timeout_thresholds_enable(Uint8);
+-extern AVALANCHE_PP_RET_e avalanche_pp_sess_timeout_thresholds_set(Uint16, Uint16);
+-#endif
+ #endif
+ 
+ /* MISC APIs */
+diff --git a/net/ti.Kconfig b/net/ti.Kconfig
+--- a/net/ti.Kconfig
++++ b/net/ti.Kconfig
+@@ -268,13 +268,6 @@ config INTEL_PP_TUNNEL_SUPPORT
+       Enable this to support L2TPv3 and GRE-MPLS tunnels by PP.
+       This tunnels should be configured statically and regular session will not be created by PP.
+ 
+-config SESS_TIMEOUT_BY_THRESH
+-        bool "Enable Session timeout by thresholds mechanism"
+-        default n
+-        depends on TI_PACKET_PROCESSOR
+-    help
+-      Select if Sessions should be timedout according to high and low thresholds
+-      
+ endmenu
+ config INTEL_IRQ_THREAD_CHANGE_PRIORITY
+ 	bool "Change scheduler policy and priority "

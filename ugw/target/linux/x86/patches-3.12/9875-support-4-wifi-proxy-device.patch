@@ -1,0 +1,23 @@
+# HG changeset patch
+# Parent 110a7557de9025180db10f332680dbd990eadd31
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -424,7 +424,7 @@ static irqreturn_t net_subsystem_isr(int
+             if(i != NETSS_INTERUPT_ARM11) {
+                 if(pnet_ss->irqs[i].func != NULL) {
+                     NETSS_DBG_PRINT("Interrupt of subdevice %d\n", i);
+-                    pnet_ss->irqs[i].func(irq, pnet_ss->irqs[i].args);
++                    pnet_ss->irqs[i].func(i, pnet_ss->irqs[i].args);
+                     /*Prepare interrupt acknowledge mask */
+                     ack_intr |= (1 << i);
+                 } else {
+@@ -439,7 +439,7 @@ static irqreturn_t net_subsystem_isr(int
+                     {
+                         if(pnet_ss->arm11_irqs[j].func != NULL)
+                         {
+-                            pnet_ss->arm11_irqs[j].func(irq, pnet_ss->arm11_irqs[j].args);
++                            pnet_ss->arm11_irqs[j].func(j, pnet_ss->arm11_irqs[j].args);
+                             /*Arm11 bottom half will clear the NetIP bridge interrupt */
+                             ack_intr |= (1 << i);
+                             NETSS_DBG_PRINT("Processed Arm 11 interrupt %d\n", j);

@@ -1,0 +1,50 @@
+diff --git a/service/procd_errorhd.h b/service/procd_errorhd.h
+index a685148..07e91c1 100644
+--- a/service/procd_errorhd.h
++++ b/service/procd_errorhd.h
+@@ -21,6 +21,8 @@
+ #define ERRORHD_NAMED_PIPE            "/opt/errorhd_pipe"
+ #define ERRORHD_NAMED_PIPE_LOCK "/opt/errorhd_pipe_lock"
+ 
++#define ERRORHD_STATE_FILE "/tmp/errorhd_is_running"
++
+ #define max(a,b) \
+    ({ __typeof__ (a) _a = (a); \
+        __typeof__ (b) _b = (b); \
+@@ -35,6 +37,16 @@ struct eh_info {
+ 	bool nopadlog;
+ };
+ 
++static inline bool errorhd_is_running(void)
++{
++	/* If the file exist (return 0), errorhd is running */
++	if (access(ERRORHD_STATE_FILE, F_OK)) {
++		return false;
++	} else {
++		return true;
++	}
++}
++
+ static inline int errorhd_lock(void)
+ {
+ 	int fd, ret = 0;
+@@ -67,7 +79,6 @@ static inline int errorhd_unlock(int fd)
+ 	return ret;
+ }
+ 
+-
+ /**
+  * errorhd_trigger - trigger error handler
+  * Not thread safe! If called from threads, protect call with appropriate locking.
+@@ -82,6 +93,11 @@ errorhd_trigger(struct eh_info *info)
+ 	int lock_fd;
+ 	size_t len = 0;
+ 
++	/* If errorhd is not running - return */
++	if (!errorhd_is_running()) {
++		return 0;
++	}
++
+ 	if (access(ERRORHD_NAMED_PIPE, F_OK)) {
+ 		perror("errorhd_trigger: access failed\n");
+ 		return -1;

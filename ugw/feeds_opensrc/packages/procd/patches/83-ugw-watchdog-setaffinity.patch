@@ -1,0 +1,140 @@
+--- a/ChangeLog	2017-07-30 00:13:08.169770542 +0530
++++ b/ChangeLog	2017-07-30 00:12:37.857205581 +0530
+@@ -1,4 +1,5 @@
+-
++2017-07-30:
++	set affinity for procd and init to handle watchdog
+ 2015-07-31:
+ 	Setting env variables PATh & LD_CONFIG_PATH
+ 	If firmware not found return failure
+--- a/initd/init.c	2015-08-26 18:34:20.000000000 +0530
++++ b/initd/init.c	2017-07-30 00:12:37.858205562 +0530
+@@ -11,11 +11,12 @@
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  */
+-
++#define _GNU_SOURCE
+ #include <sys/wait.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <sys/reboot.h>
++#include <sys/sysinfo.h>
+ 
+ #include <libubox/uloop.h>
+ #include <libubus.h>
+@@ -28,7 +29,7 @@
+ #include <regex.h>
+ #include <unistd.h>
+ #include <stdio.h>
+-
++#include <sched.h>
+ #include "../utils/utils.h"
+ #include "init.h"
+ #include "../watchdog.h"
+@@ -71,8 +72,16 @@
+ main(int argc, char **argv)
+ {
+ 	pid_t pid;
+	char production_val[16] = "";
+-
++	cpu_set_t cpu_mask,cpu_mask_all;
++	int i,max_cpus=get_nprocs_conf();
++	CPU_ZERO(&cpu_mask);
++	CPU_ZERO(&cpu_mask_all);
++	CPU_SET(0, &cpu_mask);
++	for(i=0;  i< max_cpus; i++)
++		CPU_SET(i, &cpu_mask_all);
++/*init should start only on cpu 0 as watchdog is opened here*/	
++	sched_setaffinity(0,sizeof(cpu_set_t),&cpu_mask);
+ 	ulog_open(ULOG_KMSG, LOG_DAEMON, "init");
+ 
+ 	sigaction(SIGTERM, &sa_shutdown, NULL);
+@@ -92,6 +101,9 @@
+ 
+ 	pid = fork();
+ 	if (!pid) {
++	/*this is set open for all
++		as the child derives its attributes after fork , overwriting it here*/
++		sched_setaffinity(0,sizeof(cpu_set_t),&cpu_mask_all);
+ 		char *kmod[] = { "/sbin/kmodloader", "/etc/modules-boot.d/", NULL };
+ 
+ 		if (debug < 3) {
+--- a/procd.c	2015-08-26 18:34:20.000000000 +0530
++++ b/procd.c	2017-07-30 00:12:37.858205562 +0530
+@@ -11,7 +11,7 @@
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  */
+-
++#define _GNU_SOURCE
+ #include <sys/wait.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -20,7 +20,7 @@
+ #include <unistd.h>
+ #include <getopt.h>
+ #include <libgen.h>
+-
++#include <sched.h>
+ #include "procd.h"
+ #include "watchdog.h"
+ #include "plug/hotplug.h"
+@@ -42,6 +42,13 @@
+ {
+ 	int ch;
+ 	char *dbglvl = getenv("DBGLVL");
++	cpu_set_t cpu_mask;
++	CPU_ZERO(&cpu_mask);
++	CPU_SET(0, &cpu_mask);
++	
++/*procd should start only on cpu 0 as watchdog is opened here*/	
++	sched_setaffinity(0,sizeof(cpu_set_t),&cpu_mask);
++
+ 
+ 	ulog_open(ULOG_KMSG, LOG_DAEMON, "procd");
+ 
+--- a/service/instance.c	2017-07-30 00:13:08.176770442 +0530
++++ b/service/instance.c	2017-07-30 00:12:37.856205599 +0530
+@@ -17,6 +17,7 @@
+ #include <sys/types.h>
+ #include <sys/socket.h>
+ #include <sys/stat.h>
++#include <sys/sysinfo.h>
+ #include <net/if.h>
+ #include <unistd.h>
+ #include <stdint.h>
+@@ -25,7 +26,7 @@
+ #include <pwd.h>
+ #include <libgen.h>
+ #include <unistd.h>
+-
++#include <sched.h>
+ #include <libubox/md5.h>
+ 
+ #include "../procd.h"
+@@ -227,6 +228,7 @@
+ 	char **argv;
+ 	char *ld_preload;
+ 	int argc = 1; /* NULL terminated */
++	int i,max_cpus=get_nprocs_conf();
+ #ifdef PROCD_LTQ_SPECIFIC_LOG_REDIRECTION
+ 	int rem;
+ #else
+@@ -234,6 +236,16 @@
+ #endif
+ 	bool seccomp = !in->trace && !in->has_jail && in->seccomp;
+ 	bool setlbf = _stdout >= 0;
++	cpu_set_t cpu_mask_all;
++
++	CPU_ZERO(&cpu_mask_all);
++	for(i=0;  i< max_cpus; i++)
++    CPU_SET(i, &cpu_mask_all);
++
++  /*this is set open for all, this is forked from procd which is set affinity on cpu0
++    as the child derives its attributes after fork , overwriting it here*/
++	
++	sched_setaffinity(0,sizeof(cpu_set_t),&cpu_mask_all);
+ 
+ 	if (in->nice)
+ 		setpriority(PRIO_PROCESS, 0, in->nice);

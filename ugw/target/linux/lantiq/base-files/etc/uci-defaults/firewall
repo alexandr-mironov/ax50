@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Copyright (C) 2011-2012 OpenWrt.org
+#
+
+get_ipaddr(){
+	serverip=`uboot_env --get --name serverip 2>/dev/null`
+	[ -z "$serverip" ] && serverip="192.168.1.2"
+}
+
+add_dmz_rule() {
+	get_ipaddr;
+uci batch <<EOF
+set firewall.dmz='redirect'
+set firewall.dmz.src='wan'
+set firewall.dmz.name='DMZ-Rule'
+set firewall.dmz.proto='tcp udp'
+set firewall.dmz.enabled='0'
+set firewall.dmz.dest_ip='$serverip'
+set firewall.dmz.dest='lan'
+EOF
+}
+
+add_default_WAN_to_wanzone() {
+uci batch <<EOF
+add_list firewall.@zone[1].network='eth1_wan'
+EOF
+}
+
+. /lib/functions/uci-defaults.sh
+. /lib/lantiq.sh
+
+touch /etc/config/firewall
+
+add_dmz_rule
+add_default_WAN_to_wanzone
+uci commit firewall
+
+exit 0

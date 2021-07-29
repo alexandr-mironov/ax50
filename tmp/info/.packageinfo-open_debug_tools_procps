@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_debug_tools/procps/Makefile
+Package: procps
+Version: 3.2.8-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libncurses
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: procps
+Maintainer: 
+Source: procps-3.2.8.tar.gz
+Type: ipkg
+Description: 	This package contains procps utilites.
+http://procps.sourceforge.net/
+
+@@
+
+

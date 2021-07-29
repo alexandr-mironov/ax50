@@ -1,0 +1,20 @@
+Source-Makefile: feeds/ltq_packages/system/usign/Makefile
+Package: usign
+Version: 2015-05-08-cf8dcdb8a4e874c77f3e9a8e9b643e8c17b19131
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Types: host
+Section: base
+Category: Base system
+Title: OpenWrt signature verification utility
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: usign-2015-05-08-cf8dcdb8a4e874c77f3e9a8e9b643e8c17b19131.tar.gz
+License: ISC
+Type: ipkg
+Description: OpenWrt signature verification utility
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

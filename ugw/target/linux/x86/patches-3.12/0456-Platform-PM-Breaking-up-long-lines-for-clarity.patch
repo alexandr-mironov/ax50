@@ -1,0 +1,73 @@
+From ae95cfd84d7f8b551d61ff37f80f9b17dfe42384 Mon Sep 17 00:00:00 2001
+From: "Martinez, Ricardo" <ricardo.martinez@intel.com>
+Date: Fri, 12 Aug 2016 11:36:42 -0700
+Subject: [PATCH 456/639] Platform PM: Breaking up long lines for clarity
+
+Signed-off-by: Ricardo Martinez <ricardo.martinez@intel.com>
+---
+ drivers/platform/x86/puma_acpi.c | 33 ++++++++++++++++++++++++---------
+ 1 file changed, 24 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/platform/x86/puma_acpi.c b/drivers/platform/x86/puma_acpi.c
+index d173c8e8..1547e72 100755
+--- a/drivers/platform/x86/puma_acpi.c
++++ b/drivers/platform/x86/puma_acpi.c
+@@ -414,7 +414,8 @@ static ssize_t show_function_disable_state(struct device *dev, struct device_att
+       return -ENXIO;
+    }
+ 
+-   return sprintf(buf, "FUNC_DIS_0 0x%08x FUNC_DIS_1 0x%08x\n", data->pmc_dev_disabled_config0, data->pmc_dev_disabled_config1);
++   return sprintf(buf, "FUNC_DIS_0 0x%08x FUNC_DIS_1 0x%08x\n",
++                  data->pmc_dev_disabled_config0, data->pmc_dev_disabled_config1);
+ }
+ 
+ static acpi_status update_lpm( acpi_handle handle, int xface, int operation, int *lpm_bbu)
+@@ -1560,23 +1561,37 @@ static int puma_acpi_dev_disabled_status(struct puma_acpi_data *data)
+    uint32_t func_dis, disabled_ip;
+    int ret_value;
+ 
+-   if((ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE, PUMA_PMC_FUNC_DIS_0, &func_dis)) < 0) {
+-      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",ret_value, PUMA_PMC_FUNC_DIS_0, __LINE__);
++   ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE,
++                             PUMA_PMC_FUNC_DIS_0, &func_dis);
++   if(ret_value < 0) {
++      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",
++              ret_value, PUMA_PMC_FUNC_DIS_0, __LINE__);
+       return ret_value;
+    }
+-   if((ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE, PUMA_PMC_DISABLE_IP_0, &disabled_ip)) < 0) {
+-      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",ret_value, PUMA_PMC_DISABLE_IP_0, __LINE__);
++
++   ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE,
++                             PUMA_PMC_DISABLE_IP_0, &disabled_ip);
++   if(ret_value < 0) {
++      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",
++              ret_value, PUMA_PMC_DISABLE_IP_0, __LINE__);
+       return ret_value;
+    }
+ 
+    data->pmc_dev_disabled_config0 = func_dis | disabled_ip;
+ 
+-   if((ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE, PUMA_PMC_FUNC_DIS_1, &func_dis)) < 0) {
+-      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",ret_value, PUMA_PMC_FUNC_DIS_1, __LINE__);
++   ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE,
++                             PUMA_PMC_FUNC_DIS_1, &func_dis);
++   if(ret_value < 0) {
++      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",
++              ret_value, PUMA_PMC_FUNC_DIS_1, __LINE__);
+       return ret_value;
+    }
+-   if((ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE, PUMA_PMC_DISABLE_IP_1, &disabled_ip)) < 0) {
+-      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",ret_value, PUMA_PMC_DISABLE_IP_1, __LINE__);
++
++   ret_value = iosf_mbi_read(PUMA_PMC_PORT_ID, PUMA_PMC_MEM_READ_OPCODE,
++                             PUMA_PMC_DISABLE_IP_1, &disabled_ip);
++   if(ret_value < 0) {
++      pr_err("iosf_mbi_read error %d while reading 0x%x at line %d!\n",
++              ret_value, PUMA_PMC_DISABLE_IP_1, __LINE__);
+       return ret_value;
+    }
+ 
+-- 
+2.10.1
+

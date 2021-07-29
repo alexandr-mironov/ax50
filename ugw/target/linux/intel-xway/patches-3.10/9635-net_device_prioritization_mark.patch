@@ -1,0 +1,132 @@
+# HG changeset patch
+# Parent 8654929e92a94a7f2e03a1f9f4e7a31b9a6cd274
+# IPv4, IPv6 and bridge hooks for device prioritization
+
+Signed-off-by: Mayankx, Patel<mayankx.patel@intel.com>
+
+diff --git a/net/bridge/br_forward.c b/net/bridge/br_forward.c
+--- a/net/bridge/br_forward.c
++++ b/net/bridge/br_forward.c
+@@ -21,6 +21,11 @@
+ #include <linux/netfilter_bridge.h>
+ #include "br_private.h"
+ 
++#ifdef CONFIG_BOOST_MARK
++/*Hook to mark skb for device prioritization */
++extern int32_t (*dev_boost_hook)(struct sk_buff *);
++#endif
++
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+   #include <net/ppa_api.h>
+ #endif
+@@ -54,6 +59,12 @@ int br_dev_queue_push_xmit(struct sk_buf
+ 		skb_push(skb, ETH_HLEN);
+ 		br_drop_fake_rtable(skb);
+ 
++#ifdef CONFIG_BOOST_MARK
++	if (dev_boost_hook != NULL) {
++		dev_boost_hook(skb);
++	}
++#endif
++
+ #if (defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)) && (defined( CONFIG_LTQ_BRIDGE_LEARNING))
+ 	if (ppa_hook_session_bradd_fn != NULL)
+ 		ppa_hook_session_bradd_fn(skb, NULL, PPA_F_BRIDGED_SESSION);
+diff --git a/net/bridge/br_netfilter.c b/net/bridge/br_netfilter.c
+--- a/net/bridge/br_netfilter.c
++++ b/net/bridge/br_netfilter.c
+@@ -45,6 +45,11 @@
+   #include <net/ppa_api.h>
+ #endif
+ 
++#ifdef CONFIG_BOOST_MARK
++/*Hook to mark skb for device prioritization */
++extern int32_t (*dev_boost_hook)(struct sk_buff *);
++#endif
++
+ #define skb_origaddr(skb)	 (((struct bridge_skb_cb *) \
+ 				 (skb->nf_bridge->data))->daddr.ipv4)
+ #define store_orig_dstaddr(skb)	 (skb_origaddr(skb) = ip_hdr(skb)->daddr)
+@@ -698,6 +703,12 @@ static unsigned int br_nf_pre_routing(un
+ 		return NF_DROP;
+ 	br = p->br;
+ 
++#ifdef CONFIG_BOOST_MARK
++	if (dev_boost_hook != NULL) {
++		dev_boost_hook(skb);
++	}
++#endif
++
+ #if (defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)) && (defined( CONFIG_LTQ_BRIDGE_LEARNING))
+ 	if (ppa_hook_session_bradd_fn != NULL)
+ 		ppa_hook_session_bradd_fn(skb, NULL, PPA_F_BRIDGED_SESSION
+diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
+--- a/net/ipv4/Kconfig
++++ b/net/ipv4/Kconfig
+@@ -663,6 +663,12 @@ config TCP_CONG_CUBIC
+ 	depends on !TCP_CONG_ADVANCED
+ 	default y
+ 
++config BOOST_MARK
++        tristate "Support for prioritiy marking of packet for Device prioritization"
++        default n
++        help
++                Enable packet marking for device prioritization to boost downstream traffic
++
+ config DEFAULT_TCP_CONG
+ 	string
+ 	default "bic" if DEFAULT_BIC
+diff --git a/net/ipv4/ip_output.c b/net/ipv4/ip_output.c
+--- a/net/ipv4/ip_output.c
++++ b/net/ipv4/ip_output.c
+@@ -91,6 +91,12 @@
+ int sysctl_ip_default_ttl __read_mostly = IPDEFTTL;
+ EXPORT_SYMBOL(sysctl_ip_default_ttl);
+ 
++#ifdef CONFIG_BOOST_MARK
++/*Hook to mark skb for device prioritization */
++int32_t (*dev_boost_hook)(struct sk_buff *) = NULL;
++EXPORT_SYMBOL(dev_boost_hook);
++#endif
++
+ /* Generate a checksum for an outgoing IP datagram. */
+ void ip_send_check(struct iphdr *iph)
+ {
+@@ -200,6 +206,11 @@ static inline int ip_finish_output2(stru
+ 		skb = skb2;
+ 	}
+ 
++#ifdef CONFIG_BOOST_MARK
++	if (dev_boost_hook != NULL)
++		dev_boost_hook(skb);
++#endif
++
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+ #if defined(CONFIG_LTQ_PPA_MPE_IP97)
+     struct iphdr *hdr = ip_hdr(skb);
+diff --git a/net/ipv6/ip6_output.c b/net/ipv6/ip6_output.c
+--- a/net/ipv6/ip6_output.c
++++ b/net/ipv6/ip6_output.c
+@@ -60,6 +60,10 @@
+   #include <net/ppa_api.h>
+ #endif
+ 
++#ifdef CONFIG_BOOST_MARK
++/*Hook to mark skb for device prioritization */
++extern int (*dev_boost_hook)(struct sk_buff *);
++#endif
+ 
+ int __ip6_local_out(struct sk_buff *skb)
+ {
+@@ -131,6 +135,11 @@ static int ip6_finish_output2(struct sk_
+ 		}
+ 	}
+ 
++#ifdef CONFIG_BOOST_MARK
++	if (dev_boost_hook != NULL)
++		dev_boost_hook(skb);
++#endif
++
+ #if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
+ 	if ( ppa_hook_session_add_fn != NULL )
+ 	{

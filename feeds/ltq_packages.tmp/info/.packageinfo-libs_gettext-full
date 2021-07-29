@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ltq_packages/libs/gettext-full/Makefile
+Package: libintl-full
+Version: 0.19.4-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: gettext-full/host
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: GNU Internationalization library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: gettext-0.19.4.tar.xz
+License: GPL-3.0+
+Type: ipkg
+Description: GNU Internationalization library
+http://www.gnu.org/software/gettext/
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

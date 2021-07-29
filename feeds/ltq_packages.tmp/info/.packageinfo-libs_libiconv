@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/libs/libiconv/Makefile
+Package: libiconv
+Version: 7
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Tiny drop-in replacement for the GNU Character set conversion library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: 
+License: LGPL-2.1
+LicenseFiles: LICENSE
+Type: ipkg
+Description: Tiny drop-in replacement for the GNU Character set conversion library
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

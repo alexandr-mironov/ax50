@@ -1,0 +1,20 @@
+Source-Makefile: feeds/ltq_packages/network/utils/uqmi/Makefile
+Package: uqmi
+Version: 2014-12-03-86bcdb8cca652676a78b2df8b5e3fb27a40c60a4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox +libblobmsg-json +kmod-usb-net +kmod-usb-net-qmi-wwan +wwan
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Control utility for mobile broadband modems
+Maintainer: Matti Laakso <malaakso@elisanet.fi>
+Source: uqmi-2014-12-03-86bcdb8cca652676a78b2df8b5e3fb27a40c60a4.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description:   uqmi is a command line tool for controlling mobile broadband modems using
+  the QMI-protocol.
+Matti Laakso <malaakso@elisanet.fi>
+@@
+
+

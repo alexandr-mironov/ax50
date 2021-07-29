@@ -1,0 +1,86 @@
+From 64c32571b3ab376c64a8fd4366731d10fda6e4dc Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Sun, 5 Feb 2017 17:29:04 +0200
+Subject: [PATCH 594/639] DOCSISSW-1417-7071| ifOutUcastPkts & ifHCOutUcastPkts
+ are not increment when working on SGMII0
+
+Add rx & tx unicast, multicast & broadcast counters information to PPSGC transparent port counters function (PPSGC_Db_GetTpPortCounters) output.
+
+Signed-off-by: avnerlam <avner.lamy@intel.com>
+---
+ drivers/mrpc/sgc_server.c                  | 27 ++++++++++++++++++++-------
+ include/linux/avalanche/puma7/ppsgc_defs.h | 13 ++++++++++---
+ 2 files changed, 30 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/mrpc/sgc_server.c b/drivers/mrpc/sgc_server.c
+index ad74a2b..4ff0042 100644
+--- a/drivers/mrpc/sgc_server.c
++++ b/drivers/mrpc/sgc_server.c
+@@ -329,13 +329,26 @@ static int mrpc_sgc_GetTpPortCounters
+ 	ret = sgcServerDb->callbacks->
+ 		PPSGC_Db_GetTpPortCounters(&ppsgcTpPortCounters);
+ 
+-	repPpsgcTpPortCounters->inFrames      =
+-		htonl(ppsgcTpPortCounters.inFrames);
+-	repPpsgcTpPortCounters->outFrames     =
+-		htonl(ppsgcTpPortCounters.outFrames);
+-	repPpsgcTpPortCounters->discardFrames =
+-		htonl(ppsgcTpPortCounters.discardFrames);
+-
++	repPpsgcTpPortCounters->inFrames       =
++		cpu_to_be64(ppsgcTpPortCounters.inFrames);
++	repPpsgcTpPortCounters->inBcastFrames  =
++		cpu_to_be64(ppsgcTpPortCounters.inBcastFrames);
++	repPpsgcTpPortCounters->inMcastFrames  =
++		cpu_to_be64(ppsgcTpPortCounters.inMcastFrames);
++	repPpsgcTpPortCounters->inUcastFrames  =
++		cpu_to_be64(ppsgcTpPortCounters.inUcastFrames);
++
++	repPpsgcTpPortCounters->outFrames      =
++		cpu_to_be64(ppsgcTpPortCounters.outFrames);
++	repPpsgcTpPortCounters->outBcastFrames =
++		cpu_to_be64(ppsgcTpPortCounters.outBcastFrames);
++	repPpsgcTpPortCounters->outMcastFrames =
++		cpu_to_be64(ppsgcTpPortCounters.outMcastFrames);
++	repPpsgcTpPortCounters->outUcastFrames =
++		cpu_to_be64(ppsgcTpPortCounters.outUcastFrames);
++
++	repPpsgcTpPortCounters->discardFrames  =
++		cpu_to_be64(ppsgcTpPortCounters.discardFrames);
+ 	return ret;
+ }
+ 
+diff --git a/include/linux/avalanche/puma7/ppsgc_defs.h b/include/linux/avalanche/puma7/ppsgc_defs.h
+index 60bc035..417aadb 100644
+--- a/include/linux/avalanche/puma7/ppsgc_defs.h
++++ b/include/linux/avalanche/puma7/ppsgc_defs.h
+@@ -72,6 +72,7 @@ struct PpsgcIfCounters {
+ 	char                        ifName[PPSGC_IF_MANE_MAX_LENGTH];
+ 	AVALANCHE_PP_VPID_STATS_t   ifCounters;
+ 	unsigned char               includeQosDrops;
++	unsigned char               AlignTo64Bit[7];
+ };
+ 
+ /*! \var struct PpsgcSfCounters
+@@ -89,9 +90,15 @@ struct PpsgcSfCounters {
+ */
+ struct PpsgcTpPortCounters {
+ 	unsigned char           ifName[PPSGC_IF_MANE_MAX_LENGTH];
+-	unsigned int            inFrames;
+-	unsigned int            outFrames;
+-	unsigned int            discardFrames;
++	unsigned long long      inFrames;
++	unsigned long long      inBcastFrames;
++	unsigned long long      inMcastFrames;
++	unsigned long long      inUcastFrames;
++	unsigned long long      outFrames;
++	unsigned long long      outBcastFrames;
++	unsigned long long      outMcastFrames;
++	unsigned long long      outUcastFrames;
++	unsigned long long     	discardFrames;
+ };
+ 
+ #endif /* _PPSGC_DEFS_H_ */
+-- 
+2.10.1
+

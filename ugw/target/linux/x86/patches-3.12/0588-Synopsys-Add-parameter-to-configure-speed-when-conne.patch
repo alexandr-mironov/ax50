@@ -1,0 +1,109 @@
+From 6fc0412099eee913c5b3b8a33cad257ff692e368 Mon Sep 17 00:00:00 2001
+From: "Weiss, Yair" <yair.weiss@intel.com>
+Date: Thu, 26 Jan 2017 19:15:29 +0200
+Subject: [PATCH 588/639] [Synopsys] Add parameter to configure speed when
+ connected to gmac4
+
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c    |  2 +-
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c    | 30 +++++++++++++++++++---
+ .../net/ethernet/synopsys/DWC_ETH_QOS_yheader.h    |  3 +++
+ 3 files changed, 31 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
+index e681802..608f977 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
+@@ -1518,7 +1518,7 @@ static int DWC_ETH_QOS_open(struct net_device *dev)
+ 
+    if (pdata->mux_cfg == GMCR_GMAC5_TO_GMAC4) {
+       hw_if->set_full_duplex();
+-      hw_if->set_speed(pdata, 5000);
++      hw_if->set_speed(pdata, gmac5to4_speed);
+       netif_tx_start_all_queues(dev);
+    } else if (pdata->phydev) {
+       netif_tx_start_all_queues(dev);
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
+index 79605c1..12f380f 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
+@@ -55,6 +55,9 @@ static bool vlan_filter_enable = false;
+ /* Enabling only one queue by default because MAC sends
+    most of the traffic to MTL FIFO 0. */
+ static short num_of_queues = 1;
++/* default value for gmac5 speed when connected to 4 is 5G */
++unsigned int gmac5to4_speed = 5000;
++
+ 
+ module_param(config_prints, bool, S_IRUGO | S_IWUSR);
+ MODULE_PARM_DESC(config_prints, "Enable configuration prints");
+@@ -66,6 +69,8 @@ module_param(num_of_queues, short, S_IRUGO);
+ MODULE_PARM_DESC(num_of_queues, "Number of device queues");
+ module_param(vlan_filter_enable, bool, S_IRUGO);
+ MODULE_PARM_DESC(vlan_filter_enable, "Enable/disable VLAN hash filter");
++module_param(gmac5to4_speed, uint, S_IRUGO);
++MODULE_PARM_DESC(gmac5to4_speed, "phy speed when connected to gmac4 [10 | 100 | 1000 | 2500 | 5000]");
+ 
+ #ifdef GBE_DEBUG
+ 
+@@ -150,6 +155,25 @@ static ssize_t gbe_suspend_store(struct device *dev,
+ 
+ #endif //GBE_DEBUG
+ 
++unsigned int gbe_get_4to5_speed(void)
++{
++    switch (gmac5to4_speed) {
++    case 10:
++        return GBE_GCR5_PHY_SPEED_10M;
++    case 100:
++        return GBE_GCR5_PHY_SPEED_100M;
++    case 1000:
++        return GBE_GCR5_PHY_SPEED_1G;
++    case 2500:
++        return GBE_GCR5_PHY_SPEED_2_5G;
++    case 5000:
++        return GBE_GCR5_PHY_SPEED_5G;
++    default:
++        /* not set, use 5G default value*/
++        CFG_PRINT("[GBE] 4to5 speed incorrect, using 5G default\n");
++        return GBE_GCR5_PHY_SPEED_5G;
++    }
++}
+ static int gbe_init_top_registers(void __iomem **gbe_base,
+    unsigned int *mux_cfg)
+ {
+@@ -199,8 +223,8 @@ static int gbe_init_top_registers(void __iomem **gbe_base,
+             CFG_PRINT("[GBE] GMAC5 to GMAC4!\n");
+             // Set GMII PHY config
+             VAR32_SET_FIELD(reg_val, GBE_GCR5_PHY_CFG, 0x0);
+-            // Set PHY speed to 5G
+-            VAR32_SET_FIELD(reg_val, GBE_GCR5_PHY_SPEED, GBE_GCR5_PHY_SPEED_5G);
++            // Set PHY speed according to module param
++            VAR32_SET_FIELD(reg_val, GBE_GCR5_PHY_SPEED, gbe_get_4to5_speed());
+          } else {
+             CFG_PRINT("[GBE] GMAC5 is not connected!\n");
+          }
+@@ -495,7 +519,7 @@ int DWC_ETH_QOS_probe(struct pci_dev *pdev,
+    pdata->gbe_base = gbe_base;
+    pdata->mux_cfg = gbe_mux_cfg;
+    pdata->rate = (gbe_mux_cfg == GMCR_GMAC5_TO_PHY)?
+-            GBE_GCR5_PHY_SPEED_1G : GBE_GCR5_PHY_SPEED_5G;
++            GBE_GCR5_PHY_SPEED_1G : gbe_get_4to5_speed();
+    pdata->itr_latency = ONE_SEC_TO_NS/DEFAULT_NUM_IPS;
+ 
+    /* Verify GMAC core version */
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h
+index 9061b74..a26cbcf 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_yheader.h
+@@ -1350,4 +1350,7 @@ do { \
+ 
+ uint32_t gbe_config_to_speed(uint32_t config);
+ 
++extern unsigned int gmac5to4_speed;
++unsigned int gbe_get_4to5_speed(void);
++
+ #endif
+-- 
+2.10.1
+

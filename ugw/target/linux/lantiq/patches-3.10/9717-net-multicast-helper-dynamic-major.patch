@@ -1,0 +1,108 @@
+# HG changeset patch
+# Parent 3db46588f64ef7b4a25ab93700420e5c1e94ca1d
+
+diff --git a/net/lantiq/mcast_helper.c b/net/lantiq/mcast_helper.c
+--- a/net/lantiq/mcast_helper.c
++++ b/net/lantiq/mcast_helper.c
+@@ -2347,21 +2347,34 @@ static int __init mcast_helper_init_modu
+ 	int ret_val;
+ 	int index=0;
+ 	/* 
+-	 * Register the mcast device (atleast try) 
++	 * Alloc the chrdev region for mcast helper 
+ 	 */
+-	ret_val = register_chrdev(MCH_MAJOR_NUM, DEVICE_NAME, &mcast_helper_fops);
++	ret_val = alloc_chrdev_region(&mch_major , 0 ,1 , DEVICE_NAME);
+ 
+ 	/* 
+ 	 * Negative values signify an error 
+ 	 */
+ 	if (ret_val < 0) {
+ 		printk(KERN_ALERT "%s failed with %d\n",
+-		       "Sorry, registering the mcast  device ", ret_val);
++		       "Sorry, alloc_chrdev_region failed for the mcast  device ", ret_val);
+ 		return ret_val;
+ 	}
+ 
+ 	printk(KERN_INFO "%s The major device number is %d.\n",
+-	       "Registeration is a success", MCH_MAJOR_NUM);
++	       "Registeration is a success", MAJOR(mch_major));
++
++	/* Create device class (before allocation of the array of devices) */
++	mcast_class = class_create(THIS_MODULE, DEVICE_NAME);
++	if (IS_ERR(mcast_class)) {
++		ret_val = PTR_ERR(mcast_class);
++		goto fail;
++	}
++    	if (device_create(mcast_class, NULL, mch_major, NULL, "mcast") == NULL)
++        	goto fail;
++    	device_created = 1;
++    	cdev_init(&mcast_cdev, &mcast_helper_fops);
++    	if (cdev_add(&mcast_cdev, mch_major, 1) == -1)
++        	goto fail;
+ 	
+ 	for (index = 0 ; index < GINDX_LOOP_COUNT ;index++) {
+ 		g_mcast_grpindex[index] = 0 ; 
+@@ -2378,8 +2391,18 @@ static int __init mcast_helper_init_modu
+ 	five_tuple_br_info_ptr = (void *)mcast_helper_five_tuple_br_info;
+ 	mcast_helper_sig_check_update_ptr = mcast_helper_sig_check_update;
+ 	mcast_helper_init_timer(MCH_UPDATE_TIMER);
++	return 0;
++fail:
++	if (device_created) {
++        	device_destroy(mcast_class, mch_major);
++        	cdev_del(&mcast_cdev);
++    	}
++    	if (mcast_class)
++        	class_destroy(mcast_class);
++    	if (mch_major != -1)
++        	unregister_chrdev_region(mch_major, 1);
+ 
+-	return 0;
++	return -1;
+ }
+ 
+  /*=============================================================================
+@@ -2406,7 +2429,14 @@ static void __exit mcast_helper_exit_mod
+ #endif
+ 	mcast_helper_net_exit();
+     	remove_proc_entry("proc_entry",NULL);
+-	unregister_chrdev(MCH_MAJOR_NUM, DEVICE_NAME);
++	if (device_created) {
++        	device_destroy(mcast_class, mch_major);
++        	cdev_del(&mcast_cdev);
++    	}
++    	if (mcast_class)
++        	class_destroy(mcast_class);
++    	if (mch_major != -1)
++        	unregister_chrdev_region(mch_major, 1);
+ }
+ 
+ 
+diff --git a/net/lantiq/mcast_helper.h b/net/lantiq/mcast_helper.h
+--- a/net/lantiq/mcast_helper.h
++++ b/net/lantiq/mcast_helper.h
+@@ -33,11 +33,19 @@
+ 
+ #include <uapi/linux/in.h> 
+ #include <linux/ioctl.h>
++#include <linux/cdev.h>
++#include <linux/device.h>
++#include <linux/module.h>
+ 
+-#define MCH_MAJOR_NUM 240
+-#define MCH_MEMBER_ENTRY_ADD _IOR(MCH_MAJOR_NUM, 0, char *)
+-#define MCH_MEMBER_ENTRY_UPDATE _IOR(MCH_MAJOR_NUM, 1, char *)
+-#define MCH_MEMBER_ENTRY_REMOVE _IOR(MCH_MAJOR_NUM, 2, char *)
++static int mch_major = -1;
++static struct cdev mcast_cdev;
++static struct class *mcast_class = NULL;
++static bool device_created;
++
++#define MCH_MAGIC 'M'
++#define MCH_MEMBER_ENTRY_ADD _IOR(MCH_MAGIC, 0, char *)
++#define MCH_MEMBER_ENTRY_UPDATE _IOR(MCH_MAGIC, 1, char *)
++#define MCH_MEMBER_ENTRY_REMOVE _IOR(MCH_MAGIC, 2, char *)
+ 
+ #define LTQ_MC_F_REGISTER 0x01
+ #define LTQ_MC_F_DEREGISTER 0x02

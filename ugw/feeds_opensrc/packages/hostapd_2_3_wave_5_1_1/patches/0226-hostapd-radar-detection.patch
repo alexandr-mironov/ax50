@@ -1,0 +1,71 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/hostapd.c hostapd-2.6/src/ap/hostapd.c
+--- hostapd-2.6-orig/src/ap/hostapd.c	2017-05-17 11:39:30.604835231 +0300
++++ hostapd-2.6/src/ap/hostapd.c	2017-05-17 12:09:06.557133437 +0300
+@@ -1340,19 +1340,36 @@ void hostapd_channel_list_updated(struct
+ }
+ 
+ 
+-/* Must be aligned with drivers struct for vendor country command */
++/* Must be aligned with drivers struct */
+ #define COUNTRY_CODE_MAX_LEN 3
+-typedef struct mtlk_country_code_data
++typedef struct mtlk_hostapd_initial_data
+ {
+ 	char	alpha2[COUNTRY_CODE_MAX_LEN];
+ 	u8	is_11b;
+-} mtlk_country_code_data_t;
++	u8	radar_detection;
++} mtlk_hostapd_initial_data_t;
+ 
++static int send_initial_params_to_driver (struct hostapd_data *hapd, const char *country)
++{
++	mtlk_hostapd_initial_data_t data;
++
++	os_memset(&data, 0, sizeof(data));
++	os_memcpy(data.alpha2, country, 2); /* third char will not be sent */
++	data.is_11b = (HOSTAPD_MODE_IEEE80211B == hapd->iconf->hw_mode);
++	data.radar_detection = hapd->iconf->ieee80211h;
++
++	if (hostapd_drv_vendor_cmd(hapd, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_INITIAL_DATA,
++						(const u8*)&data, sizeof(data), NULL)) {
++		wpa_printf(MSG_ERROR, "Failed to send driver vendor command LTQ_NL80211_VENDOR_SUBCMD_INITIAL_DATA");
++		return -1;
++	}
++
++	return 0;
++}
+ 
+ static int setup_interface(struct hostapd_iface *iface)
+ {
+ 	struct hostapd_data *hapd = iface->bss[0];
+-	mtlk_country_code_data_t cc_data;
+ 	size_t i;
+ 
+ 	/*
+@@ -1406,12 +1423,8 @@ static int setup_interface(struct hostap
+ 			return -1;
+ 		}
+ 
+-		os_memset(&cc_data, 0, sizeof(cc_data));
+-		os_memcpy(cc_data.alpha2, country, 2); /* third char will not be sent */
+-		cc_data.is_11b = (HOSTAPD_MODE_IEEE80211B == hapd->iconf->hw_mode);
+-		if (hostapd_drv_vendor_cmd(hapd, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_COUNTRY_CODE,
+-							(const u8*)&cc_data, sizeof(cc_data), NULL))
+-			wpa_printf(MSG_INFO, "Failed to send driver vendor command LTQ_NL80211_VENDOR_SUBCMD_COUNTRY_CODE");
++		if (send_initial_params_to_driver(hapd, country))
++			return -1;
+ 
+ 		wpa_printf(MSG_DEBUG, "Previous country code %s, new country code %s",
+ 			   previous_country, country);
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/common/ltq-vendor.h hostapd-2.6/src/common/ltq-vendor.h
+--- hostapd-2.6-orig/src/common/ltq-vendor.h	2017-05-17 11:39:30.611835091 +0300
++++ hostapd-2.6/src/common/ltq-vendor.h	2017-05-17 11:59:48.410289229 +0300
+@@ -34,7 +34,7 @@ enum ltq_nl80211_vendor_subcmds {
+ 	LTQ_NL80211_VENDOR_SUBCMD_GET_AID = 1,
+ 	LTQ_NL80211_VENDOR_SUBCMD_FREE_AID = 2,
+ 	LTQ_NL80211_VENDOR_SUBCMD_TX_EAPOL = 3,
+-	LTQ_NL80211_VENDOR_SUBCMD_COUNTRY_CODE = 4,
++	LTQ_NL80211_VENDOR_SUBCMD_INITIAL_DATA = 4,
+ 	LTQ_NL80211_VENDOR_SUBCMD_SYNC_DONE = 5,
+ 	LTQ_NL80211_VENDOR_SUBCMD_DFS_DEBUG = 6,
+ 	LTQ_NL80211_VENDOR_SUBCMD_CAC_COMPLETE = 7,

@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/libcap/Makefile
+Package: libcap
+Version: 2.24-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Linux capabilities library
+Maintainer: Steven Barth <cyrus@openwrt.org>
+Source: libcap-2.24.tar.xz
+Type: ipkg
+Description: Linux capabilities library
+http://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/
+Steven Barth <cyrus@openwrt.org>
+@@
+
+

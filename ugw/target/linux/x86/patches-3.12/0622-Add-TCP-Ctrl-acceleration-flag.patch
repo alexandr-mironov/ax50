@@ -1,0 +1,24 @@
+From 0b00802b616908428346f52c65c3c4b55e255b79 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 26 Mar 2017 19:54:02 +0300
+Subject: [PATCH 622/639] Add TCP Ctrl acceleration flag
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index c97690a..c41e7f8 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1102,6 +1102,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_ICMP                                0x200
+                                 #define AVALANCHE_PP_EGRESS_ENABLE_FRAG_BP                      0x400
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_NO_ACK             0x800
++                                #define AVALANCHE_PP_EGRESS_DO_TCP_CTRL                         0x1000
+     Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+-- 
+2.10.1
+

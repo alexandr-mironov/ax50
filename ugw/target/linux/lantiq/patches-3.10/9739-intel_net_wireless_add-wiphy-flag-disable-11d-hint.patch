@@ -1,0 +1,41 @@
+From 5efc770ec304b2625024263a1235dcddc3903f43 Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 14:54:05 +0300
+Subject: [PATCH 9739/9740] add-wiphy-flag-disable-11d-hint
+
+---
+ include/net/cfg80211.h | 1 +
+ net/wireless/sme.c     | 5 +++--
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 8c7e3e8..beec9d9 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -2469,6 +2469,7 @@ enum wiphy_flags {
+ 	WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL	= BIT(21),
+ 	WIPHY_FLAG_SUPPORTS_5_10_MHZ		= BIT(22),
+ 	WIPHY_FLAG_HAS_CHANNEL_SWITCH		= BIT(23),
++	WIPHY_FLAG_DISABLE_11D_HINT		= BIT(31),
+ };
+ 
+ /**
+diff --git a/net/wireless/sme.c b/net/wireless/sme.c
+index 3ed35c3..66ac420e 100644
+--- a/net/wireless/sme.c
++++ b/net/wireless/sme.c
+@@ -528,8 +528,9 @@ void __cfg80211_connect_result(struct net_device *dev, const u8 *bssid,
+ 	 * - country_ie + 2, the start of the country ie data, and
+ 	 * - and country_ie[1] which is the IE length
+ 	 */
+-	regulatory_hint_11d(wdev->wiphy, bss->channel->band,
+-			    country_ie + 2, country_ie[1]);
++	if (!(wdev->wiphy->flags & WIPHY_FLAG_DISABLE_11D_HINT))
++	    regulatory_hint_11d(wdev->wiphy, bss->channel->band,
++				country_ie + 2, country_ie[1]);
+ 	kfree(country_ie);
+ }
+ 
+-- 
+2.10.1
+

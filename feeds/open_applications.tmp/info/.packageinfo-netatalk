@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_applications/netatalk/Makefile
+Package: netatalk
+Submenu: Filesystem
+Version: 3.0.1-0
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libdb47 +libgcrypt +libopenssl +avahi-daemon +libavahi-client +librpc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: netatalk
+Maintainer: W. Michael Petullo <mike@flyn.org>
+Source: netatalk-3.0.1.tar.bz2
+Type: ipkg
+Description: netatalk
+http://netatalk.sourceforge.net
+W. Michael Petullo <mike@flyn.org>
+@@
+
+

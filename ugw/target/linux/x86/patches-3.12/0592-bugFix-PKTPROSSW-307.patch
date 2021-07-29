@@ -1,0 +1,25 @@
+From fd5f5a58c870d3e3355faab1e2facfff74938b75 Mon Sep 17 00:00:00 2001
+From: tshapira <tal.shapira@intel.com>
+Date: Thu, 2 Feb 2017 13:04:44 +0200
+Subject: [PATCH 592/639] bugFix/PKTPROSSW-307
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index f5e2fc7..c8902bc 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1084,7 +1084,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x80
+                                 #define AVALANCHE_PP_EGRESS_MULTICAST                           0x100
+                                 #define AVALANCHE_PP_EGRESS_ICMP                                0x200                        
+-    Uint8                       reserved
++    Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+ 
+-- 
+2.10.1
+

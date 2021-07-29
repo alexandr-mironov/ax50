@@ -1,0 +1,45 @@
+Source-Makefile: feeds/open_applications/bridge-utils/Makefile
+Package: bridge-utils
+Menu: 1
+Version: 1.4-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Base system
+Title: Ethernet bridging configuration utility
+Maintainer: 
+Source: bridge-utils-1.4.tar.gz
+Type: ipkg
+Description:  Manage ethernet bridging: a way to connect networks together to 
+ form a larger network.
+http://bridge.sourceforge.net/
+
+@@
+Config:
+   	menu "overwrite package version"
+		depends on PACKAGE_bridge-utils
+	config bridge-utils_USE_CUSTOM_VERSION
+		depends on PACKAGE_bridge-utils
+		bool "Use custom package version"
+		default n
+	config bridge-utils_CUSTOM_VERSION
+		depends on bridge-utils_USE_CUSTOM_VERSION
+		string "bridge-utils version as string (default version: 1.4)"
+		default "1.4"
+	endmenu
+   	menu "custom source directory"
+		depends on PACKAGE_bridge-utils
+	config bridge-utils_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_bridge-utils
+		bool "Use custom source directory"
+		default n
+	config bridge-utils_CUSTOM_SOURCE_DIR
+		depends on bridge-utils_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/../../../wlnsw/wireline_sw_linux26/open_bridge_utils"
+	endmenu
+@@
+
+

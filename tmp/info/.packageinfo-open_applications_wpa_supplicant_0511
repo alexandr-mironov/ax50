@@ -1,0 +1,21 @@
+Source-Makefile: package/feeds/open_applications/wpa_supplicant_0511/Makefile
+Package: wpa_supplicant_0511
+Menu: 1
+Version: 0.5.11-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libopenssl
+Section: net
+Category: Network
+Title: WPA Supplicant(0_5_11)
+Maintainer: 
+Source: wpa_supplicant-0.5.11.tar.gz
+Type: ipkg
+Description:  Linux WPA/WPA2/IEEE 802.1X Supplicant 
+http://hostap.epitest.fi
+
+@@
+
+

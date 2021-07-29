@@ -1,0 +1,22 @@
+Source-Makefile: feeds/open_applications/samba3/Makefile
+Package: samba3
+Version: 3.0.24-6
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +librpc +@BUSYBOX_CONFIG_ADDUSER +@BUSYBOX_CONFIG_FEATURE_ADDUSER_LONG_OPTIONS +@BUSYBOX_CONFIG_DELUSER
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: samba3
+Maintainer: 
+Source: samba-3.0.24.tar.gz
+Type: ipkg
+Description: samba3
+http://www.samba.org/
+
+@@
+Config:
+	source "ugw/feeds_opensrc/packages/samba3/Config.in"
+@@
+
+

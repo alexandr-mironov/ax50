@@ -1,0 +1,12 @@
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -6198,7 +6198,9 @@ struct net_device *alloc_netdev_mqs(int
+     dev->pid_handle     = -1;
+     dev->vpid_handle    = -1;
+     memset ((void *)&dev->vpid_block, 0xFF, sizeof(dev->vpid_block));
++#if !(PUMA7_OR_NEWER_SOC_TYPE)
+     dev->vpid_block.qos_clusters_count = 0;
++#endif
+ #ifdef CONFIG_MACH_PUMA5
+     dev->vpid_block.priv_vpid_flags = 0;
+ #else

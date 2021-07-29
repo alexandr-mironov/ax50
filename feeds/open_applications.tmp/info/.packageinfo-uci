@@ -1,0 +1,53 @@
+Source-Makefile: feeds/open_applications/uci/Makefile
+Package: uci
+Version: 2014-04-11.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuci
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: Utility for the Unified Configuration Interface (UCI)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uci-2014-04-11.1.tar.gz
+License: LGPLv2.1 GPLv2
+Type: ipkg
+Description: Utility for the Unified Configuration Interface (UCI)
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: libuci
+Version: 2014-04-11.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: C library for the Unified Configuration Interface (UCI)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uci-2014-04-11.1.tar.gz
+License: LGPLv2.1 GPLv2
+Type: ipkg
+Description: C library for the Unified Configuration Interface (UCI)
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: libuci-lua
+Version: 2014-04-11.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuci +liblua
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Lua plugin for UCI
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: uci-2014-04-11.1.tar.gz
+License: LGPLv2.1 GPLv2
+Type: ipkg
+Description: Lua plugin for UCI
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

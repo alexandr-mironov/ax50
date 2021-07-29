@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/utils/ubi-utils/Makefile
+Package: ubi-utils
+Version: 1.5.1-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @NAND_SUPPORT
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux liblzo zlib
+Section: utils
+Category: Utilities
+Title: Utilities for ubi info/debug
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: ubi-utils-1.5.1.tar.gz
+License: GPLv2
+Type: ipkg
+Description:   Utilities for manipulating memory technology devices.
+http://www.linux-mtd.infradead.org/
+John Crispin <blogic@openwrt.org>
+@@
+
+

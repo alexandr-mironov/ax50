@@ -1,0 +1,51 @@
+# HG changeset patch
+# Parent 7bca1304ad161498368c858575c2de3ce65bc16a
+
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -595,6 +595,9 @@ struct sk_buff {
+ #ifdef CONFIG_NETWORK_SECMARK
+ 	__u32			secmark;
+ #endif
++#if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
++	void 			*ptr_ppa_pitem;
++#endif
+ #ifdef CONFIG_NETWORK_EXTMARK
+ 	__u32			extmark;
+ #endif
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -375,7 +375,9 @@ struct sk_buff *__alloc_skb(unsigned int
+ 	skb->end = skb->tail + size;
+ 	skb->mac_header = (typeof(skb->mac_header))~0U;
+ 	skb->transport_header = (typeof(skb->transport_header))~0U;
+-
++#if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
++	skb->ptr_ppa_pitem = NULL;
++#endif
+     /* make sure we initialize shinfo sequentially */
+     shinfo = skb_shinfo(skb);
+     memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
+@@ -812,6 +814,9 @@ void kfree_skb(struct sk_buff *skb)
+ 		smp_rmb();
+ 	else if (likely(!atomic_dec_and_test(&skb->users)))
+ 		return;
++#if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
++	skb->ptr_ppa_pitem = NULL;
++#endif
+ 	trace_kfree_skb(skb, __builtin_return_address(0));
+ 	__kfree_skb(skb);
+ }
+@@ -901,8 +906,8 @@ static void __copy_skb_header(struct sk_
+ #endif
+ 	new->pfmemalloc		= old->pfmemalloc;
+ 	new->protocol		= old->protocol;
+-#ifdef CONFIG_NETWORK_EXTMARK
+-	new->extmark		= old->extmark;
++#if defined(CONFIG_LTQ_PPA_API) || defined(CONFIG_LTQ_PPA_API_MODULE)
++	new->ptr_ppa_pitem	= old->ptr_ppa_pitem;
+ #endif
+ 	new->mark		= old->mark;
+ 	new->skb_iif		= old->skb_iif;

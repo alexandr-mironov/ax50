@@ -1,0 +1,75 @@
+From 1a1f3735c1cec7e897bd965e24556c27749d31e5 Mon Sep 17 00:00:00 2001
+From: Florian Westphal <fw@strlen.de>
+Date: Tue, 8 Dec 2015 23:35:19 +0100
+Subject: [PATCH 582/639] netfilter: ipv6: nf_defrag: fix NULL deref panic
+
+Valdis reports NULL deref in nf_ct_frag6_gather.
+Problem is bogus use of skb_queue_walk() -- we miss first skb in the list
+since we start with head->next instead of head.
+
+In case the element we're looking for was head->next we won't find
+a result and then trip over NULL iter.
+
+(defrag uses plain NULL-terminated list rather than one terminated by
+ head-of-list-pointer, which is what skb_queue_walk expects).
+
+Fixes: 029f7f3b8701cc7a ("netfilter: ipv6: nf_defrag: avoid/free clone operations")
+Reported-by: Valdis Kletnieks <Valdis.Kletnieks@vt.edu>
+Tested-by: Valdis Kletnieks <Valdis.Kletnieks@vt.edu>
+Signed-off-by: Florian Westphal <fw@strlen.de>
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+Signed-off-by: Michael L. Walker <michael.l.walker@intel.com>
+---
+ include/net/netfilter/ipv6/nf_defrag_ipv6.h |  2 +-
+ net/ipv6/netfilter/nf_conntrack_reasm.c     | 15 +++++++++------
+ 2 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/include/net/netfilter/ipv6/nf_defrag_ipv6.h b/include/net/netfilter/ipv6/nf_defrag_ipv6.h
+index 495a072..540d1ab 100644
+--- a/include/net/netfilter/ipv6/nf_defrag_ipv6.h
++++ b/include/net/netfilter/ipv6/nf_defrag_ipv6.h
+@@ -5,7 +5,7 @@ extern void nf_defrag_ipv6_enable(void);
+ 
+ extern int nf_ct_frag6_init(void);
+ extern void nf_ct_frag6_cleanup(void);
+-int nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user);
++int nf_ct_frag6_gather(struct sk_buff *skb, u32 user);
+ 
+ struct inet_frags_ctl;
+ 
+diff --git a/net/ipv6/netfilter/nf_conntrack_reasm.c b/net/ipv6/netfilter/nf_conntrack_reasm.c
+index 8be49a6..f368557 100644
+--- a/net/ipv6/netfilter/nf_conntrack_reasm.c
++++ b/net/ipv6/netfilter/nf_conntrack_reasm.c
+@@ -425,11 +425,14 @@ nf_ct_frag6_reasm(struct frag_queue *fq, struct sk_buff *prev,  struct net_devic
+ 			return false;
+ 
+ 		fp->next = prev->next;
+-		skb_queue_walk(head, iter) {
+-			if (iter->next != prev)
+-			continue;
+-			iter->next = fp;
+-			break;
++
++		iter = head;
++		while (iter) {
++			if (iter->next == prev) {
++				iter->next = fp;
++				break;
++			}
++			iter = iter->next;
+ 		}
+ 
+ 		skb_morph(prev, head);
+@@ -544,7 +547,7 @@ find_prev_fhdr(struct sk_buff *skb, u8 *prevhdrp, int *prevhoff, int *fhoff)
+ 	return 0;
+ }
+ 
+-int nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
++int nf_ct_frag6_gather(struct sk_buff *skb, u32 user)
+ {
+ 	struct net_device *dev = skb->dev;
+ 	int fhoff, nhoff, ret;
+-- 
+2.10.1
+

@@ -1,0 +1,174 @@
+Source-Makefile: feeds/ltq_packages/utils/e2fsprogs/Makefile
+Package: e2fsprogs
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuuid +libext2fs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2/3/4 filesystem utilities
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description:  This package contains essential ext2 filesystem utilities which consists of
+ e2fsck, mke2fs and most of the other core ext2 filesystem utilities.
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: libext2fs
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: libs
+Category: Libraries
+Title: ext2/3/4 filesystem library
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description:  libext2fs is a library which can access ext2, ext3 and ext4 filesystems.
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: tune2fs
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem tune utility
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem tune utility
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: resize2fs
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem resize utility
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem resize utility
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: badblocks
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem badblocks utility
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem badblocks utility
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: dumpe2fs
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem information dumping utility
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem information dumping utility
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: e2freefrag
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem free space fragmentation information utility
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem free space fragmentation information utility
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: filefrag
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem file fragmentation report utility
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem file fragmentation report utility
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+Package: debugfs
+Submenu: Filesystem
+Version: 1.42.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +e2fsprogs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: util-linux
+Section: utils
+Category: Utilities
+Title: Ext2 Filesystem debugger
+Maintainer: 
+Source: e2fsprogs-1.42.12.tar.gz
+Type: ipkg
+Description: Ext2 Filesystem debugger
+http://e2fsprogs.sourceforge.net/
+
+@@
+
+

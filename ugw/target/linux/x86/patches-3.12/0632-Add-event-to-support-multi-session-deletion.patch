@@ -1,0 +1,40 @@
+From b8075c6da611bc5f87d13f227c4b4846a767dd3a Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Tue, 18 Apr 2017 11:46:52 +0300
+Subject: [PATCH 632/639] Add event to support multi session deletion
+
+---
+ include/linux/ti_hil.h | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 6863987..c2cb055 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -168,16 +168,21 @@ struct hil_core_notifier_param
+ /* Event generated once Netfilter decides to delete a session */
+ #define TI_CT_NETFILTER_DELETE_SESSION     (TI_CT_EVENT + 0x6)
+ 
+-#define TI_NPCPU_CONNTRACK_FLUSH  (TI_CT_EVENT + 0x8)
+-
+ /* Event generated as part of ATOM conntrack MRPC server handle */
+ #define CT_APPCPU_DEATH_BY_TIMEOUT  (TI_CT_EVENT + 0x7)
+ 
++/* Flush all connection tracking sessions */
++#define TI_NPCPU_CONNTRACK_FLUSH  (TI_CT_EVENT + 0x8)
++
+ /* Event generated as part of connection tracking entry flush */
+ #define NETFILTER_CT_FLUSH_START     (TI_CT_EVENT + 0x9)
+ 
+ /* Event generated as part of connection tracking entry flush */
+ #define NETFILTER_CT_FLUSH_END     (TI_CT_EVENT + 0x10)
++
++/* Event generated once Netfilter decides to delete al sessions linked to the same conntrack */
++#define TI_CT_NETFILTER_DELETE_CONNTRACK_SESSIONS     (TI_CT_EVENT + 0x11)
++
+ /**************************************************************************
+  ********************* PP Multicast Routing Event Identifiers *************
+  **************************************************************************/
+-- 
+2.10.1
+

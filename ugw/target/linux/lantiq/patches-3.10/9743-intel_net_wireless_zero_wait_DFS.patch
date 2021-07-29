@@ -1,0 +1,77 @@
+From 99f136ddc1bfa3363aeb5713bce1bb72e1885a8d Mon Sep 17 00:00:00 2001
+From: pukitis <martins.pukitis@intel.com>
+Date: Fri, 14 Jul 2017 12:01:56 +0300
+Subject: [PATCH 23/23] zero_wait_DFS
+
+---
+ net/wireless/chan.c    | 1 +
+ net/wireless/core.c    | 1 +
+ net/wireless/nl80211.c | 1 +
+ net/wireless/reg.c     | 1 +
+ 4 files changed, 4 insertions(+)
+
+diff --git a/net/wireless/chan.c b/net/wireless/chan.c
+index 5fb6aaa..8b7d28c 100644
+--- a/net/wireless/chan.c
++++ b/net/wireless/chan.c
+@@ -260,6 +260,7 @@ void cfg80211_set_dfs_state(struct wiphy *wiphy,
+ 	cfg80211_set_chans_dfs_state(wiphy, chandef->center_freq2,
+ 				     width, dfs_state);
+ }
++EXPORT_SYMBOL(cfg80211_set_dfs_state);
+ 
+ static u32 cfg80211_get_start_freq(u32 center_freq,
+ 				   u32 bandwidth)
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index cd185e7..ad70a4f 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -37,6 +37,7 @@ MODULE_DESCRIPTION("wireless configuration support");
+ 
+ /* RCU-protected (and cfg80211_mutex for writers) */
+ LIST_HEAD(cfg80211_rdev_list);
++EXPORT_SYMBOL(cfg80211_rdev_list);
+ int cfg80211_rdev_list_generation;
+ 
+ DEFINE_MUTEX(cfg80211_mutex);
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index b71fff8..ce2473f 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -10796,6 +10796,7 @@ nl80211_radar_notify(struct cfg80211_registered_device *rdev,
+ 	genlmsg_cancel(msg, hdr);
+ 	nlmsg_free(msg);
+ }
++EXPORT_SYMBOL(nl80211_radar_notify);
+ 
+ void cfg80211_cqm_pktloss_notify(struct net_device *dev,
+ 				 const u8 *peer, u32 num_packets, gfp_t gfp)
+diff --git a/net/wireless/reg.c b/net/wireless/reg.c
+index 483ebc2..504398c 100644
+--- a/net/wireless/reg.c
++++ b/net/wireless/reg.c
+@@ -119,17 +119,19 @@ static inline void assert_reg_lock(void)
+ 	lockdep_assert_held(&reg_mutex);
+ }
+ 
+-static const struct ieee80211_regdomain *get_cfg80211_regdom(void)
++const struct ieee80211_regdomain *get_cfg80211_regdom(void)
+ {
+ 	return rcu_dereference_protected(cfg80211_regdomain,
+ 					 lockdep_is_held(&reg_mutex));
+ }
++EXPORT_SYMBOL(get_cfg80211_regdom);
+ 
+-static const struct ieee80211_regdomain *get_wiphy_regdom(struct wiphy *wiphy)
++const struct ieee80211_regdomain *get_wiphy_regdom(struct wiphy *wiphy)
+ {
+ 	return rcu_dereference_protected(wiphy->regd,
+ 					 lockdep_is_held(&reg_mutex));
+ }
++EXPORT_SYMBOL(get_wiphy_regdom);
+ 
+ static void rcu_free_regdom(const struct ieee80211_regdomain *r)
+ {
+-- 
+2.10.1
+

@@ -1,0 +1,61 @@
+From 340cc61f0f1ad596bd84809078090dddb6b7491c Mon Sep 17 00:00:00 2001
+From: Andrei Danaila <andrei.danaila@intel.com>
+Date: Fri, 16 Dec 2016 10:55:19 -0800
+Subject: [PATCH 548/639] regulator: Resolve identified kw issues
+
+Resolve identified klockwork issues with respect to unbounded
+string copy:
+
+Issue as identified:
+drivers/regulator/int34d9-regulator.c:404 SV.STRBO.UNBOUND_COPY
+(1:Critical) Analyze
+function 'strcpy' does not check buffer boundaries but outputs to buffer
+'sub->name' of fixed size (40)
+Current status 'Analyze'
+
+Resolve by replacing strcpy with strlcpy and setting the size
+of destination buffer to 40.
+
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ drivers/regulator/int34d9-regulator.c       | 2 +-
+ include/linux/regulator/int34d9-regulator.h | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/regulator/int34d9-regulator.c b/drivers/regulator/int34d9-regulator.c
+index 4c09462..1db8c5c 100644
+--- a/drivers/regulator/int34d9-regulator.c
++++ b/drivers/regulator/int34d9-regulator.c
+@@ -401,7 +401,7 @@ static int puma7_rohm_regulator_probe(struct i2c_client *client,
+    sub = pdata->subdevs;
+    for (i = 0; i < PUMA7_ROHM_SUPPLY_NUMBER; i++) {
+       sub->id = puma7_rohm_reg[i].id;
+-      strcpy(sub->name, puma7_rohm_reg[i].name);
++      strlcpy(sub->name, puma7_rohm_reg[i].name, NAME_MAX_LEN);
+       sub->regulator_data.regulator_init = puma7_rohm_regulator_init;
+       sub->regulator_data.driver_data =  sub;    
+       sub++;
+diff --git a/include/linux/regulator/int34d9-regulator.h b/include/linux/regulator/int34d9-regulator.h
+index 1d8fea4..a1bb2e8 100644
+--- a/include/linux/regulator/int34d9-regulator.h
++++ b/include/linux/regulator/int34d9-regulator.h
+@@ -75,6 +75,7 @@ enum PUMA7_ROHM_REGULATOR_SUPPLIES {
+ #define PUMA7_ROHM_BATTERY_NOTIFY_STATUS_CHANGE 0x82  
+ #define ACPI_PUMA7_ROHM_CLASS       "regulator"
+ #define ACPI_PUMA7_ROHM_DEVICE_NAME	"INT34D9"
++#define NAME_MAX_LEN			 40
+ 
+ 
+ /**
+@@ -85,7 +86,7 @@ enum PUMA7_ROHM_REGULATOR_SUPPLIES {
+  */
+ struct puma7_rohm_subdev_data {
+    int         id;
+-   const char name[40];
++   const char name[NAME_MAX_LEN];
+    struct regulator_init_data regulator_data;
+ };
+ 
+-- 
+2.10.1
+

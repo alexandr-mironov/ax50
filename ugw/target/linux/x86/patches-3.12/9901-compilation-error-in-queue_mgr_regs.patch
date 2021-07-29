@@ -1,0 +1,14 @@
+# HG changeset patch
+# Parent 1b2ad60de2b2a71f16db239c7ed3f6cc3c80d71f
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -221,7 +221,7 @@ struct queue_mgr_regs {
+ /**  Globals  **/
+ /***************/
+ 
+-struct queue_mgr_regs q_mgrs[PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };
++struct queue_mgr_regs q_mgrs[PAL_CPPI41_NUM_QUEUE_MGR] = {{ 0 }};
+ u32 bmgr_base                                 =   0  ;  /* buffers pools manager base address    */
+ u32 qsmon_base[PAL_CPPI_PP_NUM_QSMON_MGRs]    = { 0 };  /* queue status monitors base addresses  */
+ 

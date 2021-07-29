@@ -1,0 +1,61 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/hostapd/ctrl_iface.c hostapd-2.6/hostapd/ctrl_iface.c
+--- hostapd-2.6-orig/hostapd/ctrl_iface.c	2017-05-12 10:17:48.254088467 +0300
++++ hostapd-2.6/hostapd/ctrl_iface.c	2017-05-12 11:05:06.266785774 +0300
+@@ -707,17 +707,25 @@ static int hostapd_ctrl_iface_hs20_deaut
+ static int hostapd_ctrl_iface_update_wan_metrics(struct hostapd_data *hapd,
+ 						const char *cmd)
+ {
+-	struct hostapd_iface *iface = hapd->iface;
+ 	char buf[128];
+-	int j;
+ 
+-	os_strlcpy(buf, cmd, 128);
+-	wpa_printf(MSG_DEBUG, "hostapd_ctrl_iface_update_wan_metrics, iface->num_bss=%zu"
+-			,iface->num_bss);
+-	for (j = 0; j < iface->num_bss; j++) {
+-		if (hs20_parse_wan_metrics(iface->bss[j]->conf, buf, 0) != 0)
+-			return -1;
++	hapd = get_bss_index(cmd, hapd->iface);
++	if (NULL == hapd) {
++		return -1;
+ 	}
++
++	cmd = os_strchr(cmd, ' ');
++	if (NULL == cmd) {
++		return -1;
++	}
++	cmd++;
++
++	os_strlcpy(buf, cmd, 128);
++	wpa_printf(MSG_DEBUG, "hostapd_ctrl_iface_update_wan_metrics, bss=%s", hapd->conf->iface);
++
++	if (hs20_parse_wan_metrics(hapd->conf, buf, 0) != 0)
++		return -1;
++
+ 	return 0;
+ }
+ 
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/hostapd/hostapd_cli.c hostapd-2.6/hostapd/hostapd_cli.c
+--- hostapd-2.6-orig/hostapd/hostapd_cli.c	2017-05-12 10:17:48.254088467 +0300
++++ hostapd-2.6/hostapd/hostapd_cli.c	2017-05-12 10:45:14.688666678 +0300
+@@ -855,14 +855,15 @@ static int hostapd_cli_cmd_update_wan_me
+ {
+ 	char buf[200];
+ 	int res;
+-	
+-	if (argc != 1) {
++
++	if (argc != 2) {
+ 		printf("Invalid 'update_wan_metrics' command - "
+-			   "one argument is needed\n");
++			   "two arguments are needed\n");
+ 		return -1;
+ 	}
+-	
+-	res = os_snprintf(buf, sizeof(buf), "UPDATE_WAN_METRICS %s", argv[0]);
++
++	res = os_snprintf(buf, sizeof(buf), "UPDATE_WAN_METRICS %s %s",
++								  argv[0], argv[1]);
+ 	if (res < 0 || res >= (int) sizeof(buf))
+ 		return -1;
+ 	return wpa_ctrl_command(ctrl, buf);

@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_debug_tools/strace/Makefile
+Package: strace
+Version: 4.5.19-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Strace
+Maintainer: 
+Source: strace-4.5.19.tar.bz2
+Type: ipkg
+Description: 	This package contains strace utility.
+http://sourceforge.net/projects/strace/ 
+
+@@
+
+

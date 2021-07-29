@@ -1,0 +1,19 @@
+Source-Makefile: feeds/ltq_packages/libs/librpc/Makefile
+Package: librpc
+Version: 2015-04-10-308e9964bfb623773dc0dcc99ef9d18d1551d6ae
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: uClibc RPC library
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: librpc-2015-04-10-308e9964bfb623773dc0dcc99ef9d18d1551d6ae.tar.gz
+License: LGPL-2.1
+Type: ipkg
+Description: uClibc RPC library
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

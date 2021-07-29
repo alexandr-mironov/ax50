@@ -1,0 +1,56 @@
+Source-Makefile: feeds/ltq_packages/network/utils/comgt/Makefile
+Package: comgt
+Version: 0.32-25
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +chat
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Option/Vodafone 3G/GPRS control tool
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: comgt.0.32.tgz
+License: GPL-2.0+
+Type: ipkg
+Description:  comgt is a scripting language interpreter useful for establishing 
+ communications on serial lines and through PCMCIA modems as well as GPRS 
+ and 3G datacards.
+http://www.pharscape.org/comgt.html
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: comgt-directip
+Version: 0.32-25
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +comgt +kmod-usb-serial +kmod-usb-serial-sierrawireless +kmod-usb-net +kmod-usb-net-sierrawireless
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Sierra Wireless Direct-IP support
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: comgt.0.32.tgz
+License: GPL-2.0+
+Type: ipkg
+Description: Sierra Wireless Direct-IP support
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: comgt-ncm
+Version: 0.32-25
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +comgt +wwan
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title:  NCM 3G/4G Support
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: comgt.0.32.tgz
+License: GPL-2.0+
+Type: ipkg
+Description:  NCM 3G/4G Support
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

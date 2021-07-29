@@ -1,0 +1,37 @@
+Source-Makefile: package/feeds/open_applications/miniupnpc/Makefile
+Package: miniupnpc
+Submenu: Firewall
+Version: 2.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libminiupnpc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Lightweight UPnP client
+Maintainer: 
+Source: miniupnpc-2.0.tar.gz
+Type: ipkg
+Description: Lightweight UPnP client
+http://miniupnp.tuxfamily.org/
+
+@@
+
+Package: libminiupnpc
+Version: 2.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Lightweight UPnP library
+Maintainer: 
+Source: miniupnpc-2.0.tar.gz
+Type: ipkg
+Description: Lightweight UPnP library
+http://miniupnp.tuxfamily.org/
+
+@@
+
+

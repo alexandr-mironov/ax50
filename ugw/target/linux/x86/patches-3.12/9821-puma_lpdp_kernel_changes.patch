@@ -1,0 +1,63 @@
+From 811c8f9d16880c3264373cf2371ac8bcfdd412bc Mon Sep 17 00:00:00 2001
+From: yairweis <yair.weiss@intel.com>
+Date: Wed, 27 Apr 2016 20:59:42 +0300
+Subject: [PATCH] 9821-puma_lpdp_kernel_changes.patch
+
+---
+ arch/x86/pp_init/puma7_pp_init.c |    1 +
+ drivers/mrpc/Kconfig             |    7 ++
+ drivers/mrpc/Makefile            |    1 +
+ drivers/mrpc/cppi_client.c       |  250 ++++++++++++++++++++++++++++++++++++++
+ drivers/net/Kconfig              |    1 +
+ drivers/net/puma7.Kconfig        |   34 ++++++
+ include/linux/mrpc.h             |    3 +
+ 7 files changed, 297 insertions(+)
+ create mode 100644 drivers/mrpc/cppi_client.c
+ create mode 100644 drivers/net/puma7.Kconfig
+
+--- a/drivers/net/Kconfig
++++ b/drivers/net/Kconfig
+@@ -428,5 +428,6 @@ config LTQ_PPA_API_DIRECTPATH_HAS_NEW_AP
+ 	  Partial Offload feature.
+ 
+ source "drivers/net/hyperv/Kconfig"
++source "drivers/net/puma7.Kconfig"
+ 
+ endif # NETDEVICES
+--- /dev/null
++++ b/drivers/net/puma7.Kconfig
+@@ -0,0 +1,34 @@
++#
++# WIFI Proxy network device driver configuration
++#
++
++config WIFI_PROXY
++        bool "WIFI proxy network device driver"
++        default n
++        ---help---
++          If PP to WIFI devices communication is needed
++          then select yes.
++          else, select no.
++
++config WIFI_PROXY_DEBUG
++        bool "Enable WiFi proxy FW debugging"
++        default n
++        depends on WIFI_PROXY
++        ---help---
++          Enable WiFi proxy FW debugging
++
++config WIFI_PROXY_DEBUG_BUFF_SIZE
++        int "Debug buffer size, number of debuf messages"
++        default 256
++        depends on WIFI_PROXY_DEBUG
++        ---help---
++          Configure extra shared memory for debugging, default 2MB for PUMA6_SOC, 512KB for PUMA5_SOC
++
++config WIFI_PROXY_EMULATOR
++        tristate "WIFI proxy emulator"
++        default n
++        depends on WIFI_PROXY_DEBUG
++        ---help---
++          If wifi proxy emulator is needed
++          then select yes.
++          else, select no.

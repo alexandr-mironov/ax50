@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/libroxml/Makefile
+Package: libroxml
+Version: 2.3.0-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Minimum, easy-to-use, C implementation for xml file parsing
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: libroxml-2.3.0.tar.gz
+License: LGPL-2.1+
+Type: ipkg
+Description: Minimum, easy-to-use, C implementation for xml file parsing
+http://www.libroxml.net/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

@@ -1,0 +1,56 @@
+# HG changeset patch
+# Parent 84c0d1d6691fb9cac66a59f4c804946cba00eac3
+fix mem leak in toe driver
+
+diff --git a/net/socket.c b/net/socket.c
+--- a/net/socket.c
++++ b/net/socket.c
+@@ -361,6 +361,7 @@ struct file *sock_alloc_file(struct sock
+ 	struct qstr name = { .name = "" };
+ 	struct path path;
+ 	struct file *file;
++	struct pid *toe_pid;
+ 
+ 	if (dname) {
+ 		name.name = dname;
+@@ -389,12 +390,14 @@ struct file *sock_alloc_file(struct sock
+ 	sock->file = file;
+ 	file->f_flags = O_RDWR | (flags & O_NONBLOCK);
+ 	file->private_data = sock;
+-	if (sock->sk) {
+-		if (toe_acceleration_flag_set_hook) {
+-			toe_acceleration_flag_set_hook(sock->sk, find_get_pid(task_pid_nr(current)), SOCKET_ALLOCATE);
+-		}
+-	}
+-	return file;
++    if (sock->sk) {
++        if (toe_acceleration_flag_set_hook) {
++            toe_pid = find_get_pid(task_pid_nr(current));
++            toe_acceleration_flag_set_hook(sock->sk, toe_pid, SOCKET_ALLOCATE);
++            put_pid(toe_pid);
++        }
++    }
++    return file;
+ }
+ EXPORT_SYMBOL(sock_alloc_file);
+ 
+@@ -592,11 +595,14 @@ const struct file_operations bad_sock_fo
+ 
+ void sock_release(struct socket *sock)
+ {
+-	if (sock->sk) {
+-		if (toe_acceleration_flag_set_hook) {
+-			toe_acceleration_flag_set_hook(sock->sk, find_get_pid(task_pid_nr(current)), SOCKET_RELEASE);
+-		}
+-	}
++    struct pid * toe_pid;
++    if (sock->sk) {
++        if (toe_acceleration_flag_set_hook) {
++            toe_pid = find_get_pid(task_pid_nr(current));
++            toe_acceleration_flag_set_hook(sock->sk, toe_pid, SOCKET_RELEASE);
++            put_pid(toe_pid);
++        }
++    }
+ 	if (sock->ops) {
+ 		struct module *owner = sock->ops->owner;
+ 

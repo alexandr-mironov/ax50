@@ -1,0 +1,60 @@
+From 186f98a1c58728f14939834039a3a7608c6aa91d Mon Sep 17 00:00:00 2001
+From: "Martinez, Ricardo" <ricardo.martinez@intel.com>
+Date: Tue, 14 Feb 2017 09:18:59 -0700
+Subject: [PATCH 597/639] DOCSISSW-1353 Porting change to add Support to BP
+ Frag
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h | 1 +
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 8 +++++++-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index d2939d9..94d2871 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -133,6 +133,7 @@ typedef enum
+     PDSP_CLASSIFIER2_PID_COMMAND    = 0x83,
+     PDSP_CLASSIFIER2_CLASSIFICATION_MODE_COMMAND = 0x84,
+     PDSP_CLASSIFIER2_MOCA_IRREG_SESS_OPEN = 0x85,
++    PDSP_CLASSIFIER2_SUPPORT_BP_FRAG      = 0x86,
+ 
+     // PDSP ReSequencer commands
+     PDSP_RESEQUENCER_SET_SYNC_Q_THRSHOLD = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index c8902bc..c7e3a37 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -886,7 +886,11 @@ typedef struct // former TI_PP_SESSION_PROPERTY
+ #endif
+     Uint8                               flags;
+                                         #define AVALANCHE_PP_INGRESS_MULTICAST   0x1
++#if PUMA7_OR_NEWER_SOC_TYPE
++    Uint8                               isFirstFrag;
++#else
+     Uint8                               reserved1;
++#endif
+ 
+ #if defined(PUMA6_SOC_TYPE) && PUMA6_SOC_TYPE
+     Bool                                isTunnel;
+@@ -1083,7 +1087,8 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_WIFI_PID                            0x40
+                                 #define AVALANCHE_PP_EGRESS_TUNNEL_BY_PASS                      0x80
+                                 #define AVALANCHE_PP_EGRESS_MULTICAST                           0x100
+-                                #define AVALANCHE_PP_EGRESS_ICMP                                0x200                        
++                                #define AVALANCHE_PP_EGRESS_ICMP                                0x200
++                                #define AVALANCHE_PP_EGRESS_ENABLE_FRAG_BP                      0x400
+     Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+@@ -1855,6 +1860,7 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_hw_interrupt_bundle_init  ( void );
+ 
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_classification_mode(PP_CLASSIFICATION_MODE_e);
++extern AVALANCHE_PP_RET_e    avalanche_pp_set_support_bp_frag(Uint8 EnDis);
+ extern PP_CLASSIFICATION_MODE_e avalanche_pp_get_classification_mode( void );
+ #endif
+ 
+-- 
+2.10.1
+

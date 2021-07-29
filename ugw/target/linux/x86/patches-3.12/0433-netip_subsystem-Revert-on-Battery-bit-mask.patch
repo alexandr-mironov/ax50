@@ -1,0 +1,32 @@
+From 8de3f9738c12e413ae52dbfa921bd5da80acc09f Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 21 Jun 2016 15:43:20 -0700
+Subject: [PATCH 433/639] netip_subsystem: Revert on Battery bit mask
+
+Revert the Bit mask used to identify the on Battery status. Netip
+subsystem cannot identify the on battery status using wrong mask
+inside the driver.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h
+index b3d921d..19360ea 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.h
+@@ -36,8 +36,8 @@
+ #define NETIP_STATUS_MSG 2
+ #define NETIP_STATUS_REQUEST_REPLY 3
+ 
+-/**Bit position in sysfs service level vector that indicates whether we are on Battery or not */
+-#define NETSS_BIT_MASK_ON_BATTERY (3)
++/**Bit position 3 in sysfs service level vector that indicates whether we are on Battery or not */
++#define NETSS_BIT_MASK_ON_BATTERY (8)
+ /**Bit mask to extract power level of netip or service. two bits  */
+ #define NETSS_BIT_MASK_POWER_LEVEL (3)
+ 
+-- 
+2.10.1
+

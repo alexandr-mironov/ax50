@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_applications/db47/Makefile
+Package: libdb47
+Version: 4.7.25.NC-5
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libxml2
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Berkeley DB library (4.7)
+Maintainer: 
+Source: db-4.7.25.NC.tar.gz
+Type: ipkg
+Description:   Berkeley DB library (4.7).
+http://www.sleepycat.com/products/db.shtml
+
+@@
+
+

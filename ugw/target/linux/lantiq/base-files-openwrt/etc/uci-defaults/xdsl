@@ -1,0 +1,102 @@
+#!/bin/sh
+#
+# Copyright (C) 2011-2012 OpenWrt.org
+#
+
+[ -e /etc/config/xdsl ] && exit 0
+
+
+. /lib/functions/uci-defaults.sh
+. /lib/lantiq.sh
+
+touch /etc/config/xdsl
+
+add_xdsl_config() {
+	local enable=$1
+	local lines=$2
+	local xdsl_phy_tc=$3
+	local ReTxUs=$4
+	local ReTxDs_V=$5
+	local ReTxDs_A=$6
+	local SraUs_V=$7
+	local SraDs_V=$8
+	local Vectoring=$9
+	local XTSE=$10
+	uci batch <<EOF
+set xdsl.dsl_config="xdsl"
+set xdsl.dsl_config.enable=$enable
+set xdsl.dsl_config.lines=$lines
+set xdsl.dsl_config.xdsl_phy_tc=$xdsl_phy_tc
+set xdsl.dsl_config.ReTxUs=$ReTxUs
+set xdsl.dsl_config.ReTxDs_V=$ReTxDs_V
+set xdsl.dsl_config.ReTxDs_A=$ReTxDs_A
+set xdsl.dsl_config.SraUs_V=$SraUs_V
+set xdsl.dsl_config.SraDs_V=$SraDs_V
+EOF
+}
+
+add_xdsl_vectoring() {
+	local vectoring=$1
+	uci set xdsl.dsl_config.Vectoring=$vectoring
+}
+
+add_xdsl_multimode() {
+	local modes=$@
+	local mode
+	for mode in $modes
+	do
+	uci add_list xdsl.dsl_config.multimode=$mode
+	done
+}
+
+add_xdsl_profile() {
+	local profiles=$@
+	local profile
+	for profile in $profiles
+	do
+	uci add_list xdsl.dsl_config.profile=$profile
+	done
+}
+
+vpi=1
+vci=32
+encaps="llc"
+payload="bridged"
+fwannex=$(lantiq_dsl_fwannex)
+board=$(lantiq_board_name)
+dsl=$(lantiq_soc_has_adsl)
+
+case "$board" in
+EASY330\ VDSL\ BOND)
+	add_xdsl_config '1' `# Enable: 0/1` \
+			'2' `# No of Lines: 1/2` \
+			'AUTO' `#PHY_TC: ADSL-ATM/ADSL-PTM/VDSL-ATM/VDSL-PTM/AUTO ` \
+			'1' `# US Retransmission: 1/0` \
+			'1' `# VDSL DS Retransmission: 1/0` \
+			'1' `# ADSL DS Retransmission: 1/0` \
+			'1' `# VDSL US Rate Adaptation: 1/0` \
+			'1' `# VDSL DS Rate Adaptation: 1/0`
+	add_xdsl_vectoring 'AUTO' `# Vectoring: On/Off/AUTO/Friendly 'one mode at a time'`
+	add_xdsl_multimode "G.lite ADSL  ADSL2" `#XTSE_Modes: G.dmt/T1.413/G.Lite/ADSL/ADSL2/ADSL2 AnnexL/ADSL2 AnnexM/ADSL2+/ADSL2+ AnnexM/VDSL2 'one or more modes'`
+	add_xdsl_profile "17a" `#AllowedProfiles: 8a/8b/8c/8d/12a/12b/17a/30a/35b`
+	;;
+
+EASY550*|EASY350*|EASY300\ AC1200*|EASY330\ AC1200*)
+	add_xdsl_config '1' `# Enable: 0/1` \
+			'1' `# No of Lines: 1/2` \
+			'AUTO' `#PHY_TC: ADSL-ATM/ADSL-PTM/VDSL-ATM/VDSL-PTM/AUTO ` \
+			'1' `# US Retransmission: 1/0` \
+			'1' `# VDSL DS Retransmission: 1/0` \
+			'1' `# ADSL DS Retransmission: 1/0` \
+			'1' `# VDSL US Rate Adaptation: 1/0` \
+			'1' `# VDSL DS Rate Adaptation: 1/0`
+	add_xdsl_vectoring 'AUTO' `# Vectoring: On/Off/AUTO/Friendly 'one mode at a time'`
+	#TODO: Refer: xml files & dslmodes.json in UGW : How to implement the Drop down selection
+	add_xdsl_multimode "G.lite ADSL  ADSL2" `#XTSE_Modes: G.dmt/T1.413/G.Lite/ADSL/ADSL2/ADSL2 AnnexL/ADSL2 AnnexM/ADSL2+/ADSL2+ AnnexM/VDSL2 'one or more modes'`
+	add_xdsl_profile "17a" `#AllowedProfiles: 8a/8b/8c/8d/12a/12b/17a/30a/35b`
+	;;
+esac
+
+uci commit xdsl
+
+exit 0

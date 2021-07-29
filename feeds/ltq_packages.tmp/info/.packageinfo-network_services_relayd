@@ -1,0 +1,20 @@
+Source-Makefile: feeds/ltq_packages/network/services/relayd/Makefile
+Package: relayd
+Submenu: Routing and Redirection
+Version: 2015-03-13-2970ff60bac6b70ecb682779d5c776dc559dc0b9
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Transparent routing / relay daemon
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: relayd-2015-03-13.tar.bz2
+License: GPL-2.0
+Type: ipkg
+Description: Transparent routing / relay daemon
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

@@ -1,0 +1,34 @@
+From 99f4806612800e20001a7b2a54c821effe92e40e Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Tue, 28 Mar 2017 19:30:33 +0300
+Subject: [PATCH 624/639] Fix endianity issue with rate limit cmd
+
+---
+ arch/x86/pal_cppi41/pal_cppi41.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+index c41a358..e9cbe58 100644
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -391,13 +391,15 @@ static AVALANCHE_PP_RET_e __cppi4AccChOpen(AVALANCHE_PP_ACC_CH_INFO_t *ptr_ch_cf
+ 
+ static AVALANCHE_PP_RET_e __cppi4AccChEnRateLimit(AVALANCHE_PP_ACC_CH_INFO_t *ptr_ch_cfg)
+ {
++    AVALANCHE_PP_ACC_CH_INFO_t info = PAL_cppi4AccChInfo_cpu_to_be(ptr_ch_cfg);
++    pdsp_cmd_t pdsp_cmd = cpu_to_be32(PDSP_PREP_CMD(PDSP_ACCUMULATOR_ENABLE_CH_RATE_LIMIT, ptr_ch_cfg->Channel, ptr_ch_cfg->Index));
+     AVALANCHE_PP_RET_e rc;
+ 
+     BUG_ON(!__pdsp_cmd_send);
+ 
+     rc = __pdsp_cmd_send(PDSP_ID_Accumulator,
+-                         PDSP_PREP_CMD(PDSP_ACCUMULATOR_ENABLE_CH_RATE_LIMIT, ptr_ch_cfg->Channel, ptr_ch_cfg->Index),
+-                         &(ptr_ch_cfg->Param0Ret),
++                         pdsp_cmd,
++                         &(info.Param0Ret),
+                          SIZE_IN_WORD(AVALANCHE_PP_ACC_CH_INFO_t) - SIZE_IN_WORD(Int32) /* Size of the parameters = total size - command size*/,
+                          NULL,   0);
+ 
+-- 
+2.10.1
+

@@ -1,0 +1,34 @@
+choice
+	prompt "Target System"
+	default TARGET_ar71xx
+	reset if !DEVEL
+	
+endchoice
+
+choice
+	prompt "Subtarget" if HAS_SUBTARGETS
+
+endchoice
+
+choice
+	prompt "Target Profile"
+
+endchoice
+
+config HAS_SUBTARGETS
+	bool
+
+config TARGET_BOARD
+	string
+
+config TARGET_ARCH_PACKAGES
+	string
+	
+
+config DEFAULT_TARGET_OPTIMIZATION
+	string
+	default "-Os -pipe -funit-at-a-time"
+
+config CPU_TYPE
+	string
+	default ""

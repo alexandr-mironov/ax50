@@ -1,0 +1,54 @@
+Source-Makefile: feeds/open_applications/upnpdm/Makefile
+Package: upnpdm
+Submenu: upnp-md
+Version: 1.2.0.17-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libupnp +libpthread +ltq-mapi +ltq-hn
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: An UPnP DM implementation (daemon)
+Maintainer: 
+Source: upnpdm-1.2.0.17.tar.gz
+Type: ipkg
+Description:  An UPnP Device Management implementation (daemon).
+ It provides a common solution through defining standard management actions
+ and data models, which can be implemented in device running different
+ execution environments. UPnP DM also allows defining new data models
+ for specific device usage.
+ .
+ This package contains an UPnP Managable Device daemon.
+http://sourceforge.net/
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_upnpdm
+	config upnpdm_USE_CUSTOM_VERSION
+		depends on PACKAGE_upnpdm
+		bool "Use custom package version"
+		default n
+	config upnpdm_CUSTOM_VERSION
+		depends on upnpdm_USE_CUSTOM_VERSION
+		string "upnpdm version as string (default version: 1.2.0.17)"
+		default "1.2.0.17"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_upnpdm
+	config upnpdm_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_upnpdm
+		bool "Use custom source directory"
+		default n
+	config upnpdm_CUSTOM_SOURCE_DIR
+		depends on upnpdm_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default ""
+	endmenu
+	menu "UPnP-DM features"
+		depends on PACKAGE_upnpdm
+		source "ugw/feeds_opensrc/packages/upnpdm/config/Config.in"
+	endmenu
+@@
+
+

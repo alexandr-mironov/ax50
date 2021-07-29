@@ -1,0 +1,31 @@
+From 44de40c7991332b117c7617b989d2cb5de571770 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 10 May 2018 14:03:00 -0700
+Subject: [PATCH] thermal_throt: Reduce the thermal check interval
+
+Reduce the thermal check interval from 5 minutes to 5 sec, so that
+thermal checks will not be missed resulting in failure to report.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/kernel/cpu/mcheck/therm_throt.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/mcheck/therm_throt.c b/arch/x86/kernel/cpu/mcheck/therm_throt.c
+index c460c91d0c8f..57d424d1a423 100644
+--- a/arch/x86/kernel/cpu/mcheck/therm_throt.c
++++ b/arch/x86/kernel/cpu/mcheck/therm_throt.c
+@@ -32,7 +32,9 @@
+ #include <asm/trace/irq_vectors.h>
+ 
+ /* How long to wait between reporting thermal events */
+-#define CHECK_INTERVAL		(300 * HZ)
++/* Check interval changed from 5 minutes to 5 sec,
++ * as 5 minutes is too long*/
++#define CHECK_INTERVAL		(5 * HZ)
+ 
+ #define THERMAL_THROTTLING_EVENT	0
+ #define POWER_LIMIT_EVENT		1
+-- 
+2.11.0
+

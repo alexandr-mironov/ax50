@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/mt76/Makefile
+Package: kmod-mt76
+Submenu: Wireless Drivers
+Version: <LINUX_VERSION>+2015-06-15-1
+Depends: +kmod-mac80211 +@DRIVER_11N_SUPPORT @PCI_SUPPORT
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: MediaTek MT76x2 wireless driver
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: mt76-2015-06-15-ec91841868a554375b3019bcfaa13ae6d20fe91c.tar.xz
+License: GPLv2
+Type: ipkg
+Description: MediaTek MT76x2 wireless driver
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

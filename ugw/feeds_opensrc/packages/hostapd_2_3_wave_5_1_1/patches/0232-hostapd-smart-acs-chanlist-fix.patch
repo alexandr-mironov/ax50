@@ -1,0 +1,14 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/acs.c hostapd-2.6/src/ap/acs.c
+--- hostapd-2.6-orig/src/ap/acs.c	2017-06-14 13:14:22.941158616 +0300
++++ hostapd-2.6/src/ap/acs.c	2017-06-14 13:23:08.851388381 +0300
+@@ -2035,6 +2035,10 @@ static void acs_init_candidate_table(str
+   for (i = 0; i < mode->num_channels; i++) {
+     struct hostapd_channel_data *chan = &mode->channels[i];
+     if (chan->flag & HOSTAPD_CHAN_DISABLED) continue;
++
++    if (!is_in_chanlist(iface, chan))
++     continue;
++
+     if (chan->flag & HOSTAPD_CHAN_RADAR) mode->candidates[mode->num_candidates].radar_affected = TRUE;
+ 
+     mode->candidates[mode->num_candidates].freq = chan->freq;

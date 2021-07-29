@@ -1,0 +1,39 @@
+From a1a24a3ee28e3ba20066b8998f230c6c83293048 Mon Sep 17 00:00:00 2001
+From: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+Date: Fri, 31 Mar 2017 14:50:13 -0700
+Subject: [PATCH 625/639] mmc: core: mmc_try_claim_host not taking HW_Mutex
+
+HW_Mutex should be taken when claiming the mmc controller which is missing
+from mmc_try_claim_host.
+This commit to add code to take HW_Mutex when claiming the mmc controller.
+
+Change-Id: Id1e3c1fc556b9001b28fff36932d65ef4fa458f4
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/core/core.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/mmc/core/core.c b/drivers/mmc/core/core.c
+index fcfb55f..f54eea9 100644
+--- a/drivers/mmc/core/core.c
++++ b/drivers/mmc/core/core.c
+@@ -988,6 +988,16 @@ int mmc_try_claim_host(struct mmc_host *host)
+ 	spin_unlock_irqrestore(&host->lock, flags);
+ 	if (host->ops->enable && claimed_host && host->claim_cnt == 1)
+ 		host->ops->enable(host);
++
++#ifdef CONFIG_HW_MUTEXES
++	spin_lock_irqsave(&host->lock, flags);
++	if ((host->claimer == current) && (host->claim_cnt == 1)) {
++		spin_unlock_irqrestore(&host->lock, flags);
++		MMC_LOCK_HW_MUTEX(host);
++	} else
++		spin_unlock_irqrestore(&host->lock, flags);
++#endif
++
+ 	return claimed_host;
+ }
+ EXPORT_SYMBOL(mmc_try_claim_host);
+-- 
+2.10.1
+

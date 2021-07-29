@@ -1,0 +1,47 @@
+# HG changeset patch
+# Parent 6e4080c5278aaaa78418c63fb8b3906440b6b451
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h b/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_bmgr_pools.h
+@@ -68,7 +68,7 @@ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_WIFI_RX_
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL5)                                   /* PAL_CPPI_PP_BUFFER_POOL5  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL6)                                   /* PAL_CPPI_PP_BUFFER_POOL6  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL7)                                   /* PAL_CPPI_PP_BUFFER_POOL7  */ \
+-PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_BUFFER_POOL8)                                   /* PAL_CPPI_PP_BUFFER_POOL8  */ \
++PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_VOICE_DSP_OUT_BUFFER_POOL)                      /* PAL_CPPI_PP_BUFFER_POOL8  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_PACKET_RAM_512B_BUFFER_POOL)                    /* PAL_CPPI_PP_BUFFER_POOL9  */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_PACKET_RAM_2KB_BUFFER_POOL)                     /* PAL_CPPI_PP_BUFFER_POOL10 */ \
+ PAL_CPPI_BMGR_P_ADD(PAL_CPPI_PP_VOICE_DSP_BUFFER_POOL)                          /* PAL_CPPI_PP_BUFFER_POOL11 */
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+@@ -212,7 +212,7 @@ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_17_LOW_Q_NUM)             /* PAL_CPPI_PP_QMGR_G2_Q149 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_18_HI_Q_NUM)              /* PAL_CPPI_PP_QMGR_G2_Q150 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_18_LOW_Q_NUM)             /* PAL_CPPI_PP_QMGR_G2_Q151 */\
+-PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_19_HI_Q_NUM)              /* PAL_CPPI_PP_QMGR_G2_Q152 */\
++PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_VOICE_DSP_OUT)                      /* PAL_CPPI_PP_QMGR_G2_Q152 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_19_LOW_Q_NUM)             /* PAL_CPPI_PP_QMGR_G2_Q153 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_20_HI_Q_NUM)              /* PAL_CPPI_PP_QMGR_G2_Q154 */\
+ PAL_CPPI_QMGR_Q_ADD(PAL_CPPI_PP_QMGR_G2_CDMA9_INFRA_INPUT_LOW_TX_CH_20_LOW_Q_NUM)             /* PAL_CPPI_PP_QMGR_G2_Q155 */\
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2936,6 +2936,8 @@ int dev_queue_xmit(struct sk_buff *skb)
+ 	int rc = -ENOMEM;
+ 	int ret=0;
+ 
++	skb_reset_mac_header(skb);
++
+ 	if (toe_dev_queue_xmit_hook && toe_dev_queue_xmit_hook(skb))
+ 		dev = skb->dev;
+ 
+@@ -2960,8 +2962,6 @@ int dev_queue_xmit(struct sk_buff *skb)
+ 	ppa_update_pp_add_fn(skb);
+ #endif
+ 
+-	skb_reset_mac_header(skb);
+-
+ 	/* Disable soft irqs for various locks below. Also
+ 	 * stops preemption for RCU.
+ 	 */

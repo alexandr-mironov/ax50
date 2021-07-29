@@ -1,0 +1,55 @@
+--- a/include/safe_mem_lib.h
++++ b/include/safe_mem_lib.h
+@@ -39,6 +39,11 @@
+ #define RSIZE_MAX_MEM16    ( RSIZE_MAX_MEM/2 )
+ #define RSIZE_MAX_MEM32    ( RSIZE_MAX_MEM/4 )
+ 
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++
+ /* set memory constraint handler */
+ extern constraint_handler_t
+ set_mem_constraint_handler_s(constraint_handler_t handler);
+@@ -102,5 +107,8 @@ extern errno_t memzero16_s(uint16_t *des
+ /* uint32_t zero */
+ extern errno_t memzero32_s(uint32_t *dest, rsize_t dmax);
+ 
++#ifdef __cplusplus
++}
++#endif 
+ 
+ #endif  /* __SAFE_MEM_LIB_H__ */
+--- a/include/safe_str_lib.h
++++ b/include/safe_str_lib.h
+@@ -40,8 +40,8 @@
+ #define RSIZE_MIN_STR      ( 1 )
+ 
+ /* maximum sring length */
+-#define RSIZE_MAX_STR      ( 4UL << 10 )      /* 4KB */
+-
++//#define RSIZE_MAX_STR      ( 4UL << 10 )      /* 4KB */
++#define RSIZE_MAX_STR      ( 32UL << 10 )      /* 32KB */
+ 
+ /* The makeup of a password */
+ #define SAFE_STR_MIN_LOWERCASE     ( 2 )
+@@ -52,6 +52,10 @@
+ #define SAFE_STR_PASSWORD_MIN_LENGTH   ( 6 )
+ #define SAFE_STR_PASSWORD_MAX_LENGTH   ( 32 )
+ 
++#ifdef __cplusplus
++extern "C"
++{
++#endif
+ 
+ /* set string constraint handler */
+ extern constraint_handler_t
+@@ -257,4 +261,7 @@ extern errno_t
+ strzero_s(char *dest, rsize_t dmax);
+ 
+ 
++#ifdef __cplusplus
++}
++#endif
+ #endif   /* __SAFE_STR_LIB_H__ */

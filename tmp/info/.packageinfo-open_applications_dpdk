@@ -1,0 +1,42 @@
+Source-Makefile: package/feeds/open_applications/dpdk/Makefile
+Package: libubacktrace
+Version: 16.04-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Base system
+Title: ubacktrace support library from GCC
+Maintainer: www.intel.com
+Source: dpdk-16.04.tar.gz
+License: BSD LGPLv2 GPLv2
+LicenseFiles: LICENSE.GPL LICENSE.LGPL
+Type: ipkg
+Description: ubacktrace support library from GCC
+http://gcc.gnu.org/
+www.intel.com
+@@
+
+Package: dpdk
+Submenu: Packet Processing
+Version: 16.04-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_x86_puma +libpcap +python-subprocess +librt +libpthread +USE_UCLIBC:libubacktrace +USE_GLIBC:libbacktrace
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: IntelBaseComponents
+Category: Intel(R) GRX750 base components
+Title: Intel(R) Data Plane Development Kit
+Maintainer: Intel Corporation
+Source: dpdk-16.04.tar.gz
+License: BSD LGPLv2 GPLv2
+LicenseFiles: LICENSE.GPL LICENSE.LGPL
+Type: ipkg
+Description: 	The Intel(r) Data Plane Development Kit (DPDK) is a set of libraries
+	and drivers for fast packet processing.
+http://dpdk.org
+Intel Corporation
+@@
+
+

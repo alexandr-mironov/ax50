@@ -1,0 +1,44 @@
+From dd3163c12d88428cd384511ed8823c60984fe107 Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 14:54:04 +0300
+Subject: [PATCH 9737/9740] mac80211-sta-csa-fix
+
+---
+ net/mac80211/mlme.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index 651b7ae..d5d9413 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -992,6 +992,8 @@ static void ieee80211_chswitch_work(struct work_struct *work)
+ 		container_of(work, struct ieee80211_sub_if_data, u.mgd.chswitch_work);
+ 	struct ieee80211_local *local = sdata->local;
+ 	struct ieee80211_if_managed *ifmgd = &sdata->u.mgd;
++	struct ieee80211_chanctx_conf *conf;
++	struct ieee80211_chanctx *ctx;
+ 
+ 	if (!ieee80211_sdata_running(sdata))
+ 		return;
+@@ -1008,6 +1010,18 @@ static void ieee80211_chswitch_work(struct work_struct *work)
+ 	} else {
+ 		/* update the device channel directly */
+ 		local->hw.conf.chandef = local->_oper_chandef;
++		sdata->vif.bss_conf.chandef = local->_oper_chandef;
++		/* Update channel context */
++		if (!local->use_chanctx){
++			mutex_lock(&local->chanctx_mtx);
++			conf = rcu_dereference_protected(sdata->vif.chanctx_conf,
++				lockdep_is_held(&local->chanctx_mtx));
++			if (conf) {
++				ctx = container_of(conf, struct ieee80211_chanctx, conf);
++				ctx->conf.def = local->csa_chandef;
++			}
++			mutex_unlock(&local->chanctx_mtx);
++		}
+ 	}
+ 
+ 	/* XXX: shouldn't really modify cfg80211-owned data! */
+-- 
+2.10.1
+

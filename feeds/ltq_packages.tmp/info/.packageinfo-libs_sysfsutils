@@ -1,0 +1,43 @@
+Source-Makefile: feeds/ltq_packages/libs/sysfsutils/Makefile
+Package: libsysfs
+Submenu: Filesystem
+Version: 2.1.0-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Sysfs library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: sysfsutils-2.1.0.tar.gz
+License: LGPL-2.1
+LicenseFiles: COPYING cmd/GPL lib/LGPL
+Type: ipkg
+Description: The library's purpose is to provide a consistant and stable interface for
+querying system device information exposed through sysfs.
+http://linux-diag.sourceforge.net/Sysfsutils.html
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+Package: sysfsutils
+Submenu: Filesystem
+Version: 2.1.0-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libsysfs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: System Utilities Based on Sysfs
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: sysfsutils-2.1.0.tar.gz
+License: LGPL-2.1
+LicenseFiles: COPYING cmd/GPL lib/LGPL
+Type: ipkg
+Description: A utility built upon libsysfs that lists devices by bus, class, and topology.
+http://linux-diag.sourceforge.net/Sysfsutils.html
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

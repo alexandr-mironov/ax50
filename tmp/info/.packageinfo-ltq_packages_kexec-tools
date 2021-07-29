@@ -1,0 +1,24 @@
+Source-Makefile: package/feeds/ltq_packages/kexec-tools/Makefile
+Package: kexec-tools
+Menu: 1
+Version: 2.0.9-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @KERNEL_KEXEC @armeb||@arm||@i386||@powerpc64||@mipsel||@mips +KEXEC_ZLIB:zlib +KEXEC_LZMA:liblzma
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Kernel boots kernel
+Maintainer: Florian Fainelli <florian@openwrt.org>
+Source: kexec-tools-2.0.9.tar.xz
+Type: ipkg
+Description:  kexec is a set of systems call that allows you to load
+ another kernel from the currently executing Linux kernel.
+http://kernel.org/pub/linux/kernel/people/horms/kexec-tools/
+Florian Fainelli <florian@openwrt.org>
+@@
+Config:
+	source "package/boot/kexec-tools/Config.in"
+@@
+
+

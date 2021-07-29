@@ -1,0 +1,58 @@
+From d36c24c928d3240da784758b492496d4cea61cd4 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Sun, 16 Jul 2017 16:23:44 +0300
+Subject: [PATCH] extend vendor_elem parameters to cover Authentication Request
+ frames
+
+The new VENDOR_ELEM value 15 can now be used to add a vendor element
+into Authentication Request frames.
+
+For example:
+VENDOR_ELEM_ADD 15 dd05001122330a
+and to clear that:
+VENDOR_ELEM_REMOVE 15 *
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ src/common/wpa_ctrl.h |  1 +
+ wpa_supplicant/sme.c  | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/src/common/wpa_ctrl.h b/src/common/wpa_ctrl.h
+index 8e7ceed..01a7406 100644
+--- a/src/common/wpa_ctrl.h
++++ b/src/common/wpa_ctrl.h
+@@ -364,6 +364,7 @@ enum wpa_vendor_elem_frame {
+ 	VENDOR_ELEM_P2P_ASSOC_RESP = 12,
+ 	VENDOR_ELEM_ASSOC_REQ = 13,
+ 	VENDOR_ELEM_PROBE_REQ = 14,
++	VENDOR_ELEM_AUTH_REQ = 15,
+ 	NUM_VENDOR_ELEM_FRAMES
+ };
+ 
+diff --git a/wpa_supplicant/sme.c b/wpa_supplicant/sme.c
+index 85a77e9..bebee90 100644
+--- a/wpa_supplicant/sme.c
++++ b/wpa_supplicant/sme.c
+@@ -563,6 +563,18 @@ static void sme_send_authentication(struct wpa_supplicant *wpa_s,
+ 		wpa_s->sme.wds = wpa_s->conf->wds;
+ 	}
+ 
++	if (wpa_s->vendor_elem[VENDOR_ELEM_AUTH_REQ]) {
++		struct wpabuf *buf = wpa_s->vendor_elem[VENDOR_ELEM_AUTH_REQ];
++		u8 auth_vs_ie[128];
++
++		if (params.ie) {
++			os_memcpy(params.ie + params.ie_len, wpabuf_head(buf), wpabuf_len(buf));
++		} else  {
++			os_memcpy(auth_vs_ie, wpabuf_head(buf), wpabuf_len(buf));
++			params.ie = auth_vs_ie;
++		}
++		params.ie_len += wpabuf_len(buf);
++	}
+ 
+ 	wpa_supplicant_cancel_sched_scan(wpa_s);
+ 	wpa_supplicant_cancel_scan(wpa_s);
+-- 
+2.10.1
+

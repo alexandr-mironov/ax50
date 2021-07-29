@@ -1,0 +1,32 @@
+From 8b461b1bde74efcd13e8f727b54fe311c5806271 Mon Sep 17 00:00:00 2001
+From: mrudek <mark.rudek@intel.com>
+Date: Mon, 19 Sep 2016 17:53:30 +0300
+Subject: [PATCH 479/639] mrpc: CNI interface synchronisation using MRPC
+
+Addition of an ID for CNI sync
+
+This change is required for PP on ATOM feature.
+
+Signed-off-by: Mark Rudek <mark.rudek@intel.com>
+---
+ include/linux/mrpc.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+index 7de084d..9ee1125 100644
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -81,9 +81,8 @@ enum {
+     MRPC_RESERVED_ID_CONNTRACK,
+     MRPC_RESERVED_ID_HILCMDS,
+     MRPC_RESERVED_ID_CPPI,
+-#ifdef CONFIG_MRPC_WIFI_PROXY_CLIENT
+     MRPC_RESERVED_ID_WIFI_PROXY_FUNC_CALL,
+-#endif
++    MRPC_RESERVED_ID_DOCSIS_NETDEV,
+     MRPC_RESERVED_ID_LAST,
+ };
+ 
+-- 
+2.10.1
+

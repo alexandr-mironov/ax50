@@ -1,0 +1,70 @@
+From ff2e9f67d3c8a81f2d407b59276bcb6a1b8e5c59 Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Mon, 16 Jan 2017 11:27:21 +0200
+Subject: [PATCH 576/639] DOCSISSW-1235-docsQosPktClassPkts MIB counter is not
+ incremented - Atom fixes
+
+---
+ include/linux/ti_hil.h  | 13 ++++++++++---
+ net/ti/pp/ti_hil_core.c |  3 ++-
+ 2 files changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 5752117..92269e2 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -43,20 +43,27 @@ struct hil_core_notifier_param
+ 
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_INGRESS_RECORDED          0x00000001
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS                    0x00000002
++#define TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET               24
+ 
++#define TI_HIL_NETDEV_READ32_REG(x)                    ntohl(x)                /* convert network byte order to native host byte order */
++#define TI_HIL_NETDEV_WRITE32_REG(x)                   htonl(x)                /* convert native host byte order to network byte order */
+ 
+ /**************************************************************************
+  ************** General Macros to get and set PP info flags ***************
+  **************************************************************************/
+ 
+-#define TI_HIL_NETDEV_READ32_REG(x)                    ntohl(x)                /* convert network byte order to native host byte order */
+-#define TI_HIL_NETDEV_WRITE32_REG(x)                   htonl(x)                /* convert native host byte order to network byte order */
+-
+ #define TI_HIL_GET_PP_INFO_FLAGS(skb)                  (TI_HIL_NETDEV_READ32_REG(SKB_GET_PP_INFO_P(skb)->flags))
+ #define TI_HIL_SET_PP_INFO_FLAGS(skb, f)               (SKB_GET_PP_INFO_P(skb)->flags = TI_HIL_NETDEV_WRITE32_REG(f))
+ #define TI_HIL_ADD_PP_INFO_FLAGS(skb, f)               (TI_HIL_SET_PP_INFO_FLAGS(skb, TI_HIL_GET_PP_INFO_FLAGS(skb) | f))
+ 
+ /**************************************************************************
++ **************** General Macros to get and set PP events *****************
++ **************************************************************************/
++
++#define TI_HIL_NETDEV_GET_EVENT(skb)                   TI_HIL_GET_PP_INFO_FLAGS(skb) >> TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET
++#define TI_HIL_NETDEV_SET_EVENT(skb, f)                TI_HIL_ADD_PP_INFO_FLAGS(skb, ((f) << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET))
++
++/**************************************************************************
+  ****************************** Module Identifers *************************
+  **************************************************************************/
+ 
+diff --git a/net/ti/pp/ti_hil_core.c b/net/ti/pp/ti_hil_core.c
+index 45350f9..3c61924 100755
+--- a/net/ti/pp/ti_hil_core.c
++++ b/net/ti/pp/ti_hil_core.c
+@@ -106,7 +106,7 @@ int create_drop_session(struct sk_buff* skb, unsigned long event)
+ {
+     struct hil_core_notifier_param param;
+ 
+-    TI_HIL_ADD_PP_INFO_FLAGS(skb, event);
++    TI_HIL_NETDEV_SET_EVENT(skb, event);
+ 
+     param.skb = skb;
+     atomic_notifier_call_chain(&notifier_list, 0, &param);
+@@ -392,6 +392,7 @@ int ti_hil_pp_event(unsigned long event, void *v)
+              *  c) Multicast packet but no layer2 extensions eg IGMP snooping exists */
+             skb = (struct sk_buff*) v;
+ 
++            /* In the intrusive mode profile these packets are not considered as candidates for acceleration so mark the packet BYPASS mode so that the egress hook is bypassed */
+             TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+             break;
+         }
+-- 
+2.10.1
+

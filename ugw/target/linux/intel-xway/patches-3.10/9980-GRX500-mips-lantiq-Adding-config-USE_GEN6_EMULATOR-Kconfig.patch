@@ -1,0 +1,29 @@
+From ec4ab3ad5f719bed05c263e1bc986efcb0ce265d Mon Sep 17 00:00:00 2001
+From: yhanin <yossef.hanin@intel.com>
+Date: Tue, 5 Dec 2017 15:16:49 +0200
+Subject: [PATCH] GRX500-mips-lantiq-Adding-config-USE_GEN6_EMULATOR-Kconfig
+
+---
+ Kconfig | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/mips/lantiq/Kconfig b/arch/mips/lantiq/Kconfig
+index 4e045a5..0d0954a 100755
+--- a/arch/mips/lantiq/Kconfig
++++ b/arch/mips/lantiq/Kconfig
+@@ -45,6 +45,12 @@ config USE_EMULATOR
+ 	help
+ 	Use FPGA emulator as platform
+ 
++config USE_GEN6_EMULATOR
++	bool "Support for GEN6 Emulator"
++	default no
++	help
++	Use GEN6 emulator
++
+ choice
+ 	prompt "Emulator"
+ 	depends on USE_EMULATOR
+-- 
+2.10.1
+

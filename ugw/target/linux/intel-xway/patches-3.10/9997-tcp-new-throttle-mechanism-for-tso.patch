@@ -1,0 +1,111 @@
+# HG changeset patch
+# Parent d180121002ffe84c33ce438fa6bfee5ad9e0acbf
+
+diff --git a/include/net/tcp.h b/include/net/tcp.h
+--- a/include/net/tcp.h
++++ b/include/net/tcp.h
+@@ -304,6 +304,7 @@ extern int sysctl_tcp_early_retrans;
+ extern int sysctl_tcp_limit_output_bytes;
+ extern int sysctl_tcp_challenge_ack_limit;
+ extern int sysctl_tcp_min_tso_segs;
++extern int sysctl_tcp_throttle_new_algo;
+ 
+ extern atomic_long_t tcp_memory_allocated;
+ extern struct percpu_counter tcp_sockets_allocated;
+diff --git a/net/ipv4/sysctl_net_ipv4.c b/net/ipv4/sysctl_net_ipv4.c
+--- a/net/ipv4/sysctl_net_ipv4.c
++++ b/net/ipv4/sysctl_net_ipv4.c
+@@ -763,6 +763,13 @@ static struct ctl_table ipv4_table[] = {
+ 		.extra2		= &gso_max_segs,
+ 	},
+ 	{
++		.procname	= "tcp_throttle_new_algo",
++		.data		= &sysctl_tcp_throttle_new_algo,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec,
++	},
++	{
+ 		.procname	= "udp_mem",
+ 		.data		= &sysctl_udp_mem,
+ 		.maxlen		= sizeof(sysctl_udp_mem),
+diff --git a/net/ipv4/tcp.c b/net/ipv4/tcp.c
+--- a/net/ipv4/tcp.c
++++ b/net/ipv4/tcp.c
+@@ -831,17 +831,21 @@ unsigned int tcp_xmit_size_goal(struct s
+ 		       inet_csk(sk)->icsk_ext_hdr_len +
+ 		       tp->tcp_header_len;
+ 
+-		/* Goal is to send at least one packet per ms,
+-		 * not one big TSO packet every 100 ms.
+-		 * This preserves ACK clocking and is consistent
+-		 * with tcp_tso_should_defer() heuristic.
+-		 */
+-		gso_size = sk->sk_pacing_rate / (2 * MSEC_PER_SEC);
+-		gso_size = max_t(u32, gso_size,
+-				 sysctl_tcp_min_tso_segs * mss_now);
+-
+-		xmit_size_goal = min_t(u32, gso_size,
+-				       sk->sk_gso_max_size - 1 - hlen);
++		if (sysctl_tcp_throttle_new_algo) {
++			xmit_size_goal = sk->sk_gso_max_size - 1 - hlen;
++		} else {
++			/* Goal is to send at least one packet per ms,
++			 * not one big TSO packet every 100 ms.
++			 * This preserves ACK clocking and is consistent
++			 * with tcp_tso_should_defer() heuristic.
++			 */
++			gso_size = sk->sk_pacing_rate / (2 * MSEC_PER_SEC);
++			gso_size = max_t(u32, gso_size,
++						 sysctl_tcp_min_tso_segs * mss_now);
++
++			xmit_size_goal = min_t(u32, gso_size,
++						   sk->sk_gso_max_size - 1 - hlen);
++		}
+ 
+ 		xmit_size_goal = tcp_bound_to_half_wnd(tp, xmit_size_goal);
+ 
+diff --git a/net/ipv4/tcp_output.c b/net/ipv4/tcp_output.c
+--- a/net/ipv4/tcp_output.c
++++ b/net/ipv4/tcp_output.c
+@@ -74,6 +74,9 @@ int sysctl_tcp_base_mss __read_mostly = 
+ /* By default, RFC2861 behavior.  */
+ int sysctl_tcp_slow_start_after_idle __read_mostly = 1;
+ 
++/* Use the latest kernel algo for throttling (backport from version 4.9) */
++int sysctl_tcp_throttle_new_algo __read_mostly = 1;
++
+ /* Account for new data that has been sent to the network. */
+ void tcp_event_new_data_sent(struct sock *sk, const struct sk_buff *skb)
+ {
+@@ -1955,8 +1958,13 @@ bool tcp_write_xmit(struct sock *sk, uns
+ 		 * of queued bytes to ensure line rate.
+ 		 * One example is wifi aggregation (802.11 AMPDU)
+ 		 */
+-		limit = max_t(unsigned int, sysctl_tcp_limit_output_bytes,
+-			      sk->sk_pacing_rate >> 10);
++		if(sysctl_tcp_throttle_new_algo) {
++			limit = max(2*skb->truesize, sk->sk_pacing_rate >> 10);
++			limit = min_t(u32, limit, sysctl_tcp_limit_output_bytes);
++		} else {
++			limit = max_t(unsigned int, sysctl_tcp_limit_output_bytes,
++					      sk->sk_pacing_rate >> 10);
++		}
+ 
+ 		if (atomic_read(&sk->sk_wmem_alloc) > limit) {
+ 			set_bit(TSQ_THROTTLED, &tp->tsq_flags);
+@@ -2683,7 +2691,14 @@ void tcp_send_fin(struct sock *sk)
+ 	 * Note: in the latter case, FIN packet will be sent after a timeout,
+ 	 * as TCP stack thinks it has already been transmitted.
+ 	 */
++#ifdef CONFIG_LTQ_TOE_DRIVER
++       /*BUG in TSO hardware where in FIN flag is set for multiple segments
++	Avoid piggyback of FIN for large packets(TSO)*/
++	if (tskb && (tcp_send_head(sk) || sk_under_memory_pressure(sk)) && 
++		(tskb->len < tcp_current_mss(sk))) {
++#else
+ 	if (tskb && (tcp_send_head(sk) || sk_under_memory_pressure(sk))) {
++#endif
+ coalesce:
+ 		TCP_SKB_CB(tskb)->tcp_flags |= TCPHDR_FIN;
+ 		TCP_SKB_CB(tskb)->end_seq++;

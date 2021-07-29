@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/libs/zlib/Makefile
+Package: zlib
+Version: 1.2.8-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Library implementing the deflate compression method
+Maintainer: 
+Source: zlib-1.2.8.tar.gz
+License: Zlib
+LicenseFiles: README
+Type: ipkg
+Description: Library implementing the deflate compression method
+http://www.zlib.net/
+
+@@
+
+

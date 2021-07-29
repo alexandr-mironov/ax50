@@ -1,0 +1,13 @@
+# HG changeset patch
+# Parent 02fe5ec2d6a339162fb4c021c7c1bcf21081119e
+
+--- a/arch/x86/Makefile
++++ b/arch/x86/Makefile
+@@ -182,6 +182,7 @@ drivers-$(CONFIG_AVALANCHE_INTD_APPCPU)
+ drivers-$(CONFIG_PAL_CPPI41_APPCPU) += arch/x86/pal_cppi41/
+ drivers-$(CONFIG_HW_MUTEXES)     += arch/x86/hw_mutex/
+ drivers-$(CONFIG_HW_MAILBOX)     += arch/x86/hw_mailbox/
++drivers-$(CONFIG_PP_TX_INIT)     += arch/x86/pp_init/
+ 
+ # must be linked after kernel/
+ drivers-$(CONFIG_OPROFILE) += arch/x86/oprofile/

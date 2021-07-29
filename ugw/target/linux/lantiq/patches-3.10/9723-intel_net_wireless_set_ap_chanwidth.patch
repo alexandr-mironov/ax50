@@ -1,0 +1,118 @@
+From c8317556b61cb426c0bcee670f5e2964d0a249bf Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 14:53:56 +0300
+Subject: [PATCH 9723/9740] set_ap_chanwidth
+
+---
+ include/net/cfg80211.h       |  4 ++++
+ net/wireless/nl80211.c       | 22 ++++++++++++++++++----
+ net/wireless/rdev-ops.h      | 13 +++++++++++++
+ net/wireless/trace.h         | 18 ++++++++++++++++++
+ 5 files changed, 57 insertions(+), 4 deletions(-)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 494e4a8..305b78f 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -2248,6 +2248,10 @@ struct cfg80211_ops {
+ 				    u16 duration);
+ 	void	(*crit_proto_stop)(struct wiphy *wiphy,
+ 				   struct wireless_dev *wdev);
++
++	int	(*set_ap_chanwidth)(struct wiphy *wiphy, struct net_device *dev,
++					struct cfg80211_chan_def *chandef);
++
+ };
+ 
+ /*
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 33c4bb7..b6581df 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -1846,14 +1846,28 @@ static int __nl80211_set_channel(struct cfg80211_registered_device *rdev,
+ 	switch (iftype) {
+ 	case NL80211_IFTYPE_AP:
+ 	case NL80211_IFTYPE_P2P_GO:
+-		if (wdev->beacon_interval) {
+-			result = -EBUSY;
+-			break;
+-		}
+ 		if (!cfg80211_reg_can_beacon(&rdev->wiphy, &chandef)) {
+ 			result = -EINVAL;
+ 			break;
+ 		}
++		if (wdev->beacon_interval) {
++			/* This functionality is backported from Linux 3.18 -- DI */
++			if (!wdev->netdev || !rdev->ops->set_ap_chanwidth ||
++			    !(rdev->wiphy.features &
++			      NL80211_FEATURE_AP_MODE_CHAN_WIDTH_CHANGE)) {
++				result = -EBUSY;
++				break;
++			}
++
++			/* Only allow dynamic channel width changes */
++			if (chandef.chan != wdev->preset_chandef.chan) {
++				result = -EBUSY;
++				break;
++			}
++			result = rdev_set_ap_chanwidth(rdev, wdev->netdev, &chandef);
++			if (result)
++				break;
++		}
+ 		wdev->preset_chandef = chandef;
+ 		result = 0;
+ 		break;
+diff --git a/net/wireless/rdev-ops.h b/net/wireless/rdev-ops.h
+index 9f15f0a..3183173 100644
+--- a/net/wireless/rdev-ops.h
++++ b/net/wireless/rdev-ops.h
+@@ -923,4 +923,17 @@ static inline void rdev_crit_proto_stop(struct cfg80211_registered_device *rdev,
+ 	trace_rdev_return_void(&rdev->wiphy);
+ }
+ 
++static inline int
++rdev_set_ap_chanwidth(struct cfg80211_registered_device *rdev,
++		      struct net_device *dev, struct cfg80211_chan_def *chandef)
++{
++	int ret;
++
++	trace_rdev_set_ap_chanwidth(&rdev->wiphy, dev, chandef);
++	ret = rdev->ops->set_ap_chanwidth(&rdev->wiphy, dev, chandef);
++	trace_rdev_return_int(&rdev->wiphy, ret);
++
++	return ret;
++}
++
+ #endif /* __CFG80211_RDEV_OPS */
+diff --git a/net/wireless/trace.h b/net/wireless/trace.h
+index bc5a75b..604ee99 100644
+--- a/net/wireless/trace.h
++++ b/net/wireless/trace.h
+@@ -1841,6 +1841,24 @@ TRACE_EVENT(rdev_crit_proto_stop,
+ 		  WIPHY_PR_ARG, WDEV_PR_ARG)
+ );
+ 
++TRACE_EVENT(rdev_set_ap_chanwidth,
++	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
++		 struct cfg80211_chan_def *chandef),
++	TP_ARGS(wiphy, netdev, chandef),
++	TP_STRUCT__entry(
++		WIPHY_ENTRY
++		NETDEV_ENTRY
++		CHAN_DEF_ENTRY
++	),
++	TP_fast_assign(
++		WIPHY_ASSIGN;
++		NETDEV_ASSIGN;
++		CHAN_DEF_ASSIGN(chandef);
++	),
++	TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", " CHAN_DEF_PR_FMT,
++		  WIPHY_PR_ARG, NETDEV_PR_ARG, CHAN_DEF_PR_ARG)
++);
++
+ /*************************************************************
+  *	     cfg80211 exported functions traces		     *
+  *************************************************************/
+-- 
+2.10.1
+

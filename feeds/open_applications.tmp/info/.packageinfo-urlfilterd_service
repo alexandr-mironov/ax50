@@ -1,0 +1,64 @@
+Source-Makefile: feeds/open_applications/urlfilterd_service/Makefile
+Package: urlfilterd
+Menu: 1
+Submenu: UGW Software
+Version: 1.0.0.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnetfilter-queue +libubox +lnfnetlink
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Lantiq
+Title: URL Filter daemon
+Maintainer: Lantiq Beteiligungs-GmbH & Co. KG
+Source: 
+Type: ipkg
+Description: 	Lantiq daemon function for URL Filter.
+http://www.lantiq.com
+Lantiq Beteiligungs-GmbH & Co. KG
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_urlfilterd
+	config urlfilterd_USE_CUSTOM_VERSION
+		depends on PACKAGE_urlfilterd
+		bool "Use custom package version"
+		default n
+	config urlfilterd_CUSTOM_VERSION
+		depends on urlfilterd_USE_CUSTOM_VERSION
+		string "urlfilterd version as string (default version: 1.0.0.1)"
+		default "1.0.0.1"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_urlfilterd
+	config urlfilterd_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_urlfilterd
+		bool "Use custom source directory"
+		default n
+	config urlfilterd_CUSTOM_SOURCE_DIR
+		depends on urlfilterd_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/ugw/feeds_opensrc/packages/urlfilterd_service/src"
+	endmenu
+config urlfilterd_DEBUG_LEVEL
+	string 'Specifiy Debug level from 0 - 7.'
+	depends on PACKAGE_urlfilterd
+	default ""
+	help
+	  Compiles out all the debug levels greater than the selected level 'X' (0 <= X <= 7).
+	  Allows control over debug prints and code foot print.
+
+config urlfilterd_DEBUG_TYPE
+	int 'Specifiy Debug Type from 0 - 3.'
+	depends on PACKAGE_urlfilterd
+	range 0 3
+	default 1
+	help
+	  Specify where the log needs to be redirected.
+	  0 - None
+	  1 - File
+	  2 - Console
+	  3 - Both File and Console
+@@
+
+

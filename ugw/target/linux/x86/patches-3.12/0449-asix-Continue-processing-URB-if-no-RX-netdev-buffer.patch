@@ -1,0 +1,70 @@
+From 20467c17d834da32c718412a69fcbd093c25c9ed Mon Sep 17 00:00:00 2001
+From: Dean Jenkins <Dean_Jenkins@mentor.com>
+Date: Fri, 2 Oct 2015 14:29:08 +0100
+Subject: [PATCH 449/639] asix: Continue processing URB if no RX netdev buffer
+
+Avoid a loss of synchronisation of the Ethernet Data header 32-bit
+word due to a failure to get a netdev socket buffer.
+
+The ASIX RX handling algorithm returned 0 upon a failure to get
+an allocation of a netdev socket buffer. This causes the URB
+processing to stop which potentially causes a loss of synchronisation
+with the Ethernet Data header 32-bit word. Therefore, subsequent
+processing of URBs may be rejected due to a loss of synchronisation.
+This may cause additional good Ethernet frames to be discarded
+along with outputting of synchronisation error messages.
+
+Implement a solution which checks whether a netdev socket buffer
+has been allocated before trying to copy the Ethernet frame into
+the netdev socket buffer. But continue to process the URB so that
+synchronisation is maintained. Therefore, only a single Ethernet
+frame is discarded when no netdev socket buffer is available.
+
+Signed-off-by: Dean Jenkins <Dean_Jenkins@mentor.com>
+Signed-off-by: Mark Craske <Mark_Craske@mentor.com>
+Signed-off-by: David S. Miller <davem@davemloft.net>
+(cherry picked from commit 6a570814cd430fa5ef4f278e8046dcf12ee63f13)
+
+Conflicts:
+
+	drivers/net/usb/asix_common.c
+
+Change-Id: Ic7274959ed800846bbfe25324631bf28ed3b3944
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/net/usb/asix_common.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/usb/asix_common.c b/drivers/net/usb/asix_common.c
+index 577c72d..254a3e8 100644
+--- a/drivers/net/usb/asix_common.c
++++ b/drivers/net/usb/asix_common.c
+@@ -92,8 +92,6 @@ int asix_rx_fixup_internal(struct usbnet *dev, struct sk_buff *skb,
+ 			}
+ 			rx->ax_skb = netdev_alloc_skb_ip_align(dev->net,
+ 							       rx->size);
+-			if (!rx->ax_skb)
+-				return 0;
+ 		}
+ 
+ 		if (rx->size > dev->net->mtu + ETH_HLEN + VLAN_HLEN) {
+@@ -111,10 +109,12 @@ int asix_rx_fixup_internal(struct usbnet *dev, struct sk_buff *skb,
+ 			rx->size = skb->len - offset;
+ 		}
+ 
+-		data = skb_put(rx->ax_skb, rx->size);
+-		memcpy(data, skb->data + offset, rx->size);
+-		if (!remaining)
+-			usbnet_skb_return(dev, rx->ax_skb);
++		if (rx->ax_skb) {
++			data = skb_put(rx->ax_skb, rx->size);
++			memcpy(data, skb->data + offset, rx->size);
++			if (!remaining)
++				usbnet_skb_return(dev, rx->ax_skb);
++		}
+ 
+ 		offset += (rx->size + 1) & 0xfffe;
+ 		rx->size = remaining;
+-- 
+2.10.1
+

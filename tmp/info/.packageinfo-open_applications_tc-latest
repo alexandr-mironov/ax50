@@ -1,0 +1,71 @@
+Source-Makefile: package/feeds/open_applications/tc-latest/Makefile
+Package: ip-latest
+Submenu: Routing and Redirection
+Version: 3.12.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Routing control utility
+Maintainer: 
+Source: iproute2-3.12.0.tar.gz
+Type: ipkg
+Description: Routing control utility
+http://linux-net.osdl.org/index.php/tc-latest
+
+@@
+
+Package: tc-latest
+Version: 3.12.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-sched
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Traffic control utility with codel support
+Maintainer: 
+Source: iproute2-3.12.0.tar.gz
+Type: ipkg
+Description: Traffic control utility with codel support
+http://linux-net.osdl.org/index.php/tc-latest
+
+@@
+
+Package: genl-latest
+Version: 3.12.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: General netlink utility frontend
+Maintainer: 
+Source: iproute2-3.12.0.tar.gz
+Type: ipkg
+Description: General netlink utility frontend
+http://linux-net.osdl.org/index.php/tc-latest
+
+@@
+
+Package: ss-latest
+Version: 3.12.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Socket statistics utility
+Maintainer: 
+Source: iproute2-3.12.0.tar.gz
+Type: ipkg
+Description: Socket statistics utility
+http://linux-net.osdl.org/index.php/tc-latest
+
+@@
+
+

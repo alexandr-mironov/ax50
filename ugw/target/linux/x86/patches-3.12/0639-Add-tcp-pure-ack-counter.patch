@@ -1,0 +1,25 @@
+From 9bbe655a5926ecbf0a721808129be8fa4beea0fb Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 27 Apr 2017 13:18:50 +0300
+Subject: [PATCH 639/639] Add tcp pure ack counter
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 7f084d0..c0569ad 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1472,7 +1472,7 @@ typedef struct
+     Uint32      Classifier1_pkts_frwrd_to_reseq_for_discard;
+     Uint32      Classifier1_pkts_default_hop_list_set;
+     Uint32      Classifier1_pkts_default_frag_hop_list_set;
+-    Uint32      Classifier1_res7;
++    Uint32      Classifier1_tcp_pure_ack;
+     Uint32      Classifier1_res8;
+ 
+     /* Classifier2 */
+-- 
+2.10.1
+

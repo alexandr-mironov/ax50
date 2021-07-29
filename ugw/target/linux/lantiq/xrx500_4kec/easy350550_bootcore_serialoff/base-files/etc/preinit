@@ -1,0 +1,19 @@
+#!/bin/sh
+# Copyright (C) 2013 Lantiq Deutschland GmbH
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+/bin/mount -a
+
+mount_default ()
+{
+	mount -t ramfs -o nr_inodes=1k,mode=770 /dev/ram /ramdisk
+	cp -ar /ramdisk_copy/* /ramdisk
+	/bin/mount -t ramfs /dev/ram /dev
+	[ -e /etc/device_table.txt ] && /sbin/makedevs -d /etc/device_table.txt /
+	/bin/mount -t devpts /dev/pts
+}
+
+mount_default
+
+exec /sbin/init 1>/dev/null 2>/dev/null

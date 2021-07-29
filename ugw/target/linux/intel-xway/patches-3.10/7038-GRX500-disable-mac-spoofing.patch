@@ -1,0 +1,38 @@
+# HG changeset patch
+# Parent 9c4dbbb4fe4e6a6eee278c39eb10d3bed518833a
+
+diff --git a/drivers/net/ethernet/lantiq/Kconfig b/drivers/net/ethernet/lantiq/Kconfig
+--- a/drivers/net/ethernet/lantiq/Kconfig
++++ b/drivers/net/ethernet/lantiq/Kconfig
+@@ -64,6 +64,13 @@ config XRX500_ETH_DRV_COC_SUPPORT
+ 		---help---
+ 		CoC support in the Ethernet driver of XRX500 series
+ 
++config XRX500_ETH_DISABLE_CPU_PORT_SPOOF_DETECT
++	bool "CPU port MAC address spoofing detection"
++	depends on LTQ_ETH_XRX500
++		default n
++		---help---
++		CPU port MAC address spoofing detection.
++
+ config HGU_BONDING
+  	bool "Enable ethernet bonding for GRX500 HGU boards"
+ 	depends on LTQ_ETH_XRX500
+diff --git a/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c b/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c
+--- a/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c
++++ b/drivers/net/ethernet/lantiq/ltq_eth_drv_xrx500.c
+@@ -797,12 +797,14 @@ static int ltq_gsw_pmac_init(void)
+ 	gsw_api_kioctl(gswl, GSW_REGISTER_SET, (unsigned int)&regCfg);
+ #endif
+ 
++#ifndef CONFIG_XRX500_ETH_DISABLE_CPU_PORT_SPOOF_DETECT
+ 	/* Enable the CPU port MAC address spoofing detection */
+ 	memset((void *)&regCfg, 0x00, sizeof(regCfg));
+ 	regCfg.nRegAddr = 0x480;
+ 	gsw_api_kioctl(gswl, GSW_REGISTER_GET, (unsigned int)&regCfg);
+ 	regCfg.nData |= 0x4000;
+ 	gsw_api_kioctl(gswl, GSW_REGISTER_SET, (unsigned int)&regCfg);
++#endif
+ 
+ 	/* PMAC control register 2 to disable LCHKS*/
+ 	memset((void *)&regCfg, 0x00, sizeof(regCfg));

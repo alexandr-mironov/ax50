@@ -1,0 +1,107 @@
+--- a/src/ap/ap_drv_ops.h
++++ b/src/ap/ap_drv_ops.h
+@@ -476,4 +476,13 @@ static inline int hostapd_drv_set_wds_wp
+   return hapd->driver->set_wds_wpa_sta(hapd->drv_priv, addr, remove);
+ }
+ #endif
++
++static inline int hostapd_drv_set_disable_dgaf(struct hostapd_data *hapd,
++  int disable_dgaf)
++{
++  if (hapd->driver == NULL || hapd->driver->set_disable_dgaf == NULL)
++    return -ENOTSUP;
++
++  return hapd->driver->set_disable_dgaf(hapd->drv_priv, disable_dgaf);
++}
+ #endif /* AP_DRV_OPS */
+--- a/src/ap/beacon.c
++++ b/src/ap/beacon.c
+@@ -1324,10 +1324,15 @@ int ieee802_11_set_beacon(struct hostapd
+ 
+ 	res = hostapd_drv_set_ap(hapd, &params);
+ 	hostapd_free_ap_extra_ies(hapd, beacon, proberesp, assocresp);
+-	if (res)
++	if (res) {
+ 		wpa_printf(MSG_ERROR, "Failed to set beacon parameters");
++		goto fail;
++	}
+ 	else
+ 		ret = 0;
++  ret = hostapd_drv_set_disable_dgaf(hapd, params.disable_dgaf);
++  if (ret)
++    wpa_printf(MSG_ERROR, "Failed to set disable_dgaf");
+ fail:
+ 	ieee802_11_free_ap_params(&params);
+ 	return ret;
+--- a/src/common/ltq-vendor.h
++++ b/src/common/ltq-vendor.h
+@@ -46,7 +46,8 @@ enum ltq_nl80211_vendor_subcmds {
+ 	LTQ_NL80211_VENDOR_SUBCMD_GET_RADIO_INFO       = 13,
+ 	LTQ_NL80211_VENDOR_SUBCMD_SET_ATF_QUOTAS       = 14,  /* Air time fairness data */
+ 	LTQ_NL80211_VENDOR_SUBCMD_SET_WDS_WPA_STA      = 15,
+   LTQ_NL80211_VENDOR_SUBCMD_BLOCK_TX             = 16, /* Block TX after next channel switch */
++	LTQ_NL80211_VENDOR_SUBCMD_SET_DGAF_DISABLED    = 17,
+ };
+ 
+ enum ltq_nl80211_vendor_events {
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -4149,6 +4149,14 @@ struct wpa_driver_ops {
+    * to DFS USABLE channel.
+    */
+   int (*block_tx)(void *priv);
++
++  /**
++   * set_disable_dgaf - configure disable_dgaf
++   * @priv: Private driver interface data
++   * @disable_dgaf: disable_dgaf value
++   * Returns: 0 on success, -1 on failure
++   */
++  int (*set_disable_dgaf)(void *priv, int set_disable_dgaf);
+ };
+ 
+ /**
+@@ -4159,6 +4167,7 @@ struct wpa_driver_ops {
+  */
+ int (*get_radio_info)(void *priv, mtlk_radio_info_t *radio_info);
+ 
++
+ /**
+  * enum wpa_event_type - Event type for wpa_supplicant_event() calls
+  */
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -9676,6 +9676,26 @@ int nl80211_set_wds_wpa_sta(void *priv,
+ #endif
+ 
+ 
++int nl80211_set_disable_dgaf(void *priv, int disable_dgaf)
++{
++  int ret;
++  uint32_t disable_dgaf_u32;
++
++  disable_dgaf_u32 = disable_dgaf;
++  ret = nl80211_vendor_cmd(priv, OUI_LTQ,
++    LTQ_NL80211_VENDOR_SUBCMD_SET_DGAF_DISABLED, (u8*) &disable_dgaf_u32,
++    sizeof(disable_dgaf_u32), NULL);
++
++  if (ret < 0)
++    wpa_printf(MSG_ERROR, "nl80211: sending SET_DGAF_DISABLED failed: %i (%s)",
++         ret, strerror(-ret));
++  else
++    wpa_printf(MSG_DEBUG, "nl80211: disable_dgaf set to %u", disable_dgaf_u32);
++
++  return ret;
++}
++
++
+ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
+ 	.name = "nl80211",
+ 	.desc = "Linux nl80211/cfg80211",
+@@ -9809,5 +9829,6 @@ const struct wpa_driver_ops wpa_driver_n
+ 	.get_ext_capab = nl80211_get_ext_capab,
+ #ifdef CONFIG_WDS_WPA
+ 	.set_wds_wpa_sta = nl80211_set_wds_wpa_sta,
++	.set_disable_dgaf = nl80211_set_disable_dgaf,
+ #endif
+ };

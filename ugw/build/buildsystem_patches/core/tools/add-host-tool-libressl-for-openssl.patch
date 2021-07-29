@@ -1,0 +1,44 @@
+--- a/tools/Makefile    2018-06-12 14:19:19.882125121 +0530
++++ b/tools/Makefile   2018-06-12 14:19:15.026209723 +0530
+@@ -26,7 +26,7 @@
+ tools-$(BUILD_TOOLCHAIN) += gmp mpfr mpc libelf
+ tools-y += m4 libtool autoconf automake flex bison pkg-config sed mklibs
+ tools-y += sstrip make-ext4fs e2fsprogs mtd-utils mkimage
+-tools-y += firmware-utils patch-image patch quilt yaffs2 flock padjffs2
++tools-y += firmware-utils patch-image patch quilt yaffs2 flock padjffs2 libressl
+ tools-y += mm-macros missing-macros xz cmake scons bc findutils gengetopt patchelf
+ tools-$(CONFIG_TARGET_orion_generic) += wrt350nv2-builder upslug2
+ tools-$(CONFIG_powerpc) += upx
+
+
+diff -Naur tools/libressl/Makefile tools/libressl/Makefile
+--- a/tools/libressl/Makefile	1970-01-01 05:30:00.000000000 +0530
++++ b/tools/libressl/Makefile	2018-06-12 14:50:39.129523032 +0530
+@@ -0,0 +1,27 @@
++#
++# Copyright (C) 2016 LEDE project
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=libressl
++PKG_VERSION:=2.5.0
++PKG_HASH:=8652bf6b55ab51fb37b686a3f604a2643e0e8fde2c56e6a936027d12afda6eae
++PKG_RELEASE:=1
++
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=http://mirror.ox.ac.uk/pub/OpenBSD/LibreSSL \
++	http://ftp.jaist.ac.jp/pub/OpenBSD/LibreSSL \
++	http://ftp.openbsd.org/pub/OpenBSD/LibreSSL
++
++HOST_BUILD_PARALLEL:=1
++
++include $(INCLUDE_DIR)/host-build.mk
++
++HOST_CONFIGURE_ARGS += --disable-shared
++HOST_CFLAGS += $(FPIC)
++
++$(eval $(call HostBuild))

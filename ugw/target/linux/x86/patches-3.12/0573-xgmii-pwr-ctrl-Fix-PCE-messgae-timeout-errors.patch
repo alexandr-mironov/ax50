@@ -1,0 +1,85 @@
+From 36194cc439ce4e8c04d8ec0856c0a1765169ef61 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 10 Jan 2017 18:57:38 -0700
+Subject: [PATCH 573/639] xgmii-pwr-ctrl: Fix PCE messgae timeout errors
+
+Timeout value need to be increased. Initializing the
+timeout condition before sending the pce msg.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c | 25 ++++++++--------------
+ 1 file changed, 9 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+index 4a327f3..44ca7ea 100644
+--- a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
++++ b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+@@ -40,7 +40,7 @@
+ #define HW_MBOX_LAN_MSG_TAG (5)
+ #define PCE_MSG_OPCODE (6)
+ /*PCE response timeout in milli seconds */
+-#define PCE_RSP_TIMEOUT (200)
++#define PCE_RSP_TIMEOUT (60*1000)
+ 
+ enum xgmii_power_state {
+ 	XGMII_PWR_STATE_OFF = 0,
+@@ -220,25 +220,19 @@ static int  xgmii_pce_rsp_msg_cb(hw_mbox_Masters_e commander,
+ {
+ 	struct xgmii_pce_response_msg *msg;
+ 
+-	msg = (struct xgmii_pce_response_msg *) dataBuf;        
++	msg = (struct xgmii_pce_response_msg *) dataBuf;
+ 
+ 	if (msg->opcode != PCE_MSG_OPCODE) {
+-		pr_err("Invalid Opcode %d in pce response\n",msg->opcode);		
++		pr_err("Invalid Opcode %d in pce response\n", msg->opcode);
+ 		return -1;
+ 	}
+-	if (g_pce_rsp_status == PCE_RSP_UNKNOWN) {
+-		g_pce_rsp_status = msg->response;
+-		wake_up(&xgmii_wq);
+-		pr_debug("pce reply msg cb rsp %d\n", g_pce_rsp_status);
+-		
+-	} else {
+-		pr_err("Unexpected pce response %d\n", msg->response);
+-	}
+-
++	/* Acknowledge the PCE response */
+ 	hwMbox_sendAckOpcode(HW_MBOX_MASTER_NP_CPU);
++	g_pce_rsp_status = msg->response;
++	wake_up(&xgmii_wq);
++	pr_debug("pce reply msg cb rsp %d\n", g_pce_rsp_status);
+ 
+ 	return 0;
+-
+ }
+ 
+ static int xgmii_send_pce_command(enum pce_cmd cmd, enum rsc_id id)
+@@ -263,6 +257,7 @@ static int xgmii_send_pce_command(enum pce_cmd cmd, enum rsc_id id)
+ 
+ 	pr_debug("opcode %d cmd %d id %d\n", PCE_MSG_OPCODE, cmd, id);
+ 
++	g_pce_rsp_status = PCE_RSP_UNKNOWN;
+ 	ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU,
+ 			HW_MBOX_LAN_MSG_TAG, (uint8_t *)msg,
+ 			sizeof(struct xgmii_pce_cmd_msg),
+@@ -273,14 +268,12 @@ static int xgmii_send_pce_command(enum pce_cmd cmd, enum rsc_id id)
+ 		goto out;
+ 	}
+ 
+-	g_pce_rsp_status = PCE_RSP_UNKNOWN;
+-
+ 	ret = wait_event_timeout(xgmii_wq,
+ 			(g_pce_rsp_status != PCE_RSP_UNKNOWN),
+ 			 msecs_to_jiffies(PCE_RSP_TIMEOUT));
+ 	if (!ret) {
+ 		ret = -EBUSY;
+-		pr_err("xGMII PCE response timeout ret %d\n", ret);
++		pr_err("xGMII PCE response 60 sec timeout ret %d\n", ret);
+ 	} else {
+ 		ret = g_pce_rsp_status;
+ 		if (ret)
+-- 
+2.10.1
+

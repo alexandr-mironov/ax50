@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/open_applications/dot1ag-utils/Makefile
+Package: dot1ag-utils
+Version: 1.0.1-01a24e5de960318c4cc8a97212cc33b38d19e3e2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpcap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: dot1ag-utils
+Maintainer: 
+Source: dot1ag-utils-1.0.1-01a24e5de960318c4cc8a97212cc33b38d19e3e2.tar.gz
+License: BSD
+Type: ipkg
+Description: 	The dot1ag-utils is an update to dot1ag-utils software package which is an Open Source (new BSD License) implementation of the IEEE 802.1ag protocol.
+	It provides several debugging tools that interact with IEEE 802.1ag enabled routers and switches. The package implements a loopback message initiator (ethping), a link trace message initiator (ethtrace) and a daemon (ltq-ethoamd) that responds to loopback messages and link trace messages. Sending and receiving of continuity check messages is implemented in the dot1ag_ccd daemon.
+
+@@
+
+

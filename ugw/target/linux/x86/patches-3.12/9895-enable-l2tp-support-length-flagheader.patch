@@ -1,0 +1,17 @@
+# HG changeset patch
+# Parent f7c19afae8f9a6855263ca2cb41a539f2fba6a18
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1199,8 +1199,9 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_NO_ACK             0x400
+                                 #define AVALANCHE_PP_EGRESS_DO_TCP_CTRL                         0x800
+                                 #define AVALANCHE_PP_EGRESS_MULTI_DROP_SESSION                  0x1000
+-								#define AVALANCHE_PP_EGRESS_PSI_VALID                           0x2000
++                                #define AVALANCHE_PP_EGRESS_PSI_VALID                           0x2000
+                                 #define AVALANCHE_PP_EGRESS_WH_UDP                              0x4000
++                                #define AVALANCHE_PP_EGRESS_L2TP_HDRFLAG                        0x8000
+     Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;

@@ -1,0 +1,110 @@
+From 9a966f721ae2844d7b02731ae9fc895bd55da782 Mon Sep 17 00:00:00 2001
+From: Tomer Eliyahu <tomer.b.eliyahu@intel.com>
+Date: Sun, 13 Mar 2016 11:45:50 +0200
+Subject: [PATCH 362/639] hw_mbox: sync hw_mbox tags to latest
+
+- update hw_mbox tags to latest document changes
+- move puma7_npcpu_appcpu_defs.h to a shared location
+  so that all hw_mbox users can include the same file
+  for the tag enum.
+
+Change-Id: I2312632cfbb8a96f1779a8e3c8fab5de8dffc607
+Signed-off-by: Tomer Eliyahu <tomer.b.eliyahu@intel.com>
+---
+ drivers/misc/ce_mailbox.c                             |  1 +
+ drivers/mrpc/core/mrpc.c                              |  2 +-
+ .../linux/avalanche/puma7}/puma7_npcpu_appcpu_defs.h  | 19 ++++++++++---------
+ include/linux/ce_mailbox.h                            |  2 --
+ 4 files changed, 12 insertions(+), 12 deletions(-)
+ rename {drivers/mrpc/core => include/linux/avalanche/puma7}/puma7_npcpu_appcpu_defs.h (89%)
+
+diff --git a/drivers/misc/ce_mailbox.c b/drivers/misc/ce_mailbox.c
+index 1db47be..ea40364 100644
+--- a/drivers/misc/ce_mailbox.c
++++ b/drivers/misc/ce_mailbox.c
+@@ -43,6 +43,7 @@
+ #include <linux/ce_mailbox.h>
+ #include <linux/hw_mailbox.h>
+ #include <linux/completion.h>
++#include <linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h>
+ 
+ static struct proc_dir_entry   *mbx_proc_dir;
+ static struct npcpu_appcpu_mbx_user    mbx_usr_info;
+diff --git a/drivers/mrpc/core/mrpc.c b/drivers/mrpc/core/mrpc.c
+index 31fac6d..5e752ef 100644
+--- a/drivers/mrpc/core/mrpc.c
++++ b/drivers/mrpc/core/mrpc.c
+@@ -49,7 +49,7 @@
+ #include <linux/err.h>
+ #include <linux/hw_mbox_defs.h>
+ #include <linux/mrpc.h>
+-#include "puma7_npcpu_appcpu_defs.h"
++#include <linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h>
+ 
+ /************************************************/
+ /**           Structures & Enums                */
+diff --git a/drivers/mrpc/core/puma7_npcpu_appcpu_defs.h b/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+similarity index 89%
+rename from drivers/mrpc/core/puma7_npcpu_appcpu_defs.h
+rename to include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+index 04d0982..a665ef0 100755
+--- a/drivers/mrpc/core/puma7_npcpu_appcpu_defs.h
++++ b/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+@@ -9,7 +9,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2015 Intel Corporation.
++  Copyright(c) 2015-2016 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify 
+   it under the terms of version 2 of the GNU General Public License as
+@@ -34,7 +34,7 @@
+ 
+   BSD LICENSE 
+ 
+-  Copyright(c) 2015 Intel Corporation. All rights reserved.
++  Copyright(c) 2015-2016 Intel Corporation. All rights reserved.
+ 
+   Redistribution and use in source and binary forms, with or without 
+   modification, are permitted provided that the following conditions 
+@@ -77,16 +77,17 @@ typedef enum npcpu_appcpu_hw_mbox_tags
+     NPCPU_APPCPU_HW_MBOX_TAG_INVALID = -1,
+     NPCPU_APPCPU_HW_MBOX_TAG_BOOT,
+     NPCPU_APPCPU_HW_MBOX_TAG_PM,
+-    NPCPU_APPCPU_HW_MBOX_TAG_CM,
++    NPCPU_APPCPU_HW_MBOX_TAG_MRPC,
+     NPCPU_APPCPU_HW_MBOX_TAG_RPC,
+-    NPCPU_APPCPU_HW_MBOX_TAG_MUX,
+-    NPCPU_APPCPU_HW_MBOX_TAG_VLAN,
+-    NPCPU_APPCPU_HW_MBOX_TAG_PP,
+-    NPCPU_APPCPU_HW_MBOX_TAG_NETDEV,
++    NPCPU_APPCPU_HW_MBOX_TAG_IT_STORE,
++    NPCPU_APPCPU_HW_MBOX_TAG_LAN,
++    NPCPU_APPCPU_HW_MBOX_TAG_MOCA,
++    NPCPU_APPCPU_HW_MBOX_TAG_NONE,  /* reserved */
+     NPCPU_APPCPU_HW_MBOX_TAG_CPPI41_MBX,
+     NPCPU_APPCPU_HW_MBOX_TAG_DATAPIPE_MBX,
+-    NPCPU_APPCPU_HW_MBOX_TAG_MRPC,
++    NPCPU_APPCPU_HW_MBOX_TAG_WIFI_MBX,
++    NPCPU_APPCPU_HW_MBOX_TAG_DPI_MBX,
+     NPCPU_APPCPU_HW_LAST_ENTRY
+ } npcpu_appcpu_hw_mbox_tags_e;
+ 
+-#endif /* _PUMA7_NPCPU_APPCPU_DEFS_H_ */
++#endif /* ! _PUMA7_NPCPU_APPCPU_DEFS_H_ */
+diff --git a/include/linux/ce_mailbox.h b/include/linux/ce_mailbox.h
+index 894deaa..2e422d1 100644
+--- a/include/linux/ce_mailbox.h
++++ b/include/linux/ce_mailbox.h
+@@ -70,7 +70,5 @@ enum appcpu_mbx_event_id
+ 
+ #define MBX_IOC_MAXNR  3
+ 
+-#define NPCPU_APPCPU_HW_MBOX_TAG_RPC 3
+-
+ long npcpu_appcpu_mbx_receive_specific_callback();
+ #endif /* _NPCPU_APPCPU_MBX_H_ */
+-- 
+2.10.1
+

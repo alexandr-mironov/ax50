@@ -1,0 +1,25 @@
+Source-Makefile: feeds/ltq_packages/system/udev/Makefile
+Package: udev
+Menu: 1
+Version: 173-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: Dynamic device management subsystem
+Maintainer: Geoff Levand <geoff@infradead.org>
+Source: udev-173.tar.bz2
+License: GPL-2.0
+Type: ipkg
+Description: 	udev allows Linux users to have a dynamic /dev directory and it
+	provides the ability to have persistent device names.
+http://www.kernel.org/pub/linux/utils/kernel/hotplug/udev.html
+Geoff Levand <geoff@infradead.org>
+@@
+Config:
+	source "package/system/udev/Config.in"
+@@
+
+

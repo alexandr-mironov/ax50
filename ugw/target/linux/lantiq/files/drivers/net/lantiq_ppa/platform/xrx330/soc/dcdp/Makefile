@@ -1,0 +1,1 @@
+ltqmips_ppe_drv-objs += ltqmips_datapath_api.o ltqmips_datapath_proc_api.o ltqmips_datapath_proc.o

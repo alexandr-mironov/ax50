@@ -1,0 +1,147 @@
+--- a/src/dnsmasq.c
++++ b/src/dnsmasq.c
+@@ -1361,9 +1361,16 @@
+ 	    /* block in writes until all done */
+ 	    if ((i = fcntl(daemon->helperfd, F_GETFL)) != -1)
+ 	      fcntl(daemon->helperfd, F_SETFL, i & ~O_NONBLOCK); 
++#if defined(UGW_DNSMASQ)
++	      /* handle pending leases at once for UGW framework */
++	      helper_write();
++	      do_script_run_all(now);
++	      helper_write();
++#else
+ 	    do {
+ 	      helper_write();
+ 	    } while (!helper_buf_empty() || do_script_run(now));
++#endif /* UGW_DNSMASQ */
+ 	    while (retry_send(close(daemon->helperfd)));
+ 	  }
+ #endif
+--- a/src/dnsmasq.h
++++ b/src/dnsmasq.h
+@@ -648,6 +648,9 @@
+ #define ACTION_TFTP          5
+ #define ACTION_ARP           6
+ #define ACTION_ARP_DEL       7
++#if defined(UGW_DNSMASQ)
++#define ACTION_DELALL        8
++#endif /* UGW_DNSMASQ */
+ 
+ #define LEASE_NEW            1  /* newly created */
+ #define LEASE_CHANGED        2  /* modified */
+@@ -1333,6 +1336,9 @@
+ void lease_prune(struct dhcp_lease *target, time_t now);
+ void lease_update_from_configs(void);
+ int do_script_run(time_t now);
++#if defined(UGW_DNSMASQ)
++int do_script_run_all(time_t now);
++#endif /* UGW_DNSMASQ */
+ void rerun_scripts(void);
+ void lease_find_interfaces(time_t now);
+ #ifdef HAVE_SCRIPT
+--- a/src/helper.c
++++ b/src/helper.c
+@@ -17,6 +17,13 @@
+ #include <stdio.h>
+ #include "dnsmasq.h"
+ 
++#ifdef UGW_DNSMASQ
++/* If header files do not define F_SETPIPE_SZ, define it from the standard headers */
++#ifndef F_SETPIPE_SZ
++#define F_SETPIPE_SZ 1031
++#endif /* F_SETPIPE_SZ */
++#endif /* UGW_DNSMASQ */
++
+ #ifdef HAVE_SCRIPT
+ 
+ /* This file has code to fork a helper process which receives data via a pipe 
+@@ -92,6 +99,12 @@
+       _exit(0);
+     }
+ 
++#if defined(UGW_DNSMASQ)
++  /* Set the pipe size to 1k for quicker buffering of events and notifications */
++  fcntl(pipefd[0], F_SETPIPE_SZ, 1024);
++  fcntl(pipefd[1], F_SETPIPE_SZ, 1024);
++#endif /* UGW_DNSMASQ */
++
+   if (pid != 0)
+     {
+       close(pipefd[0]); /* close reader side */
+@@ -212,6 +225,10 @@
+       
+       if (data.action == ACTION_DEL)
+ 	action_str = "del";
++#if defined(UGW_DNSMASQ)
++      else if (data.action == ACTION_DELALL)
++	action_str = "delall";
++#endif /* UGW_DNSMASQ */
+       else if (data.action == ACTION_ADD)
+ 	action_str = "add";
+       else if (data.action == ACTION_OLD || data.action == ACTION_OLD_HOSTNAME)
+--- a/src/lease.c
++++ b/src/lease.c
+@@ -1140,6 +1140,63 @@
+   return 0; /* nothing to do */
+ }
+ 
++#if defined(UGW_DNSMASQ)
++/* deleted leases get transferred to the old_leases list.
++   Remove all of them at once, after calling the lease change
++   script.
++
++   Return zero if nothing to do. */
++int do_script_run_all(time_t now)
++{
++  struct dhcp_lease *lease;
++
++  (void)now;
++
++#ifdef HAVE_DBUS
++  /* If we're going to be sending DBus signals, but the connection is not yet up,
++     delay everything until it is. */
++  if (option_bool(OPT_DBUS) && !daemon->dbus)
++    return 0;
++#endif
++
++  if (old_leases)
++    {
++      lease = old_leases;
++                  
++      /* Take lease cleanup action at once */
++      if (!lease->old_hostname)
++	{
++#ifdef HAVE_DHCP6
++	  struct slaac_address *slaac, *tmp;
++	  for (slaac = lease->slaac_address; slaac; slaac = tmp)
++	    {
++	      tmp = slaac->next;
++	      free(slaac);
++	    }
++#endif
++	  kill_name(lease);
++#ifdef HAVE_SCRIPT
++	  queue_script(ACTION_DELALL, lease, lease->old_hostname, now);
++#endif
++#ifdef HAVE_DBUS
++	  emit_dbus_signal(ACTION_DELALL, lease, lease->old_hostname);
++#endif
++	  /* Clean up all the pending leases */
++	  for (lease = leases; lease; lease = old_leases) {
++	      old_leases = lease->next;
++	      free(lease->old_hostname); 
++	      free(lease->clid);
++	      free(lease->extradata);
++	      free(lease);
++	  }
++
++	  return 1; 
++	}
++    }
++   return 0; /* nothing to do */
++}
++#endif /* UGW_DNSMASQ */
++
+ #ifdef HAVE_SCRIPT
+ /* delim == -1 -> delim = 0, but embedded 0s, creating extra records, are OK. */
+ void lease_add_extradata(struct dhcp_lease *lease, unsigned char *data, unsigned int len, int delim)

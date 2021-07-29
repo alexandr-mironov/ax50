@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_applications/tinytcl/Makefile
+Package: tinytcl
+Menu: 1
+Version: 680-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Utilities
+Title: tinytcl(680)
+Maintainer: 
+Source: tinytcl680.zip
+Type: ipkg
+Description:   Rommable, minimal Tcl for embedded applications
+http://tinytcl.sourceforge.net
+
+@@
+
+

@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_applications/minissdpd/Makefile
+Package: minissdpd
+Version: 1.5-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnfnetlink
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Simple Service Discovery Protocol daemon
+Maintainer: 
+Source: minissdpd-1.5.tar.gz
+Type: ipkg
+Description: Simple Service Discovery Protocol daemon
+http://miniupnp.free.fr/minissdpd.html
+
+@@
+
+

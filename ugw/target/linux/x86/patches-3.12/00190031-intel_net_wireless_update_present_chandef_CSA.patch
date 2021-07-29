@@ -1,0 +1,24 @@
+commit 96f55f12a2365529b64d7c0d06709719b58ff089
+Author: Janusz Dziedzic <janusz.dziedzic@tieto.com>
+Date:   Fri Jan 24 14:29:21 2014 +0100
+
+    cfg80211: set preset_chandef after channel switch
+    
+    Set preset_chandef in channel switch notification.
+    In other case we will have old preset_chandef.
+    
+    Signed-off-by: Janusz Dziedzic <janusz.dziedzic@tieto.com>
+    Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 20be186..0a18601 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -11216,6 +11216,7 @@ void cfg80211_ch_switch_notify(struct net_device *dev,
+ 		return;
+ 
+ 	wdev->channel = chandef->chan;
++	wdev->preset_chandef = *chandef;
+ 	nl80211_ch_switch_notify(rdev, dev, chandef, GFP_KERNEL);
+ }
+ EXPORT_SYMBOL(cfg80211_ch_switch_notify);

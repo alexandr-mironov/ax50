@@ -1,0 +1,34 @@
+# HG changeset patch
+# Parent 6446bc2d0ca87715fd3a0ce4f5fb2035359b16a4
+diff --git a/drivers/net/ppp/pppoe.c b/drivers/net/ppp/pppoe.c
+--- a/drivers/net/ppp/pppoe.c
++++ b/drivers/net/ppp/pppoe.c
+@@ -89,6 +89,10 @@
+ #define PPPOE_HASH_SIZE (1 << PPPOE_HASH_BITS)
+ #define PPPOE_HASH_MASK	(PPPOE_HASH_SIZE - 1)
+ 
++#ifdef CONFIG_PPA_PUMA7
++#include <net/ppa_api.h>
++#endif
++
+ static int __pppoe_xmit(struct sock *sk, struct sk_buff *skb);
+ 
+ static const struct proto_ops pppoe_ops;
+@@ -282,6 +286,17 @@ static void pppoe_flush_dev(struct net_d
+ 	struct pppoe_net *pn;
+ 	int i;
+ 
++#ifdef CONFIG_PPA_PUMA7
++	/* PPPoE is a special case where we delete VPID & contract of the parent net device instead of the pppoe net device.
++		So, before deleting pppoe net device, we have to make sure parent device VPID & contract are flushed.
++	*/
++	PPA_IFINFO ifinfo;
++	memset(&ifinfo, 0, sizeof(ifinfo));
++
++	ifinfo.ifname = dev->name;
++	ppa_del_if(&ifinfo, 0); 
++#endif
++
+ 	pn = pppoe_pernet(dev_net(dev));
+ 	write_lock_bh(&pn->hash_lock);
+ 	for (i = 0; i < PPPOE_HASH_SIZE; i++) {

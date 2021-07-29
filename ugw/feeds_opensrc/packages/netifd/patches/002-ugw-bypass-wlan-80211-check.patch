@@ -1,0 +1,24 @@
+--- a/system-linux.c
++++ b/system-linux.c
+@@ -1577,6 +1577,7 @@ static void system_add_link_modes(struct
+ 	}
+ }
+ 
++#if 0
+ bool
+ system_if_force_external(const char *ifname)
+ {
+@@ -1586,6 +1587,13 @@ system_if_force_external(const char *ifn
+ 	snprintf(buf, sizeof(buf), "/sys/class/net/%s/phy80211", ifname);
+ 	return stat(buf, &s) == 0;
+ }
++#else
++bool
++system_if_force_external(const char *ifname __attribute__((unused)))
++{
++	return 0;
++}
++#endif
+ 
+ int
+ system_if_dump_info(struct device *dev, struct blob_buf *b)

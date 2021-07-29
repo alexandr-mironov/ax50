@@ -1,0 +1,100 @@
+From 8b4bde2faf1f4db8fac858d5733f572532df4841 Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Fri, 25 May 2018 13:35:33 +0300
+Subject: [PATCH 9726/9740] wlan_add_sta_rssi
+
+---
+ include/net/cfg80211.h |  6 ++++++
+ net/wireless/nl80211.c | 10 ++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 0a42f12..444360a 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -683,6 +683,7 @@ enum station_parameters_apply_mask {
+  * @resp: last association response frame
+  *	(or NULL for no change)
+  * @resp_len: length of last association response
++ * @rssi: received signal strength indicator
+  */
+ struct station_parameters {
+ 	const u8 *supported_rates;
+@@ -704,6 +705,7 @@ struct station_parameters {
+ 	u8 ext_capab_len;
+ 	u8 *resp;
+ 	size_t resp_len;
++	u32 rssi;
+ };
+ 
+ /**
+@@ -782,6 +784,7 @@ int cfg80211_check_station_change(struct wiphy *wiphy,
+  * @STATION_INFO_LOCAL_PM: @local_pm filled
+  * @STATION_INFO_PEER_PM: @peer_pm filled
+  * @STATION_INFO_NONPEER_PM: @nonpeer_pm filled
++ * @STATION_INFO_MAX_RSSI: @max_rssi filled
+  */
+ enum station_info_flags {
+ 	STATION_INFO_INACTIVE_TIME	= 1<<0,
+@@ -810,6 +813,7 @@ enum station_info_flags {
+ 	STATION_INFO_NONPEER_PM		= 1<<23,
+ 	STATION_INFO_RX_BYTES64		= 1<<24,
+ 	STATION_INFO_TX_BYTES64		= 1<<25,
++	STATION_INFO_MAX_RSSI		= 1<<26,
+ };
+ 
+ /**
+@@ -959,6 +963,8 @@ struct station_info {
+ 	enum nl80211_mesh_power_mode peer_pm;
+ 	enum nl80211_mesh_power_mode nonpeer_pm;
+ 
++	u32 max_rssi;
++
+ 	/*
+ 	 * Note: Add a new enum station_info_flags value for each new field and
+ 	 * use it to check which fields are initialized.
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 7ebca4e..1cde60b 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -260,6 +260,7 @@ static const struct nla_policy nl80211_policy[NL80211_ATTR_MAX+1] = {
+ 	[NL80211_ATTR_BEACON_TAIL] = { .type = NLA_BINARY,
+ 				       .len = IEEE80211_MAX_DATA_LEN },
+ 	[NL80211_ATTR_STA_AID] = { .type = NLA_U16 },
++	[NL80211_ATTR_STA_RSSI] = { .type = NLA_U32 },
+ 	[NL80211_ATTR_STA_FLAGS] = { .type = NLA_NESTED },
+ 	[NL80211_ATTR_STA_LISTEN_INTERVAL] = { .type = NLA_U16 },
+ 	[NL80211_ATTR_STA_SUPPORTED_RATES] = { .type = NLA_BINARY,
+@@ -3474,6 +3475,10 @@ static int nl80211_send_station(struct sk_buff *msg, u32 portid, u32 seq,
+ 	    nla_put_u32(msg, NL80211_STA_INFO_INACTIVE_TIME,
+ 			sinfo->inactive_time))
+ 		goto nla_put_failure;
++	if ((sinfo->filled & STATION_INFO_MAX_RSSI) &&
++	    nla_put_u32(msg, NL80211_STA_INFO_MAX_RSSI,
++			sinfo->max_rssi))
++		goto nla_put_failure;
+ 	if ((sinfo->filled & (STATION_INFO_RX_BYTES |
+ 			      STATION_INFO_RX_BYTES64)) &&
+ 	    nla_put_u32(msg, NL80211_STA_INFO_RX_BYTES,
+@@ -4046,6 +4051,9 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+ 	if (!info->attrs[NL80211_ATTR_STA_AID])
+ 		return -EINVAL;
+ 
++	if (!info->attrs[NL80211_ATTR_STA_RSSI])
++		return -EINVAL;
++
+ 	mac_addr = nla_data(info->attrs[NL80211_ATTR_MAC]);
+ 	params.supported_rates =
+ 		nla_data(info->attrs[NL80211_ATTR_STA_SUPPORTED_RATES]);
+@@ -4063,6 +4071,8 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+ 	if (!params.aid || params.aid > IEEE80211_MAX_AID)
+ 		return -EINVAL;
+ 
++	params.rssi = nla_get_u32(info->attrs[NL80211_ATTR_STA_RSSI]);
++
+ 	if (info->attrs[NL80211_ATTR_STA_CAPABILITY]) {
+ 		params.capability =
+ 			nla_get_u16(info->attrs[NL80211_ATTR_STA_CAPABILITY]);
+-- 
+2.10.1
+

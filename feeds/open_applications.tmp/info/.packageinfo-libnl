@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_applications/libnl/Makefile
+Package: libnl
+Version: 1.1-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: netlink socket library
+Maintainer: 
+Source: libnl-1.1.tar.gz
+Type: ipkg
+Description:  This package contains a library for applications dealing with netlink sockets
+http://people.suug.ch/~tgr/libnl/
+
+@@
+
+

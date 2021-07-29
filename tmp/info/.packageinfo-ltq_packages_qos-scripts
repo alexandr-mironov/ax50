@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/qos-scripts/Makefile
+Package: qos-scripts
+Version: 1.2.1-7
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +tc +kmod-sched-core +kmod-sched-connmark +kmod-ifb +iptables +iptables-mod-ipopt +iptables-mod-conntrack-extra
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Base system
+Title: QoS scripts
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: 
+Type: ipkg
+Description:  A set of scripts that abstract QoS configuration into a simple 
+ configuration file supporting stanzas that specify any number of QoS 
+ entries.
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

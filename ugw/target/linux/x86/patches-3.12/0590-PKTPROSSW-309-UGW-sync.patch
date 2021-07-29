@@ -1,0 +1,34 @@
+From 2f33e08ea65f70f7e014cea80eb97c90cab1dd22 Mon Sep 17 00:00:00 2001
+From: Denis <dennis.begun@intel.com>
+Date: Mon, 30 Jan 2017 18:15:33 +0200
+Subject: [PATCH 590/639] PKTPROSSW-309 UGW sync
+
+---
+ include/linux/netdevice.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index efa45ed..9c88f04d 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -1477,7 +1477,7 @@ struct net_device {
+     struct net_device   *parentDev;
+ 
+     /* Hook for letting the net device set its own PSI during session creation */
+-    void (*netdev_set_psi_hook)(Uint32 *psi, struct sk_buff *skb, struct net_device *dev);
++    int (*netdev_set_psi_hook)(Uint32 *psi, struct sk_buff *skb, struct net_device *dev);
+ #endif
+ 
+     /* There QoS may be defined either for physical or virtual device
+@@ -1492,7 +1492,7 @@ struct net_device {
+     int (*qos_setup_hook)   (struct net_device *dev_p);
+     int (*qos_shutdown_hook)(struct net_device *dev_p);
+     int (*qos_select_hook)  (struct sk_buff    *skb);
+-    void (*qos_get_params_hook)  (struct net_device *dev, Uint16 *egressQ, Uint32 *rate);
++    void (*qos_get_params_hook)  (struct net_device *dev, Uint16 *egressQ, Uint32 *rate, Uint32 *shaper);
+     int devInstance;
+ #else
+ #ifdef CONFIG_PUMA_LITEPATH
+-- 
+2.10.1
+

@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/open_applications/tornado/Makefile
+Package: tornado
+Submenu: Python
+Version: 4.3-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +python
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: python
+Section: lang
+Category: Languages
+Title: tornado for Python
+Maintainer: 
+Source: tornado-4.3.tar.gz
+Type: ipkg
+Description: tornado for Python
+
+@@
+
+

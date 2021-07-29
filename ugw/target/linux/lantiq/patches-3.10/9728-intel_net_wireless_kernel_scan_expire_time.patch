@@ -1,0 +1,101 @@
+From 4310c9eec1a3cbc8ca7d78add9d945378bece32f Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 14:53:58 +0300
+Subject: [PATCH 9728/9740] kernel_scan_expire_time
+
+---
+ net/wireless/core.c |  2 ++
+ net/wireless/core.h |  2 ++
+ net/wireless/scan.c | 22 ++++++++++++++++++----
+ 3 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index 341cf64..cd185e7 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -348,6 +348,8 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
+ 	/* give it a proper name */
+ 	dev_set_name(&rdev->wiphy.dev, PHY_NAME "%d", rdev->wiphy_idx);
+ 
++	rdev->scan_expire_time = IEEE80211_SCAN_RESULT_EXPIRE;
++
+ 	mutex_init(&rdev->mtx);
+ 	mutex_init(&rdev->devlist_mtx);
+ 	mutex_init(&rdev->sched_scan_mtx);
+diff --git a/net/wireless/core.h b/net/wireless/core.h
+index 1402b8a..7fc97ca 100644
+--- a/net/wireless/core.h
++++ b/net/wireless/core.h
+@@ -19,6 +19,7 @@
+ 
+ 
+ #define WIPHY_IDX_INVALID	-1
++#define IEEE80211_SCAN_RESULT_EXPIRE	(30 * HZ)
+ 
+ struct cfg80211_registered_device {
+ 	const struct cfg80211_ops *ops;
+@@ -71,6 +72,7 @@ struct cfg80211_registered_device {
+ 	u32 bss_generation;
+ 	struct cfg80211_scan_request *scan_req; /* protected by RTNL */
+ 	struct cfg80211_sched_scan_request *sched_scan_req;
++	u32 scan_expire_time;
+ 	unsigned long suspend_at;
+ 	struct work_struct scan_done_wk;
+ 	struct work_struct sched_scan_results_wk;
+diff --git a/net/wireless/scan.c b/net/wireless/scan.c
+index 81019ee..dc4f87a 100644
+--- a/net/wireless/scan.c
++++ b/net/wireless/scan.c
+@@ -55,8 +55,6 @@
+  * also linked into the probe response struct.
+  */
+ 
+-#define IEEE80211_SCAN_RESULT_EXPIRE	(30 * HZ)
+-
+ static void bss_free(struct cfg80211_internal_bss *bss)
+ {
+ 	struct cfg80211_bss_ies *ies;
+@@ -335,7 +333,7 @@ void cfg80211_bss_age(struct cfg80211_registered_device *dev,
+ 
+ void cfg80211_bss_expire(struct cfg80211_registered_device *dev)
+ {
+-	__cfg80211_bss_expire(dev, jiffies - IEEE80211_SCAN_RESULT_EXPIRE);
++	__cfg80211_bss_expire(dev, jiffies - dev->scan_expire_time);
+ }
+ 
+ const u8 *cfg80211_find_ie(u8 eid, const u8 *ies, int len)
+@@ -543,7 +541,7 @@ struct cfg80211_bss *cfg80211_get_bss(struct wiphy *wiphy,
+ 		if (channel && bss->pub.channel != channel)
+ 			continue;
+ 		/* Don't get expired BSS structs */
+-		if (time_after(now, bss->ts + IEEE80211_SCAN_RESULT_EXPIRE) &&
++		if (time_after(now, bss->ts + dev->scan_expire_time) &&
+ 		    !atomic_read(&bss->hold))
+ 			continue;
+ 		if (is_bss(&bss->pub, bssid, ssid, ssid_len)) {
+@@ -1039,6 +1037,22 @@ void cfg80211_unlink_bss(struct wiphy *wiphy, struct cfg80211_bss *pub)
+ }
+ EXPORT_SYMBOL(cfg80211_unlink_bss);
+ 
++void cfg80211_set_scan_expire_time(struct wiphy *wiphy, unsigned long time)
++{
++	struct cfg80211_registered_device *dev = wiphy_to_dev(wiphy);
++
++	dev->scan_expire_time = time;
++}
++EXPORT_SYMBOL(cfg80211_set_scan_expire_time);
++
++u32 cfg80211_get_scan_expire_time(struct wiphy *wiphy)
++{
++	struct cfg80211_registered_device *dev = wiphy_to_dev(wiphy);
++
++	return dev->scan_expire_time;
++}
++EXPORT_SYMBOL(cfg80211_get_scan_expire_time);
++
+ #ifdef CONFIG_CFG80211_WEXT
+ int cfg80211_wext_siwscan(struct net_device *dev,
+ 			  struct iw_request_info *info,
+-- 
+2.10.1
+

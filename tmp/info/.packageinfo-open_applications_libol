@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/libol/Makefile
+Package: libol
+Version: 0.3.18-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Support library for syslog-ng
+Maintainer: 
+Source: libol-0.3.18.tar.gz
+Type: ipkg
+Description: Support library for syslog-ng
+http://www.balabit.com/products/syslog_ng/
+
+@@
+
+

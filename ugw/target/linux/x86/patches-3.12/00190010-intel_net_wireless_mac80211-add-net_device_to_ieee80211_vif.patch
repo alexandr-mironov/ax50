@@ -1,0 +1,56 @@
+From 64b142364cf29f4736f0193bea9bf8229b96a57a Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 15:05:48 +0300
+Subject: [PATCH 11/20] mac80211-add-net_device_to_ieee80211_vif
+
+---
+ include/net/mac80211.h |  9 +++++++++
+ net/mac80211/util.c    | 12 ++++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/include/net/mac80211.h b/include/net/mac80211.h
+index 3c4e509..6605683 100644
+--- a/include/net/mac80211.h
++++ b/include/net/mac80211.h
+@@ -1175,6 +1175,15 @@ struct ieee80211_vif *wdev_to_ieee80211_vif(struct wireless_dev *wdev);
+ struct wireless_dev *ieee80211_vif_to_wdev(struct ieee80211_vif *vif);
+ 
+ /**
++ * net_device_to_ieee80211_vif - return a vif from net_device
++ * @dev: the net_device to get the vif for
++ *
++ * This can be used by mac80211 drivers which needs to manipulate data
++ * path with tier own implementation of net_device_ops.
++ */
++struct ieee80211_vif *net_device_to_ieee80211_vif(struct net_device *dev);
++
++/**
+  * ieee80211_vif_to_name - return the vif name
+  * @vif: the vif to get the wdev for
+  *
+diff --git a/net/mac80211/util.c b/net/mac80211/util.c
+index 4433284..7ede8a1 100644
+--- a/net/mac80211/util.c
++++ b/net/mac80211/util.c
+@@ -676,6 +676,18 @@ struct wireless_dev *ieee80211_vif_to_wdev(struct ieee80211_vif *vif)
+ }
+ EXPORT_SYMBOL_GPL(ieee80211_vif_to_wdev);
+ 
++struct ieee80211_vif *net_device_to_ieee80211_vif(struct net_device *dev)
++{
++	struct ieee80211_sub_if_data *sdata;
++
++	if (!dev)
++		return NULL;
++
++	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
++	return &sdata->vif;
++}
++EXPORT_SYMBOL_GPL(net_device_to_ieee80211_vif);
++
+ const char *ieee80211_vif_to_name(struct ieee80211_vif *vif)
+ {
+ 	struct ieee80211_sub_if_data *sdata;
+-- 
+2.10.1
+

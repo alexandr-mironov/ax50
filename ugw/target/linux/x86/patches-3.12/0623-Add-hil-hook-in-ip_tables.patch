@@ -1,0 +1,62 @@
+From 247a509883e6f0723f73d1d02a381ac9cfe42faa Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 26 Mar 2017 20:15:06 +0300
+Subject: [PATCH 623/639] Add hil hook in ip_tables
+
+---
+ net/ipv4/netfilter/ip_tables.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/net/ipv4/netfilter/ip_tables.c b/net/ipv4/netfilter/ip_tables.c
+index c433aba..764fc0e 100644
+--- a/net/ipv4/netfilter/ip_tables.c
++++ b/net/ipv4/netfilter/ip_tables.c
+@@ -9,6 +9,13 @@
+  * it under the terms of the GNU General Public License version 2 as
+  * published by the Free Software Foundation.
+  */
++
++/*
++    Includes Intel Corporation's changes/modifications dated: [Mar.2017].
++    Changed/modified portions - Copyright © 2017, Intel Corporation
++    1. PP Hook
++*/
++
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/cache.h>
+ #include <linux/capability.h>
+@@ -32,6 +39,10 @@
+ #include <net/netfilter/nf_log.h>
+ #include "../../netfilter/xt_repldata.h"
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++#include <linux/ti_hil.h>
++#endif
++
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Netfilter Core Team <coreteam@netfilter.org>");
+ MODULE_DESCRIPTION("IPv4 packet filter");
+@@ -426,6 +437,20 @@ ipt_do_table(struct sk_buff *skb,
+  	xt_write_recseq_end(addend);
+  	local_bh_enable();
+ 
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++    if (acpar.hotdrop)
++    {
++        ti_hil_pp_event (TI_CT_NETFILTER_DISCARD_PKT, (void *)skb);
++    }
++    else
++    {
++        if (verdict == NF_DROP)
++        {
++            ti_hil_pp_event(TI_CT_NETFILTER_DISCARD_PKT, (void *)skb);
++        }
++    }
++#endif
++
+ #ifdef DEBUG_ALLOW_ALL
+ 	return NF_ACCEPT;
+ #else
+-- 
+2.10.1
+

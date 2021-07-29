@@ -1,0 +1,12 @@
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 7d141a4..9b80673 100644
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -43,6 +43,7 @@ struct hil_core_notifier_param
+ 
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_INGRESS_RECORDED          0x00000001
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS                    0x00000002
++#define TI_HIL_PACKET_FLAG_PP_SESSION_EGRESS_RECORDED           0x00000004
+ #define TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET               24
+ 
+ #define TI_HIL_NETDEV_READ32_REG(x)                    ntohl(x)                /* convert network byte order to native host byte order */

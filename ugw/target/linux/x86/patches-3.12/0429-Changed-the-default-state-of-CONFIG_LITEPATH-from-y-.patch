@@ -1,0 +1,36 @@
+From 5eb8e75bd235cb50360756443fb7057ec314aba7 Mon Sep 17 00:00:00 2001
+From: "Sukerkar, Amol N" <amol.n.sukerkar@intel.com>
+Date: Wed, 15 Jun 2016 15:58:31 -0700
+Subject: [PATCH 429/639] Changed the default state of CONFIG_LITEPATH from y
+ to n in drivers/net/Kconfig and added the dependency on PPA_PUMA7
+
+Signed-off-by: Sukerkar, Amol N <amol.n.sukerkar@intel.com>
+---
+ drivers/net/Kconfig | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
+index f12cb990..bb79fb6 100644
+--- a/drivers/net/Kconfig
++++ b/drivers/net/Kconfig
+@@ -390,10 +390,13 @@ config VMXNET3
+ 	  module will be called vmxnet3.
+ 
+ config LPAL_DIRECTPATH
+-   tristate "LitePath DirectPath Interface"
+-   default y
+-   help
+-     Partial Offload SUpport for WiFi.
++        tristate "LitePath DirectPath Interface"
++        depends on PPA_PUMA7
++        default n
++        help
++          Partial Offload SUpport for WiFi. This turns on the API
++          support for LitePath API library to be used by WiFi
++          Access Point driver.
+ 
+ source "drivers/net/hyperv/Kconfig"
+ 
+-- 
+2.10.1
+

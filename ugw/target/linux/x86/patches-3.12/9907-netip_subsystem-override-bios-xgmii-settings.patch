@@ -1,0 +1,41 @@
+From 1619562c96e4cc44b158f70a0fdadd7b27ea64b1 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Fri, 23 Mar 2018 15:55:20 -0700
+Subject: [PATCH] netip_subsystem: override bios xgmii settings
+
+To provide backward compatibility with older bios, if bios
+settings are not found, assume as if bios enabled all xgmii
+interfaces.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index 1dd6fe786aac..4554c8015819 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -642,7 +642,18 @@ void netss_get_child_dev_info(void)
+        }
+     }
+ 
+-    printk(KERN_INFO "BIOS enabled xgmiis = %08X\n", pnetss_drv_data->bios_enabled_xgmiis);
++#ifdef CONFIG_NETIP_SERVICES_ON_ATOM
++    if (pnetss_drv_data->bios_enabled_xgmiis == 0)
++    {
++        /* Override as this will be the case if PP on ARM BIOS is used with PP on ATOM SDK */
++        pnetss_drv_data->bios_enabled_xgmiis = 0xF;
++        printk(KERN_INFO "Forcing BIOS enabled xgmiis = %08X\n", pnetss_drv_data->bios_enabled_xgmiis);
++    }
++    else
++#endif
++    {
++        printk(KERN_INFO "BIOS enabled xgmiis = %08X\n", pnetss_drv_data->bios_enabled_xgmiis);
++    }
+     return;
+ }
+ 
+-- 
+2.11.0
+

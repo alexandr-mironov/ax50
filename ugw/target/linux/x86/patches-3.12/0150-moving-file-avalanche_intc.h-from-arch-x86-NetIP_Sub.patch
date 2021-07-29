@@ -1,0 +1,89 @@
+From 15f072b57547c9b0dfcfadd2d46bb8a43a9d883f Mon Sep 17 00:00:00 2001
+From: chandrap <prakash1.chandra@intel.com>
+Date: Tue, 25 Aug 2015 16:02:25 -0700
+Subject: [PATCH 150/639] moving file avalanche_intc.h from
+ arch/x86/NetIP_SubSystem/ to include/linux/avalanche/generic/ and changing
+ dependencies accordigly
+
+---
+ arch/x86/NetIP_SubSystem/avalanche_intc.c                        | 9 +++++----
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c                   | 5 +++--
+ .../linux/avalanche/generic}/avalanche_intc.h                    | 4 ++--
+ 3 files changed, 10 insertions(+), 8 deletions(-)
+ rename {arch/x86/NetIP_SubSystem => include/linux/avalanche/generic}/avalanche_intc.h (99%)
+
+diff --git a/arch/x86/NetIP_SubSystem/avalanche_intc.c b/arch/x86/NetIP_SubSystem/avalanche_intc.c
+index abc6602..0d20ea5 100644
+--- a/arch/x86/NetIP_SubSystem/avalanche_intc.c
++++ b/arch/x86/NetIP_SubSystem/avalanche_intc.c
+@@ -1,8 +1,8 @@
+ /*
+  *
+- * avalanche_intd.h 
++ * avalanche_intdc.c
+  * Description:
+- * interrupt distributor header file
++ * interrupt controller file
+  *
+  *
+ 
+@@ -75,7 +75,7 @@
+ #include <asm/io.h>
+ #include <linux/netip_subsystem.h>
+ #include "netip_subsystem_defs.h"
+-#include "avalanche_intc.h"
++#include <linux/avalanche/generic/avalanche_intc.h>
+ 
+ /***************/
+ /**  Defines  **/
+@@ -173,4 +173,5 @@ void avalanche_intc_cleanup(void)
+ {
+     iounmap(AVALANCHE_INTC_BASE);
+ }
+-
++EXPORT_SYMBOL(avalanche_intc_get_status);
++EXPORT_SYMBOL(avalanche_intc_clear_status);
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index 6ddfbf5..0f7be26 100755
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -39,7 +39,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/netip_subsystem.h>
+ #include "netip_subsystem_defs.h"
+-#include "avalanche_intc.h"
++#include <linux/avalanche/generic/avalanche_intc.h>
+ 
+ /* Time out if we cannot get a MUTEX within half minute */
+ #define NET_SUBSYSTEM_IRQ_NAME "netip_subsystem_irq"
+@@ -165,7 +165,8 @@ static irqreturn_t net_subsystem_isr(int irq, void *dev_id)
+                             pnet_ss->arm11_irqs[j].func(irq, pnet_ss->arm11_irqs[j].args);
+ 
+                         }
+-                        avalanche_intc_clear_status(j);
++                        /* no need to clear ATOM_INTC here avalanche_intc_clear_status(j); */
++                        /* status clear need to be done by requester */
+                     }
+ 
+                 }
+diff --git a/arch/x86/NetIP_SubSystem/avalanche_intc.h b/include/linux/avalanche/generic/avalanche_intc.h
+similarity index 99%
+rename from arch/x86/NetIP_SubSystem/avalanche_intc.h
+rename to include/linux/avalanche/generic/avalanche_intc.h
+index 4c2d801..63bec2a 100644
+--- a/arch/x86/NetIP_SubSystem/avalanche_intc.h
++++ b/include/linux/avalanche/generic/avalanche_intc.h
+@@ -1,8 +1,8 @@
+ /*
+  *
+- * avalanche_intd.h 
++ * avalanche_intc.h 
+  * Description:
+- * interrupt distributor header file
++ * ATOM_INTC interrupt controller header file
+  *
+  *
+ 
+-- 
+2.10.1
+

@@ -1,0 +1,18 @@
+Source-Makefile: feeds/open_applications/lsqlite/Makefile
+Package: lsqlite3
+Version: fsl09b-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libsqlite3
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: lsqlite3 -- prints a snarky message
+Maintainer: 
+Source: lsqlite3_fsl09b.zip
+Type: ipkg
+Description:  LuaSQLite 3 is a thin wrapper around the public domain SQLite3 database engine.
+
+@@
+
+

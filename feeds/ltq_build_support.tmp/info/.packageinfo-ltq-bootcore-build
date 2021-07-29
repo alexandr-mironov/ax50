@@ -1,0 +1,49 @@
+Source-Makefile: feeds/ltq_build_support/ltq-bootcore-build/Makefile
+Package: ltq-xrx500-bootcore
+Menu: 1
+Submenu: Enable xRX500 BootCore build
+Version: 0.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Lantiq
+Title: Lantiq xRX500 BootCore environment build
+Maintainer: Lantiq
+Source: 
+Type: ipkg
+Description: 	This package is for building xRX500 BootCore model.
+http://www.lantiq.com
+Lantiq
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_ltq-xrx500-bootcore
+	config ltq-xrx500-bootcore_USE_CUSTOM_VERSION
+		depends on PACKAGE_ltq-xrx500-bootcore
+		bool "Use custom package version"
+		default n
+	config ltq-xrx500-bootcore_CUSTOM_VERSION
+		depends on ltq-xrx500-bootcore_USE_CUSTOM_VERSION
+		string "ltq-xrx500-bootcore version as string (default version: 0.0.0)"
+		default "0.0.0"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_ltq-xrx500-bootcore
+	config ltq-xrx500-bootcore_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_ltq-xrx500-bootcore
+		bool "Use custom source directory"
+		default n
+	config ltq-xrx500-bootcore_CUSTOM_SOURCE_DIR
+		depends on ltq-xrx500-bootcore_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/build_dir/xRX500_BootCore"
+	endmenu
+	menu "xRX500 Boot Core features"
+		depends on PACKAGE_ltq-xrx500-bootcore
+		source "ugw/build/build_support/ltq-bootcore-build/config/Config.in"
+	endmenu
+@@
+
+

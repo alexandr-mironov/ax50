@@ -1,0 +1,19 @@
+Source-Makefile: feeds/ltq_packages/network/config/ipip/Makefile
+Package: ipip
+Version: 1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-ipip
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: IP in IP Tunnel config support
+Maintainer: Hans Dedecker <dedeckeh@gmail.com>
+Source: 
+License: GPL-2.0
+Type: ipkg
+Description:  IP in IP Tunnel config support in /etc/config/network.
+Hans Dedecker <dedeckeh@gmail.com>
+@@
+
+

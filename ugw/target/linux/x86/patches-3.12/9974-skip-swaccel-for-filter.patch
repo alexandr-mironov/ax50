@@ -1,0 +1,32 @@
+# HG changeset patch
+# Parent 134af68b14a1fcf87fdee9333571b1bda6275b85
+
+diff --git a/include/linux/extmark.h b/include/linux/extmark.h
+--- a/include/linux/extmark.h
++++ b/include/linux/extmark.h
+@@ -39,4 +39,10 @@
+ #define QUETYPE_NO_OF_BITS 1
+ #define QUETYPE_MASK 0x20
+ 
++// LRO bit is being reused to mark packet is acclerated by SAE
++#define FILTERTAP_START_BIT_POS 31 
++#define FILTERTAP_NO_OF_BITS 1
++#define FILTERTAP_MASK 0x80000000
++
++
+ #endif
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2643,7 +2643,11 @@ int dev_hard_start_xmit(struct sk_buff *
+ 			}
+ 		}
+ 
++	#ifdef CONFIG_NETWORK_EXTMARK
++		if (!list_empty(&ptype_all) && !(skb->extmark & FILTERTAP_MASK))
++	#else
+ 		if (!list_empty(&ptype_all))
++	#endif
+ 			dev_queue_xmit_nit(skb, dev);
+ 
+ #ifdef CONFIG_ETHERNET_PACKET_MANGLE

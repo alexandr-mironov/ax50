@@ -1,0 +1,44 @@
+From f45fccc4b795525ef119e3cd32e906e1b1376be2 Mon Sep 17 00:00:00 2001
+From: Utkarsh Patel <utkarsh.h.patel@intel.com>
+Date: Thu, 27 Oct 2016 12:21:35 -0700
+Subject: [PATCH 509/639] x86: puma7-crash-kernel: Enable crashdumps
+
+Enable CONFIG_CRASH_DUMP in the puma7 crash kernel defconfig.
+
+This option will enable the crash kernel to expose the interface
+/proc/vmcore after the main kernel has crashed.
+
+By reading from this interface, a userspace application can collect an
+elf file representing the crashdump, which can be parsed offline
+using crash-tool.
+
+Signed-off-by: Utkarsh Patel <utkarsh.h.patel@intel.com>
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ arch/x86/configs/puma7-crash-kernel_defconfig | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/configs/puma7-crash-kernel_defconfig b/arch/x86/configs/puma7-crash-kernel_defconfig
+index 3b91b83..699c596 100644
+--- a/arch/x86/configs/puma7-crash-kernel_defconfig
++++ b/arch/x86/configs/puma7-crash-kernel_defconfig
+@@ -450,7 +450,7 @@ CONFIG_HZ_1000=y
+ CONFIG_HZ=1000
+ CONFIG_SCHED_HRTICK=y
+ # CONFIG_KEXEC is not set
+-# CONFIG_CRASH_DUMP is not set
++CONFIG_CRASH_DUMP=y
+ CONFIG_PHYSICAL_START=0x200000
+ CONFIG_RELOCATABLE=y
+ CONFIG_X86_NEED_RELOCS=y
+@@ -2087,6 +2087,7 @@ CONFIG_FAT_DEFAULT_IOCHARSET="iso8859-1"
+ #
+ CONFIG_PROC_FS=y
+ # CONFIG_PROC_KCORE is not set
++CONFIG_PROC_VMCORE=y
+ CONFIG_PROC_SYSCTL=y
+ CONFIG_PROC_PAGE_MONITOR=y
+ CONFIG_SYSFS=y
+-- 
+2.10.1
+

@@ -1,0 +1,48 @@
+From 5a8f8dd3acee2899bb8ed25d804fcc1ee1f5b945 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Wed, 10 Aug 2016 13:36:43 -0700
+Subject: [PATCH 457/639] puma-litepath: Add Kconfig options
+
+Puma Litepath with GW on Atom usecase like RDKB needs datapipe driver to
+be connected to wifi mux driver. Adding necessary Kconfig options to
+either enable or disable wifi mux driver compilation and connect or
+disconnect adp driver and wifi mux driver.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/Kconfig | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 461b677..ebb0159 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -467,6 +467,25 @@ menu "Intel Puma7 LitePath Support"
+           This feature turns on the LitePath support logic for
+           WiFi Access Point driver that wishes to use Partial
+           Offload feature.
++    config WIFI_MUX
++       tristate "Enable WiFi Mux driver."
++       depends on PPA_PUMA7
++       default n
++       ---help---
++          Builds WiFi Mux driver, which is interface between datapipe
++          and wifi litepath abstraction layer, used by datapipe driver to
++          bypass the first wifi packet from linux network stack thereby
++          reducing the load on host CPU.
++    config CONNECT_ADP_WIFI_MUX
++       bool "Connect Datapipe driver with Wifi Mux driver."
++       depends on WIFI_MUX
++       default n
++       ---help---
++          Register Datapipe driver with Wifi Mux driver. ADP driver
++          and WiFi Mux drivers are connected only when the Gateway
++          is on Atom CPU. This enables the Datapipe driver to register
++          callbacks that can be called from WiFi Mux driver to send
++          and receive network packets.
+ endmenu
+ 
+ menu  "Intel PUMA7 AVALANCHE support"
+-- 
+2.10.1
+

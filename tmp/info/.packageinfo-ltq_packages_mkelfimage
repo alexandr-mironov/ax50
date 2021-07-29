@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/mkelfimage/Makefile
+Package: mkelfimage
+Default: y if TARGET_x86
+Version: 2.7
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @i386
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: mkelfimage
+Maintainer: 
+Source: mkelfimage_2.7.orig.tar.gz
+Type: ipkg
+Hidden: 1
+Description: mkelfimage
+
+@@
+
+

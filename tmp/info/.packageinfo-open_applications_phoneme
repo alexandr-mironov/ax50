@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/phoneme/Makefile
+Package: phoneme
+Version: advanced-mr2-dev-b167
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_ltqcpe_platform_vr9 @PACKAGE_kmod-ltqcpe_nand
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: A Java Virtual Machine
+Maintainer: 
+Source: phoneme_advanced-mr2-dev-b167.tgz
+Type: ipkg
+Description: A Java Virtual Machine
+http://davy.preuveneers.be/phoneme/?q=node/10
+
+@@
+
+

@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_applications/gdbm/Makefile
+Package: libgdbm
+Version: 1.8.3-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: libs
+Category: Libraries
+Title: GNU database manager
+Maintainer: 
+Source: gdbm-1.8.3.tar.gz
+Type: ipkg
+Description: GNU database manager
+http://www.gnu.org/software/gdbm/
+
+@@
+
+

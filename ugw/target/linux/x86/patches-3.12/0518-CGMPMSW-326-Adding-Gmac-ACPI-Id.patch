@@ -1,0 +1,24 @@
+From 1143a34a5f8879abe99f53d841b06cab14b0ebf4 Mon Sep 17 00:00:00 2001
+From: Vinodkumar Mudaliar <vinodkumar.mudaliar@intel.com>
+Date: Wed, 16 Nov 2016 01:01:00 -0700
+Subject: [PATCH 518/639] CGMPMSW-326-Adding Gmac ACPI Id
+
+---
+ drivers/acpi/acpi_platform.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/acpi/acpi_platform.c b/drivers/acpi/acpi_platform.c
+index 3f0adf2..99d735b 100644
+--- a/drivers/acpi/acpi_platform.c
++++ b/drivers/acpi/acpi_platform.c
+@@ -31,6 +31,7 @@ static const struct acpi_device_id acpi_platform_device_ids[] = {
+ 	{ "PNP0D40" },
+ 	{ "INT33FF" },
+ 	{ "INT351A" },
++    { "INT351B" },
+ 
+ 	{ }
+ };
+-- 
+2.10.1
+

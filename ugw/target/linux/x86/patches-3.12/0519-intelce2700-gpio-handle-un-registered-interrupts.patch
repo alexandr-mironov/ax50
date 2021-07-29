@@ -1,0 +1,45 @@
+From fc5a5400360f6e2506defa047871d591bc11a3f3 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 15 Nov 2016 13:45:00 -0700
+Subject: [PATCH 519/639] intelce2700-gpio: handle un registered interrupts
+
+gpio driver is running into endless while loop when a un-registered
+interrupt comes because the pin offset is saved in an unsigned variable
+and when the invalid pin offset -1 is compared as less than zero the
+condition never met and the interrupt is causing an infinite loop of
+handling this interrupt. Fix is to save the pin index in a signed
+variable.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/gpio/gpio-intelce2700.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpio/gpio-intelce2700.c b/drivers/gpio/gpio-intelce2700.c
+index a8a6805..1c47cef 100644
+--- a/drivers/gpio/gpio-intelce2700.c
++++ b/drivers/gpio/gpio-intelce2700.c
+@@ -832,8 +832,8 @@ static void pad_intr_line_save(struct intelce2700_gpio *cg, unsigned offset)
+ 
+ 	value = intelce2700_readl(reg);
+ 	intr_line = (value & CE2700_GPIO_INT_SEL_MASK) >> 28;
+-	pad_info->interrupt_line = intr_line;
+-	cg->intr_lines[intr_line] = offset;
++	pad_info->interrupt_line = (int)intr_line;
++	cg->intr_lines[intr_line] = (int)offset;
+ }
+ 
+ static int intelce2700_irq_type(struct irq_data *d, unsigned type)
+@@ -1226,7 +1226,8 @@ static struct irq_chip intelce2700_irqchip = {
+ 
+ static void intelce2700_gpio_irq_dispatch(struct intelce2700_gpio *cg)
+ {
+-	u32 intr_line, mask, offset;
++	u32 intr_line, mask;
++	int offset;
+ 	void __iomem *reg, *mask_reg;
+ 	u32 pending;
+ 
+-- 
+2.10.1
+

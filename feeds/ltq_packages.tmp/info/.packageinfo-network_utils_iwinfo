@@ -1,0 +1,56 @@
+Source-Makefile: feeds/ltq_packages/network/utils/iwinfo/Makefile
+Package: libiwinfo
+Version: 2015-06-01-ade8b1b299cbd5748db1acf80dd3e9f567938371
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +PACKAGE_kmod-cfg80211:libnl-tiny +libuci +PACKAGE_kmod-lantiq-wlan-wave-support_5_x:libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Generalized Wireless Information Library (iwinfo)
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: libiwinfo-2015-06-01-ade8b1b299cbd5748db1acf80dd3e9f567938371.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description:   Wireless information library with consistent interface for proprietary Broadcom,
+  madwifi, nl80211 and wext driver interfaces.
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+Package: libiwinfo-lua
+Submenu: Lua
+Version: 2015-06-01-ade8b1b299cbd5748db1acf80dd3e9f567938371
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libiwinfo +liblua
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: lang
+Category: Languages
+Title: libiwinfo Lua binding
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: libiwinfo-2015-06-01-ade8b1b299cbd5748db1acf80dd3e9f567938371.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description:   This is the Lua binding for the iwinfo library. It provides access to all enabled
+  backends.
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+Package: iwinfo
+Version: 2015-06-01-ade8b1b299cbd5748db1acf80dd3e9f567938371
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libiwinfo
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Generalized Wireless Information utility
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: libiwinfo-2015-06-01-ade8b1b299cbd5748db1acf80dd3e9f567938371.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description:   Command line frontend for the wireless information library.
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

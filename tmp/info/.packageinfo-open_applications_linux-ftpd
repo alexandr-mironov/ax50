@@ -1,0 +1,49 @@
+Source-Makefile: package/feeds/open_applications/linux-ftpd/Makefile
+Package: linux-ftpd
+Submenu: File Transfer
+Version: 0.17-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ltq-mapi
+Section: net
+Category: Network
+Title: Linux FTP Daemon for file transfer
+Maintainer: 
+Source: linux-ftpd-0.17.tar.gz
+Type: ipkg
+Description:   Daemon for FTP (File Transfer Protocol)
+ftp://ftp.linux.hr/gentoo/distfiles/distfiles/
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_linux-ftpd
+	config linux-ftpd_USE_CUSTOM_VERSION
+		depends on PACKAGE_linux-ftpd
+		bool "Use custom package version"
+		default n
+	config linux-ftpd_CUSTOM_VERSION
+		depends on linux-ftpd_USE_CUSTOM_VERSION
+		string "linux-ftpd version as string (default version: 0.17)"
+		default "0.17"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_linux-ftpd
+	config linux-ftpd_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_linux-ftpd
+		bool "Use custom source directory"
+		default n
+	config linux-ftpd_CUSTOM_SOURCE_DIR
+		depends on linux-ftpd_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/../../../wlnsw/wireline_sw_linux26/open_linux_ftpd"
+	endmenu
+	config FEATURE_FTP_SERVER
+		default y
+		depends on PACKAGE_linux-ftpd
+		bool 'linux_ftpd'
+@@
+
+

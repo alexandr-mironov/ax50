@@ -1,0 +1,25 @@
+From 7fdc790e24613c31cd96e931ce9f8fcd3bba31ae Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 20 Apr 2017 09:41:56 +0300
+Subject: [PATCH 633/639] Fix comment typo
+
+---
+ include/linux/ti_hil.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index c2cb055..e25a90c 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -180,7 +180,7 @@ struct hil_core_notifier_param
+ /* Event generated as part of connection tracking entry flush */
+ #define NETFILTER_CT_FLUSH_END     (TI_CT_EVENT + 0x10)
+ 
+-/* Event generated once Netfilter decides to delete al sessions linked to the same conntrack */
++/* Event generated once Netfilter decides to delete all sessions linked to the same conntrack */
+ #define TI_CT_NETFILTER_DELETE_CONNTRACK_SESSIONS     (TI_CT_EVENT + 0x11)
+ 
+ /**************************************************************************
+-- 
+2.10.1
+

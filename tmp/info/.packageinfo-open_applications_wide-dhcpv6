@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/wide-dhcpv6/Makefile
+Package: wide-dhcpv6
+Version: 20080615-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +!NEW_FRAMEWORK:ltq-mapi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Base system
+Title: DHCPv6 Client and Server
+Maintainer: 
+Source: wide-dhcpv6-20080615.tar.gz
+Type: ipkg
+Description: DHCPv6 Client and Server
+http://sourceforge.net/projects/wide-dhcpv6/
+
+@@
+
+

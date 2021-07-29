@@ -1,0 +1,74 @@
+From 5c705201e373147846103b47a64a446d47b28982 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 1 Jan 2017 18:19:26 +0200
+Subject: [PATCH 568/639] TOE processname based acceleration
+
+---
+ include/net/sock.h |  8 ++++++++
+ net/socket.c       | 15 ++++++++++++++-
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/include/net/sock.h b/include/net/sock.h
+index 6ed6df1..16fd573 100644
+--- a/include/net/sock.h
++++ b/include/net/sock.h
+@@ -408,8 +408,16 @@ struct sock {
+ 	int			(*sk_backlog_rcv)(struct sock *sk,
+ 						  struct sk_buff *skb);
+ 	void                    (*sk_destruct)(struct sock *sk);
++    uint32_t                acceleration_flag;
+ };
+ 
++enum toe_acceleration_flag_set_act {
++    SOCKET_ALLOCATE,
++    SOCKET_RELEASE
++};
++
++extern int (*toe_acceleration_flag_set_hook)(struct sock *, struct pid *, enum toe_acceleration_flag_set_act);
++
+ #define __sk_user_data(sk) ((*((void __rcu **)&(sk)->sk_user_data)))
+ 
+ #define rcu_dereference_sk_user_data(sk)	rcu_dereference(__sk_user_data((sk)))
+diff --git a/net/socket.c b/net/socket.c
+index 64c47cd..3df77e8 100644
+--- a/net/socket.c
++++ b/net/socket.c
+@@ -336,6 +336,9 @@ static struct file_system_type sock_fs_type = {
+ 	.kill_sb =	kill_anon_super,
+ };
+ 
++int (*toe_acceleration_flag_set_hook)(struct sock *, struct pid *, enum toe_acceleration_flag_set_act);
++EXPORT_SYMBOL(toe_acceleration_flag_set_hook);
++
+ /*
+  *	Obtains the first available file descriptor and sets it up for use.
+  *
+@@ -386,7 +389,12 @@ struct file *sock_alloc_file(struct socket *sock, int flags, const char *dname)
+ 	sock->file = file;
+ 	file->f_flags = O_RDWR | (flags & O_NONBLOCK);
+ 	file->private_data = sock;
+-	return file;
++    if (sock->sk) {
++        if (toe_acceleration_flag_set_hook) {
++            toe_acceleration_flag_set_hook(sock->sk, find_get_pid(task_pid_nr(current)), SOCKET_ALLOCATE);
++        }
++    }
++    return file;
+ }
+ EXPORT_SYMBOL(sock_alloc_file);
+ 
+@@ -584,6 +592,11 @@ const struct file_operations bad_sock_fops = {
+ 
+ void sock_release(struct socket *sock)
+ {
++    if (sock->sk) {
++        if (toe_acceleration_flag_set_hook) {
++            toe_acceleration_flag_set_hook(sock->sk, find_get_pid(task_pid_nr(current)), SOCKET_RELEASE);
++        }
++    }
+ 	if (sock->ops) {
+ 		struct module *owner = sock->ops->owner;
+ 
+-- 
+2.10.1
+

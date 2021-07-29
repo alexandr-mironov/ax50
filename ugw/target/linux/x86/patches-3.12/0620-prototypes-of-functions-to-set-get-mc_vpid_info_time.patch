@@ -1,0 +1,32 @@
+From 5a4a98f52b93b74d0519c3db0afd4e6221346050 Mon Sep 17 00:00:00 2001
+From: "Martinez, Ricardo" <ricardo.martinez@intel.com>
+Date: Sat, 25 Mar 2017 17:56:16 -0700
+Subject: [PATCH 620/639] prototypes of functions to set/get
+ mc_vpid_info_timeout
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 6a1f3c9..901c972 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1783,11 +1783,13 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_session_create        ( AVALANCHE_PP_S
+ extern AVALANCHE_PP_RET_e    avalanche_pp_check_multiple_egress ( AVALANCHE_PP_SESSION_INFO_t *ptr_session );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_del_mcast_member      ( void *ptr );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_add_mcast_member      ( void *ptr );
++extern AVALANCHE_PP_RET_e    avalanche_pp_set_mc_vpid_info_timeout (Uint8 timeoutSeconds);
++extern AVALANCHE_PP_RET_e    avalanche_pp_get_mc_vpid_info_timeout (Uint8 *timeoutSeconds);
+ extern AVALANCHE_PP_RET_e    avalanche_pp_mcast_dbg_add_member  ( Uint8 group_index, Uint8 vpid, Uint16 cluster, Uint32 psi );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_delete_mc_session     ( void *ptr, Bool deleteMCVpidInfo );
+ 
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats, Bool deleteFromFW, Bool deleteMCVpidInfo );
+-extern AVALANCHE_PP_RET_e   avalanche_pp_override_egress_queue  ( Uint32 session_handle,     Uint8 override_qMgr,                               Uint16 override_qNum);
++extern AVALANCHE_PP_RET_e    avalanche_pp_override_egress_queue ( Uint32 session_handle,     Uint8 override_qMgr,                               Uint16 override_qNum);
+ #else
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_delete        ( Uint32    session_handle,     AVALANCHE_PP_SESSION_STATS_t *  ptr_session_stats );
+ #endif
+-- 
+2.10.1
+

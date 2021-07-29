@@ -1,0 +1,54 @@
+From a5b66a7846c387683962b824823f4e7ca4169332 Mon Sep 17 00:00:00 2001
+From: Andrei Danaila <andrei.danaila@intel.com>
+Date: Fri, 16 Dec 2016 11:54:27 -0800
+Subject: [PATCH 551/639] puma: thermal: Resolve kw issue for strcpy
+
+Resolve klockwork issue with respect to an unbounded
+string copy:
+
+Original KW warning:
+function 'strcpy' does not check buffer boundaries but outputs to buffer
+'tdi_ptr->name' of fixed size (20)
+Current status 'Analyze'
+
+Resolve by replacing strcpy with strlcpy and specifying the destination
+buffer size.
+
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ drivers/thermal/puma_thermal.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/thermal/puma_thermal.c b/drivers/thermal/puma_thermal.c
+index c719a6b..7f1c815 100644
+--- a/drivers/thermal/puma_thermal.c
++++ b/drivers/thermal/puma_thermal.c
+@@ -128,6 +128,7 @@
+ 
+ #define PUMA_THERMAL_CLASS       "thermal"
+ #define PUMA_DEVICE_NAME         "puma_dts"
++#define MAX_NAME_LEN             20
+ 
+ struct thermal_device_info {
+    struct mutex lock;
+@@ -135,7 +136,7 @@ struct thermal_device_info {
+    int trips;
+    int mask;
+    enum thermal_device_mode mode;   
+-   char name[20];
++   char name[MAX_NAME_LEN];
+ };
+ 
+ struct thermal_soc_data {
+@@ -613,7 +614,7 @@ static int puma_thermal_init(void)
+    for (i = 0; i < PUMA_THERMAL_SENSORS; i++) {
+       tdi_ptr->sensor_index = index[i];
+       mutex_init(&tdi_ptr->lock);
+-      strcpy(tdi_ptr->name, name[i]);
++      strlcpy(tdi_ptr->name, name[i], MAX_NAME_LEN);
+       tdi_ptr->trips = trips[i];
+       tdi_ptr->mask = mask[i];
+       tdi_ptr->mode = THERMAL_DEVICE_DISABLED;
+-- 
+2.10.1
+

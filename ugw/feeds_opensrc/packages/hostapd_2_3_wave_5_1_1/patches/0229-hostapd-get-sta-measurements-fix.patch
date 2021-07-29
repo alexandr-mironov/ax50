@@ -1,0 +1,18 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/hostapd/ctrl_iface.c hostapd-2.6/hostapd/ctrl_iface.c
+--- hostapd-2.6-orig/hostapd/ctrl_iface.c	2017-05-24 11:33:09.465203882 +0300
++++ hostapd-2.6/hostapd/ctrl_iface.c	2017-05-24 11:37:58.010483403 +0300
+@@ -4922,7 +4922,14 @@ int hostapd_ctrl_iface_get_sta_measureme
+       return 0;
+     return ret;
+   }
++
+   sta = ap_get_sta(hapd, sta_addr);
++  if (sta == NULL) {
++    ret = os_snprintf(buf, buflen, "FAIL\n");
++    if (ret < 0 || (size_t) ret >= buflen)
++      return 0;
++    return ret;
++  }
+ 
+   ret = hostapd_drv_get_sta_measurements(hapd, sta_addr, &sta_info);
+   if (ret) {

@@ -1,0 +1,27 @@
+Source-Makefile: feeds/ltq_packages/utils/busybox/Makefile
+Package: busybox
+Menu: 1
+Version: 1.23.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +BUSYBOX_USE_LIBRPC:librpc +BUSYBOX_CONFIG_PAM:libpam
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: BUSYBOX_USE_LIBRPC:librpc BUSYBOX_CONFIG_PAM:libpam
+Section: base
+Category: Base system
+Title: Core utilities for embedded Linux
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: busybox-1.23.2.tar.bz2
+License: GPL-2.0
+LicenseFiles: LICENSE archival/libarchive/bz/LICENSE
+Type: ipkg
+Description:  The Swiss Army Knife of embedded Linux.
+ It slices, it dices, it makes Julian Fries.
+http://busybox.net/
+Felix Fietkau <nbd@openwrt.org>
+@@
+Config:
+	source "package/utils/busybox/Config.in"
+@@
+
+

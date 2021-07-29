@@ -1,0 +1,32 @@
+From 2e1bbe6ffbd63aef1661ff17ebb1638ea6a55851 Mon Sep 17 00:00:00 2001
+From: vulsmike <mikelis.vuls@intel.com>
+Date: Fri, 23 Feb 2018 13:00:04 +0200
+Subject: [PATCH 36/36] 802.11AX-band-attribute-update
+
+---
+ net/wireless/nl80211.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index fb8e827..2d070c4b 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -1080,10 +1080,11 @@ static int nl80211_send_band_rateinfo(struct sk_buff *msg,
+ 	/* add HE info */
+ 	if (sband->he_cap.he_supported &&
+ 	(nla_put(msg, NL80211_BAND_ATTR_HE_MCS_SET,
+-		sizeof(sband->vht_cap.vht_mcs),
+-		&sband->vht_cap.vht_mcs) ||
+-		nla_put_u32(msg, NL80211_BAND_ATTR_HE_CAPA,
+-		sband->vht_cap.cap))) /* TODO: Temporary, using VHT rates for HE */
++		NL80211_HE_CAPABILITY_MCS_NSS_LEN,
++		&sband->he_cap.he_capabilities[NL80211_HE_CAPABILITY_MCS_NSS_OFFSET]) ||
++		nla_put(msg, NL80211_BAND_ATTR_HE_CAPA,
++		NL80211_HE_CAPABILITY_LEN,
++		&sband->he_cap.he_capabilities[NL80211_HE_CAPABILITY_OFFSET])))
+ 	return -ENOBUFS;
+ 	/* add bitrates */
+ 	nl_rates = nla_nest_start(msg, NL80211_BAND_ATTR_RATES);
+-- 
+2.10.1
+

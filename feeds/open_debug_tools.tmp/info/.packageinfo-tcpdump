@@ -1,0 +1,36 @@
+Source-Makefile: feeds/open_debug_tools/tcpdump/Makefile
+Package: tcpdump
+Version: 4.1.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpcap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Utilities
+Title: Network monitoring and data acquisition tool
+Maintainer: 
+Source: tcpdump-4.1.1.tar.gz
+Type: ipkg
+Description: Network monitoring and data acquisition tool
+http://www.tcpdump.org/
+
+@@
+
+Package: tcpdump-mini
+Version: 4.1.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpcap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Utilities
+Title: Network monitoring and data acquisition tool (minimal version)
+Maintainer: 
+Source: tcpdump-4.1.1.tar.gz
+Type: ipkg
+Description: Network monitoring and data acquisition tool (minimal version)
+http://www.tcpdump.org/
+
+@@
+
+

@@ -1,0 +1,58 @@
+From e60c6e394e59e876f46c5d1bc47604ee21a04121 Mon Sep 17 00:00:00 2001
+From: Denis <dennis.begun@intel.com>
+Date: Sun, 26 Feb 2017 14:28:18 +0200
+Subject: [PATCH 614/639] PKTPROSSW-289: Added support for adaptive session
+ deletion based on number of open sessions
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h |  2 ++
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 13 +++++++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index e1fa583..5042020 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -155,6 +155,8 @@ typedef enum
+     PDSP_SESSION_CACHE_SESSION_CMD  = 0x83,
+     PDSP_SESSION_CACHE_FLUSH_ALL    = 0x84,
+     PDSP_SESSION_CACHE_SESSION_TIMEOUT  = 0x85,
++    PDSP_SESSION_CACHE_DELETION_THRESHOLDS_SET = 0x86,
++    PDSP_SESSION_CACHE_DELETION_THRESHOLDS_ENABLE = 0x87,
+ 
+     // tDox Commands
+     PDSP_TDOX_CONFIGURE_PARAMS          = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index bd64c96..7ddb9d9 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -763,6 +763,10 @@ typedef enum
+ #define CLASSIFICATION_MODE_DEFAULT CLASSIFICATION_MODE_IPV4_IPV6
+ #endif
+ 
++/* Session cache deletion thresholds */
++#define SESSION_CACHE_DEFAULT_DEL_THRESHOLDS_ENABLE 1
++#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_LOW     100
++#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_HIGH    1000
+ 
+ typedef enum
+ {
+@@ -1866,6 +1870,15 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_hw_interrupt_bundle_init  ( void );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_classification_mode(PP_CLASSIFICATION_MODE_e);
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_support_bp_frag(Uint8 EnDis);
+ extern PP_CLASSIFICATION_MODE_e avalanche_pp_get_classification_mode( void );
++
++/* Session cache deletion thresholds */
++// TODO why defining these here has no effect and is not seen by pp_fw_download.c??
++//#define SESSION_CACHE_DEFAULT_DEL_THRESHOLDS_ENABLE 0
++//#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_LOW     1000
++//#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_HIGH    1200
++
++extern AVALANCHE_PP_RET_e avalanche_pp_cache_del_thresholds_enable(Uint8);
++extern AVALANCHE_PP_RET_e avalanche_pp_cache_del_thresholds_set(Uint16, Uint16);
+ #endif
+ 
+ /* MISC APIs */
+-- 
+2.10.1
+

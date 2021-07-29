@@ -1,0 +1,26 @@
+--- a/src/dhcp.c
++++ b/src/dhcp.c
+@@ -147,7 +147,7 @@ void dhcp_packet(time_t now, int pxe_fd)
+   ssize_t sz; 
+   int iface_index = 0, unicast_dest = 0, is_inform = 0, loopback = 0;
+   int rcvd_iface_index;
+-  struct in_addr iface_addr;
++  struct in_addr iface_addr, *addrp = NULL;
+   struct iface_param parm;
+   time_t recvtime = now;
+ #ifdef HAVE_LINUX_NETWORK
+@@ -286,12 +286,9 @@ void dhcp_packet(time_t now, int pxe_fd)
+     {
+       ifr.ifr_addr.sa_family = AF_INET;
+       if (ioctl(daemon->dhcpfd, SIOCGIFADDR, &ifr) != -1 )
+-	iface_addr = ((struct sockaddr_in *) &ifr.ifr_addr)->sin_addr;
+-      else
+ 	{
+-	  if (iface_check(AF_INET, NULL, ifr.ifr_name, NULL))
+-	    my_syslog(MS_DHCP | LOG_WARNING, _("DHCP packet received on %s which has no address"), ifr.ifr_name);
+-	  return;
++	  addrp = &iface_addr;
++	  iface_addr = ((struct sockaddr_in *) &ifr.ifr_addr)->sin_addr;
+ 	}
+       
+       for (tmp = daemon->dhcp_except; tmp; tmp = tmp->next)

@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/ethtool/Makefile
+Package: ethtool
+Version: 2.6.36-0
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Display or change ethernet card settings
+Maintainer: 
+Source: ethtool-2.6.36.tar.gz
+Type: ipkg
+Description: 	ethtool is used for querying settings of an ethernet device and changing them.
+http://sourceforge.net/projects/gkernel/
+
+@@
+
+

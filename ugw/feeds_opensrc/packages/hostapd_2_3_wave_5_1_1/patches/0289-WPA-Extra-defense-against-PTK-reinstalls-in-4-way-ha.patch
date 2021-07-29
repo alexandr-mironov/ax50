@@ -1,0 +1,41 @@
+From 4fcad647fc965df7148310194614851cba218652 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Wed, 18 Oct 2017 17:53:00 +0300
+Subject: [PATCH 09/14] WPA: Extra defense against PTK reinstalls in 4-way
+ handshake
+
+Currently, reinstallations of the PTK are prevented by (1) assuring the
+same TPTK is only set once as the PTK, and (2) that one particular PTK
+is only installed once. This patch makes it more explicit that point (1)
+is required to prevent key reinstallations. At the same time, this patch
+hardens wpa_supplicant such that future changes do not accidentally
+break this property.
+
+Signed-off-by: Mathy Vanhoef <Mathy.Vanhoef@cs.kuleuven.be>
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ src/rsn_supp/wpa.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 33c62d5..67b7a63 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -1643,6 +1643,14 @@ static int wpa_supplicant_verify_eapol_key_mic(struct wpa_sm *sm,
+ 			sm->ptk_set = 1;
+ 			os_memcpy(&sm->ptk, &sm->tptk, sizeof(sm->ptk));
+ 			os_memset(&sm->tptk, 0, sizeof(sm->tptk));
++			/*
++			 * This assures the same TPTK in sm->tptk can never be
++			 * copied twice to sm->pkt as the new PTK. In
++			 * combination with the installed flag in the wpa_ptk
++			 * struct, this assures the same PTK is only installed
++			 * once.
++			 */
++			sm->renew_snonce = 1;
+ 		}
+ 	}
+ 
+-- 
+2.10.1
+

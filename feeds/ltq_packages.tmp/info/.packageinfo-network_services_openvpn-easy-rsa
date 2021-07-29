@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/network/services/openvpn-easy-rsa/Makefile
+Package: openvpn-easy-rsa
+Submenu: VPN
+Version: 2013-01-30-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +openssl-util
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Simple shell scripts to manage a Certificate Authority
+Maintainer: 
+Source: openvpn-easy-rsa-2013-01-30-ff5bfd1dd8e548cb24d302742af3894f893ef92f.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: Simple shell scripts to manage a Certificate Authority
+http://openvpn.net
+
+@@
+
+

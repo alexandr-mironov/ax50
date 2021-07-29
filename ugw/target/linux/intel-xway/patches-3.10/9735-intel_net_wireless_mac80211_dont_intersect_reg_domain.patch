@@ -1,0 +1,35 @@
+From 12ea33a1e8c028c2bb503fc06ed68d3ba6e67712 Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 14:54:03 +0300
+Subject: [PATCH 9735/9740] mac80211_dont_intersect_reg_domain
+
+---
+ net/wireless/reg.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/net/wireless/reg.c b/net/wireless/reg.c
+index cc35fba..483ebc2 100644
+--- a/net/wireless/reg.c
++++ b/net/wireless/reg.c
+@@ -1387,8 +1387,9 @@ get_reg_request_treatment(struct wiphy *wiphy,
+ 		if (reg_request_cell_base(lr))
+ 			return REG_REQ_IGNORE;
+ 
++		/* Don't do intersection between mac80211 and cfg80211 regdom */
+ 		if (lr->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)
+-			return REG_REQ_INTERSECT;
++			return REG_REQ_OK;
+ 		/*
+ 		 * If the user knows better the user should set the regdom
+ 		 * to their country before the IE is picked up
+@@ -1457,7 +1458,6 @@ __regulatory_hint(struct wiphy *wiphy,
+ 	struct regulatory_request *lr;
+ 
+ 	treatment = get_reg_request_treatment(wiphy, pending_request);
+-
+ 	switch (treatment) {
+ 	case REG_REQ_INTERSECT:
+ 		if (pending_request->initiator ==
+-- 
+2.10.1
+

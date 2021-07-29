@@ -1,0 +1,39 @@
+--- a/wpa_supplicant/.config
++++ b/wpa_supplicant/.config
+@@ -580,3 +580,6 @@ CONFIG_MBO=y
+ # This is needed to be able to use mode=1 network profile with proto=RSN and
+ # key_mgmt=WPA-PSK (i.e., full key management instead of WPA-None).
+ #CONFIG_IBSS_RSN=y
++
++# Support of WPA WDS. Requires WPA support (enabled by default).
++CONFIG_WDS_WPA_SUPPLICANT=y
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -1654,6 +1654,10 @@ OBJS_t2 += $(FST_OBJS)
+ OBJS_nfc += $(FST_OBJS)
+ endif
+ 
++ifdef CONFIG_WDS_WPA_SUPPLICANT
++CFLAGS += -DCONFIG_WDS_WPA_SUPPLICANT
++endif
++
+ ifndef LDO
+ LDO=$(CC)
+ endif
+--- a/src/common/wpa_common.c
++++ b/src/common/wpa_common.c
+@@ -1388,6 +1388,14 @@ int wpa_compare_rsn_ie(int ft_initial_as
+ 	}
+ #endif /* CONFIG_IEEE80211R */
+ 
++#ifdef CONFIG_WDS_WPA_SUPPLICANT
++	/* fix for WDS STA that some vendor system set unsupported RSN IE in 3/4 EAPOL
++	 * handshake */
++	if (ie1len == ie2len + 2 && ie2len > 8 &&
++	  RSN_SELECTOR_GET(&ie2[4]) == RSN_SELECTOR(0x00, 0x10, 0x18, 0) &&
++	  os_memcmp(&ie1[8], &ie2[8], ie2len - 8) == 0)
++	  return 0;
++#endif
+ 	return -1;
+ }
+ 

@@ -1,0 +1,54 @@
+From 44d01a06ec0c5e3f79980d9d6f7a10d7bd8de1f5 Mon Sep 17 00:00:00 2001
+From: avelayux <arunkumar.velayutham@intel.com>
+Date: Sat, 3 Dec 2016 01:13:18 -0700
+Subject: [PATCH 536/639] PUMAGWRDKBSW-1012 Flush PP sessions when
+ conntrack_flush
+
+Signed-off-by: avelayux <arunkumar.velayutham@intel.com>
+---
+ include/linux/ti_hil.h            |  5 +++++
+ net/netfilter/nf_conntrack_core.c | 11 +++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index e943f4d..7ff97bb 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -166,6 +166,11 @@ struct hil_core_notifier_param
+ /* Event generated as part of ATOM conntrack MRPC server handle */
+ #define CT_APPCPU_DEATH_BY_TIMEOUT  (TI_CT_EVENT + 0x7)
+ 
++/* Event generated as part of connection tracking entry flush */
++#define NETFILTER_CT_FLUSH_START     (TI_CT_EVENT + 0x9)
++
++/* Event generated as part of connection tracking entry flush */
++#define NETFILTER_CT_FLUSH_END     (TI_CT_EVENT + 0x10)
+ /**************************************************************************
+  ********************* PP Multicast Routing Event Identifiers *************
+  **************************************************************************/
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+index 8b14811..940fb2c 100644
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -1437,7 +1437,18 @@ void nf_conntrack_flush_report(struct net *net, u32 portid, int report)
+         /* nf_conntrack_flush_report invoked to trigger NPCPU ct flush. */
+         nf_conn_info_event(TI_NPCPU_CONNTRACK_FLUSH,(void *)NULL);
+ #endif
++/* for PP on ATOM, all active PP sessions to be deleted and disable PP to 
++ * avoid any new session creation when connection tracking entry is getting
++ * flushed.
++ * This change is specific to PP on ATOM configuration only.
++ */
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++        ti_hil_pp_event (NETFILTER_CT_FLUSH_START, (void *)NULL);
++#endif
+ 	nf_ct_iterate_cleanup(net, kill_all, NULL, portid, report);
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++        ti_hil_pp_event (NETFILTER_CT_FLUSH_END, (void *)NULL);
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nf_conntrack_flush_report);
+ 
+-- 
+2.10.1
+

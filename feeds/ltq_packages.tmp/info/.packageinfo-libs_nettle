@@ -1,0 +1,24 @@
+Source-Makefile: feeds/ltq_packages/libs/nettle/Makefile
+Package: libnettle
+Version: 3.1.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +!LIBNETTLE_MINI:libgmp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: GNU crypto library
+Maintainer: 
+Source: nettle-3.1.1.tar.gz
+License: GPL-2.0+
+LicenseFiles: COPYING
+Type: ipkg
+Description: GNU crypto library
+http://www.lysator.liu.se/~nisse/nettle/
+
+@@
+Config:
+	source "package/libs/nettle/Config.in"
+@@
+
+

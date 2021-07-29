@@ -1,0 +1,15 @@
+# HG changeset patch
+# Parent 5437295c37e789cb9cb7cf777a2c908783a0694d
+
+diff --git a/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h b/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+--- a/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
++++ b/include/linux/avalanche/puma7/puma7_npcpu_appcpu_defs.h
+@@ -87,6 +87,8 @@ typedef enum npcpu_appcpu_hw_mbox_tags
+     NPCPU_APPCPU_HW_MBOX_TAG_DATAPIPE_MBX,
+     NPCPU_APPCPU_HW_MBOX_TAG_WIFI_MBX,
+     NPCPU_APPCPU_HW_MBOX_TAG_DPI_MBX,
++    NPCPU_APPCPU_HW_MBOX_TAG_EXTSWITCH,
++    NPCPU_APPCPU_HW_MBOX_TAG_UART_MBX,
+     NPCPU_APPCPU_HW_LAST_ENTRY
+ } npcpu_appcpu_hw_mbox_tags_e;
+ 

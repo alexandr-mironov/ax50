@@ -1,0 +1,59 @@
+From 18927b3cc4fa89d24229dc850f510f987b96d980 Mon Sep 17 00:00:00 2001
+From: "Vital Yep, Marco A" <marco.a.vital.yep@intel.com>
+Date: Wed, 30 Nov 2016 15:58:00 -0700
+Subject: [PATCH 531/639] [Synopsys] Add parameter to configure VLAN filter
+
+Issue: PUMAGWRDKBSW-1003
+Symptom: Some specific customer traffic is discarded in the Atom GMAC.
+RootCause: Customer packets are dropped because of the current
+           VLAN filter configuration.
+Resolution: Added module parameter to enable or disable the Atom GMAC
+            VLAN filter and disable this filter by default.
+Attestation: I confirm that I understand the authorized content and
+             license obligations listed in the IP Plan(s) for the SDK
+             release and I have delivered content in accordance with
+             those IP Plan(s): Yes.
+Reviewers: Jillela Emmanuel, Poole Bryce, Danaila Andrei
+           Walker Mike, Tabul Amihay
+
+Signed-off-by: Vital Yep, Marco A <marco.a.vital.yep@intel.com>
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
+index 19dcc16..79605c1 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
+@@ -51,6 +51,7 @@ uint32_t dwc_eth_qos_pci_base_addr;
+ bool config_prints = false;
+ static bool msi_mode = true;
+ static bool tso_enable = true;
++static bool vlan_filter_enable = false;
+ /* Enabling only one queue by default because MAC sends
+    most of the traffic to MTL FIFO 0. */
+ static short num_of_queues = 1;
+@@ -63,6 +64,8 @@ module_param(msi_mode, bool, S_IRUGO);
+ MODULE_PARM_DESC(msi_mode, "Enable/disable MSI interrupts mode");
+ module_param(num_of_queues, short, S_IRUGO);
+ MODULE_PARM_DESC(num_of_queues, "Number of device queues");
++module_param(vlan_filter_enable, bool, S_IRUGO);
++MODULE_PARM_DESC(vlan_filter_enable, "Enable/disable VLAN hash filter");
+ 
+ #ifdef GBE_DEBUG
+ 
+@@ -584,6 +587,11 @@ int DWC_ETH_QOS_probe(struct pci_dev *pdev,
+       dev->hw_features |= NETIF_F_HW_VLAN_CTAG_TX;
+       CFG_PRINT("VLAN Feature enabled\n");
+    }
++
++   /* Override VLAN filter enabling with module parameter */
++   if (pdata->hw_feat.vlan_hash_en)
++      pdata->hw_feat.vlan_hash_en = vlan_filter_enable;
++
+    if (pdata->hw_feat.vlan_hash_en) {
+       dev->hw_features |= NETIF_F_HW_VLAN_CTAG_FILTER;
+       CFG_PRINT("VLAN HASH Filtering enabled\n");
+-- 
+2.10.1
+

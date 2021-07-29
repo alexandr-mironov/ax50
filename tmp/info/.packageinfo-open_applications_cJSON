@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/cJSON/Makefile
+Package: libcjson
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: javascript object notation
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	If you can't figure out what this program does, you're probably
+	brain-dead and need immediate medical attention.
+
+@@
+
+

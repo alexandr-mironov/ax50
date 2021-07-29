@@ -1,0 +1,25 @@
+From 8837bd9e081ae26e9e73bcc099ef14afbcf858c1 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 10 Nov 2016 10:59:33 +0200
+Subject: [PATCH 516/639] Add more syncQ statistical counters
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 639248a..ecdbd13 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1465,6 +1465,8 @@ typedef struct
+     Uint32      SyncQ_threshold_overflow;
+     Uint32      SyncQ_PTID_sent;
+     Uint32      SyncQ_Sent_To_SyncQ;
++    Uint32      SyncQ_Not_Allocated_HostPkt;
++    Uint32      SyncQ_Not_Allocated_AccPkt;
+ 
+ } AVALANCHE_PP_STAGE1_STATS_t;
+ 
+-- 
+2.10.1
+

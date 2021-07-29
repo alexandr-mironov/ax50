@@ -1,0 +1,47 @@
+From eb309e0eb54d65c9229ea35d4a3bf874534ce3c6 Mon Sep 17 00:00:00 2001
+From: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+Date: Tue, 23 Aug 2016 18:29:57 -0700
+Subject: [PATCH 469/639] acpi_lpss: Check for null mmio_base
+
+When disable HSUART in BIOS, mmio_base is getting NULL,
+so NULL check is not handled in the driver and null pointer exception
+happened during boot.
+
+Added null check to avoid null pointer exception
+when mmio_base address is NULL.
+
+Change-Id: Ib30b04f2883fa2eb5df95d65f1fb13690071900e
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/acpi/acpi_lpss.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/acpi/acpi_lpss.c b/drivers/acpi/acpi_lpss.c
+index 43072f3d..efbd8aa 100644
+--- a/drivers/acpi/acpi_lpss.c
++++ b/drivers/acpi/acpi_lpss.c
+@@ -306,11 +306,20 @@ static int acpi_lpss_create_device(struct acpi_device *adev,
+ 				pdata->mmio_size = dev_desc->prv_size_override;
+ 			else
+ 				pdata->mmio_size = resource_size(&rentry->res);
++
++			if (!pdata->mmio_size || !rentry->res.start) {
++				ret = -ENXIO;
++				goto err_out;
++			}
+ 			pdata->mmio_base = ioremap(rentry->res.start,
+ 						   pdata->mmio_size);
+ 			break;
+ 		}
+-
++	if (!pdata->mmio_base) {
++		dev_warn(&adev->dev, "mmio_base address is NULL\n");
++		ret = -EFAULT;
++		goto err_out;
++	}
+ 	acpi_dev_free_resource_list(&resource_list);
+ 
+ 	pdata->dev_desc = dev_desc;
+-- 
+2.10.1
+

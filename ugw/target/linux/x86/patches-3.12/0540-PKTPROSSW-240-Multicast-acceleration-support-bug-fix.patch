@@ -1,0 +1,47 @@
+From 4cae1fcad168be4fa8b95a619cea5e7dad1e9c7d Mon Sep 17 00:00:00 2001
+From: iemergi <idan.emergi@intel.com>
+Date: Mon, 12 Dec 2016 16:52:06 +0200
+Subject: [PATCH 540/639] PKTPROSSW-240: Multicast acceleration support bug
+ fixes
+
+Do not send PP HIL event under rcu_read_lock in mcast.c
+---
+ net/ipv6/mcast.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/net/ipv6/mcast.c b/net/ipv6/mcast.c
+index 5ffbcb2..3b93005 100644
+--- a/net/ipv6/mcast.c
++++ b/net/ipv6/mcast.c
+@@ -251,14 +251,6 @@ int ipv6_sock_mc_drop(struct sock *sk, int ifindex, const struct in6_addr *addr)
+ 			dev = dev_get_by_index_rcu(net, mc_lst->ifindex);
+ 			if (dev != NULL) {
+ 				struct inet6_dev *idev = __in6_dev_get(dev);
+-
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-				struct hil_mr_ipaddr hil_ip;
+-				hil_ip.type = HIL_MR_IPV6;
+-				memcpy(&(hil_ip.addr.ip6), addr, sizeof(struct in6_addr));
+-				hil_ip.ifindex = ifindex;
+-				ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+ 				(void) ip6_mc_leave_src(sk, mc_lst, idev);
+ 				if (idev)
+ 					__ipv6_dev_mc_dec(idev, &mc_lst->addr);
+@@ -267,6 +259,13 @@ int ipv6_sock_mc_drop(struct sock *sk, int ifindex, const struct in6_addr *addr)
+ 			rcu_read_unlock();
+ 			atomic_sub(sizeof(*mc_lst), &sk->sk_omem_alloc);
+ 			kfree_rcu(mc_lst, rcu);
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++			struct hil_mr_ipaddr hil_ip;
++			hil_ip.type = HIL_MR_IPV6;
++			memcpy(&(hil_ip.addr.ip6), addr, sizeof(struct in6_addr));
++			hil_ip.ifindex = ifindex;
++			ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
++#endif// CONFIG_TI_PACKET_PROCESSOR
+ 			return 0;
+ 		}
+ 	}
+-- 
+2.10.1
+

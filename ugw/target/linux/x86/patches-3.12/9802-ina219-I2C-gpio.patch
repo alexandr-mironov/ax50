@@ -1,0 +1,55 @@
+# HG changeset patch
+# Parent 3801ea665748e522ece1d002a520b51efd54a373
+
+diff --git a/drivers/i2c/busses/i2c-gpio.c b/drivers/i2c/busses/i2c-gpio.c
+--- a/drivers/i2c/busses/i2c-gpio.c
++++ b/drivers/i2c/busses/i2c-gpio.c
+@@ -17,6 +17,9 @@
+ #include <linux/gpio.h>
+ #include <linux/of_gpio.h>
+ 
++#define INA_219_I2C_SDA_PIN  125
++#define INA_219_I2C_SCL_PIN  126 
++
+ struct i2c_gpio_private_data {
+ 	struct i2c_adapter adap;
+ 	struct i2c_algo_bit_data bit_data;
+@@ -276,10 +279,30 @@ static struct platform_driver i2c_gpio_d
+ 	.remove		= i2c_gpio_remove,
+ };
+ 
++
++static struct i2c_gpio_platform_data i2c_gpio_data = {
++	.sda_pin		= INA_219_I2C_SDA_PIN,
++	.scl_pin		= INA_219_I2C_SCL_PIN,
++	.sda_is_open_drain	= 0,
++	.scl_is_open_drain	= 0,
++	.udelay			= 2,	/* close to 100 kHz */
++};
++static struct platform_device i2c_gpio_device = {
++	.name		= "i2c-gpio",
++	.id		= 7,
++	.dev		= { .platform_data = &i2c_gpio_data, },
++};
++
++
+ static int __init i2c_gpio_init(void)
+ {
+ 	int ret;
+ 
++	ret = platform_device_register(&i2c_gpio_device);
++	if (ret)
++		printk(KERN_ERR
++			"i2c-gpio: platform_device_register failed: %d\n", ret);
++
+ 	ret = platform_driver_register(&i2c_gpio_driver);
+ 	if (ret)
+ 		printk(KERN_ERR "i2c-gpio: probe failed: %d\n", ret);
+@@ -290,6 +313,7 @@ subsys_initcall(i2c_gpio_init);
+ 
+ static void __exit i2c_gpio_exit(void)
+ {
++	platform_device_unregister(&i2c_gpio_device);
+ 	platform_driver_unregister(&i2c_gpio_driver);
+ }
+ module_exit(i2c_gpio_exit);

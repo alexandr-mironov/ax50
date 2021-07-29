@@ -1,0 +1,39 @@
+From 8a7901296adba4ea69bcd30c1880748d26f571c3 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 8 Sep 2016 13:13:10 -0700
+Subject: [PATCH 474/639] gpio-intelce2700: Revert gpio sw indexes
+
+Recently 08-22-2016 gpio sw indexes were changed. Reverting back to old
+sw indexes to be in sync with the indexes used by BIOS.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/gpio/gpio-intelce2700.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpio/gpio-intelce2700.c b/drivers/gpio/gpio-intelce2700.c
+index 9d2880b..26a08a1 100644
+--- a/drivers/gpio/gpio-intelce2700.c
++++ b/drivers/gpio/gpio-intelce2700.c
+@@ -652,12 +652,13 @@ static struct gpio_pad_info west_pads_info[] = {
+    [NGPIO18_1P8_3P3                 ] = { 0x4C80, -1},
+ };
+ 
++/* gpio bases are rounded up to next multiple of ten and incremented by ten */
+ #define CE2700_GPIO_SOUTHWEST_BASE (0)
+-#define CE2700_GPIO_NORTHEAST_BASE (CE2700_GPIO_SOUTHWEST_BASE + (ARRAY_SIZE(southwest_pads_info)))
+-#define CE2700_GPIO_NORTHWEST_BASE (CE2700_GPIO_NORTHEAST_BASE + (ARRAY_SIZE(northeast_pads_info)))
+-#define CE2700_GPIO_SOUTHEAST_BASE (CE2700_GPIO_NORTHWEST_BASE + (ARRAY_SIZE(northwest_pads_info)))
+-#define CE2700_GPIO_VIRTUAL_BASE   (CE2700_GPIO_SOUTHEAST_BASE + (ARRAY_SIZE(southeast_pads_info)))
+-#define CE2700_GPIO_WEST_BASE      (CE2700_GPIO_VIRTUAL_BASE   + (ARRAY_SIZE(virtual_pads_info)))
++#define CE2700_GPIO_NORTHEAST_BASE (CE2700_GPIO_SOUTHWEST_BASE + ((ARRAY_SIZE(southwest_pads_info)/10 + 2)*10))
++#define CE2700_GPIO_NORTHWEST_BASE (CE2700_GPIO_NORTHEAST_BASE + ((ARRAY_SIZE(northeast_pads_info)/10 + 2)*10))
++#define CE2700_GPIO_SOUTHEAST_BASE (CE2700_GPIO_NORTHWEST_BASE + ((ARRAY_SIZE(northwest_pads_info)/10 + 2)*10))
++#define CE2700_GPIO_VIRTUAL_BASE   (CE2700_GPIO_SOUTHEAST_BASE + ((ARRAY_SIZE(southeast_pads_info)/10 + 2)*10))
++#define CE2700_GPIO_WEST_BASE      (CE2700_GPIO_VIRTUAL_BASE   + ((ARRAY_SIZE(virtual_pads_info)/10 + 2)*10))
+ 
+ #define CE2700_GPIO_SOUTHWEST_IRQBASE (256)
+ #define CE2700_GPIO_NORTHEAST_IRQBASE (CE2700_GPIO_SOUTHWEST_IRQBASE + (ARRAY_SIZE(southwest_pads_info)))
+-- 
+2.10.1
+

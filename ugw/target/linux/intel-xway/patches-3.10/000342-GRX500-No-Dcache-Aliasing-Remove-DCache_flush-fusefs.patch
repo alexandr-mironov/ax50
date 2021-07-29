@@ -1,0 +1,15 @@
+# HG changeset patch
+# Parent 62f959128cc67b01977ddbe7ff3e662bc2bfce30
+
+diff --git a/fs/fuse/dev.c b/fs/fuse/dev.c
+--- a/fs/fuse/dev.c
++++ b/fs/fuse/dev.c
+@@ -762,7 +762,7 @@ static int fuse_copy_fill(struct fuse_co
+ static int fuse_copy_do(struct fuse_copy_state *cs, void **val, unsigned *size)
+ {
+ 	unsigned ncpy = min(*size, cs->len);
+-#ifdef CONFIG_MIPS
++#if defined(CONFIG_MIPS) && !defined(CONFIG_SOC_GRX500)
+ 	__flush_cache_all();
+ #endif
+ 	if (val) {

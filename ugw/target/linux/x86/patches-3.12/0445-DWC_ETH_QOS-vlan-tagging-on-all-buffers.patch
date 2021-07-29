@@ -1,0 +1,101 @@
+From 876e46c076dffe054cae39efc52b366afa6db0d9 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 19 Jul 2016 11:23:49 -0700
+Subject: [PATCH 445/639] DWC_ETH_QOS: vlan tagging on all buffers
+
+When tso is enabled gbe driver is not tagging some of the buffers with
+vlan tags, therefore causing mac to drop them decreasing the throughput.
+Fix is to add vlan tags for all the buffers.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c | 59 +++++++++++++++++--------
+ 1 file changed, 41 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c
+index cfbb592..0cdcb45 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c
+@@ -2313,6 +2313,44 @@ static void tx_descriptor_init(struct DWC_ETH_QOS_prv_data *pdata,
+ 
+    DBGPR("<--tx_descriptor_init\n");
+ }
++/*!
++* \brief This sequence is used to instruct the MAC to perform one of the
++* the following based on the value of tx_vlan_tag_ctrl
++* ========================================
++* | tx_vlan_tag_ctrl   |    Action       |
++* =======================================|
++* |      00            | Do Not add tags |
++* |      01            | Remove the tags |
++* |      10            | Insert the tags |
++* |      11            | Replace the tags|
++* ========================================
++* \param[in] pdata
++* \param[in] qInx
++*/
++void process_vlan_tags(struct DWC_ETH_QOS_prv_data *pdata, uint32_t qInx)
++{
++   struct DWC_ETH_QOS_tx_wrapper_descriptor *tx_desc_data =
++       GET_TX_WRAPPER_DESC(qInx);
++   tx_descriptor_t *tx_desc = GET_TX_DESC_PTR(qInx, tx_desc_data->cur_tx);
++#ifdef DWC_ETH_QOS_ENABLE_VLAN_TAG
++   /* Insert a VLAN tag with a tag value programmed in MAC Reg 24 or
++    * CONTEXT descriptor
++    * */
++   if (tx_desc_data->vlan_tag_present && Y_FALSE == tx_desc_data->tx_vlan_tag_via_reg) {
++      //printk(KERN_ALERT "VLAN control info update via descriptor\n\n");
++      VAR32_SET_FIELD(tx_desc->TDES2, NORMAL_RF_TDES2_VTIR,
++               tx_desc_data->tx_vlan_tag_ctrl);
++   }
++#endif   /* DWC_ETH_QOS_ENABLE_VLAN_TAG */
++
++#ifdef DWC_ETH_QOS_ENABLE_DVLAN
++   if (pdata->via_reg_or_desc == DWC_ETH_QOS_VIA_DESC) {
++      if (pdata->in_out & DWC_ETH_QOS_DVLAN_OUTER) {
++         VAR32_SET_FIELD(tx_desc->TDES2, NORMAL_RF_TDES2_VTIR, pdata->op_type);
++      }
++   }
++#endif /* End of DWC_ETH_QOS_ENABLE_DVLAN */
++}
+ 
+ /*!
+ * \brief This sequence is used to prepare tx descriptor for
+@@ -2465,24 +2503,7 @@ static void pre_transmit(struct DWC_ETH_QOS_prv_data *pdata, uint32_t qInx)
+       VAR32_SET_FIELD(tx_desc->TDES3, NORMAL_RF_TDES3_PL, total_len);
+    }
+ 
+-#ifdef DWC_ETH_QOS_ENABLE_VLAN_TAG
+-   /* Insert a VLAN tag with a tag value programmed in MAC Reg 24 or
+-    * CONTEXT descriptor
+-    * */
+-   if (tx_desc_data->vlan_tag_present && Y_FALSE == tx_desc_data->tx_vlan_tag_via_reg) {
+-      //printk(KERN_ALERT "VLAN control info update via descriptor\n\n");
+-      VAR32_SET_FIELD(tx_desc->TDES2, NORMAL_RF_TDES2_VTIR,
+-               tx_desc_data->tx_vlan_tag_ctrl);
+-   }
+-#endif   /* DWC_ETH_QOS_ENABLE_VLAN_TAG */
+-
+-#ifdef DWC_ETH_QOS_ENABLE_DVLAN
+-   if (pdata->via_reg_or_desc == DWC_ETH_QOS_VIA_DESC) {
+-      if (pdata->in_out & DWC_ETH_QOS_DVLAN_OUTER) {
+-         VAR32_SET_FIELD(tx_desc->TDES2, NORMAL_RF_TDES2_VTIR, pdata->op_type);
+-      }
+-   }
+-#endif /* End of DWC_ETH_QOS_ENABLE_DVLAN */
++   process_vlan_tags(pdata, qInx);
+ 
+    /* Mark it as First Descriptor */
+    VAR32_SET_BIT(tx_desc->TDES3, NORMAL_RF_TDES3_FD, 1);
+@@ -2542,6 +2563,8 @@ static void pre_transmit(struct DWC_ETH_QOS_prv_data *pdata, uint32_t qInx)
+          VAR32_SET_FIELD(tx_desc->TDES2, NORMAL_RF_TDES2_B2L, buffer->len2);
+       }
+ 
++      process_vlan_tags(pdata, qInx);
++
+       /* set own bit */
+       VAR32_SET_BIT(tx_desc->TDES3, NORMAL_RF_TDES3_OWN, 1);
+       /* Mark it as NORMAL descriptor */
+-- 
+2.10.1
+

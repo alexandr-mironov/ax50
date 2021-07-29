@@ -1,0 +1,9 @@
+Index: linux-3.12.59/include/uapi/net/Kbuild
+===================================================================
+--- linux-3.12.59.orig/include/uapi/net/Kbuild
++++ linux-3.12.59/include/uapi/net/Kbuild
+@@ -6,3 +6,4 @@ header-y += uapi_lantiq_ethsw_flow.h
+ header-y += uapi_lantiq_gsw.h
+ header-y += uapi_lantiq_gsw_api.h
+ header-y += uapi_lantiq_gsw_flow.h
++header-y += ppa_api.h

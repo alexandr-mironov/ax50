@@ -1,0 +1,18 @@
+Source-Makefile: package/feeds/ltq_packages/ca-certificates/Makefile
+Package: ca-certificates
+Version: 20150426
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: System CA certificates
+Maintainer: 
+Source: ca-certificates_20150426.tar.xz
+Type: ipkg
+Description: System CA certificates
+
+@@
+
+

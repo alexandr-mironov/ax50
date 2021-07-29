@@ -1,0 +1,98 @@
+From eda70be5f49649a27b8a54eca9a7c0639e2ba133 Mon Sep 17 00:00:00 2001
+From: "Michael L. Walker" <michael.l.walker@intel.com>
+Date: Tue, 13 Dec 2016 18:09:49 -0700
+Subject: [PATCH 543/639] net: Add port trigger Netfilter extension to kernel
+
+Symptom: Need port trigger implementation moved from rdkb-compat layer
+RootCause: Need port trigger implementation moved from rdkb-compat layer
+Resolution: Move port trigger implementation from rdkb-compat layer
+---
+ include/uapi/linux/netfilter_ipv4/Kbuild        |   1 +
+ include/uapi/linux/netfilter_ipv4/ipt_TRIGGER.h |  46 +++
+ net/Kconfig                                     |   6 +
+ net/ipv4/netfilter/Kconfig                      |  10 +
+ net/ipv4/netfilter/Makefile                     |   3 +
+ 6 files changed, 559 insertions(+)
+ create mode 100644 include/uapi/linux/netfilter_ipv4/ipt_TRIGGER.h
+
+diff --git a/include/uapi/linux/netfilter_ipv4/Kbuild b/include/uapi/linux/netfilter_ipv4/Kbuild
+index fb00843..7485165 100644
+--- a/include/uapi/linux/netfilter_ipv4/Kbuild
++++ b/include/uapi/linux/netfilter_ipv4/Kbuild
+@@ -9,3 +9,4 @@ header-y += ipt_ULOG.h
+ header-y += ipt_ah.h
+ header-y += ipt_ecn.h
+ header-y += ipt_ttl.h
++header-y += ipt_TRIGGER.h
+diff --git a/include/uapi/linux/netfilter_ipv4/ipt_TRIGGER.h b/include/uapi/linux/netfilter_ipv4/ipt_TRIGGER.h
+new file mode 100644
+index 0000000..9c9e381
+--- /dev/null
++++ b/include/uapi/linux/netfilter_ipv4/ipt_TRIGGER.h
+@@ -0,0 +1,46 @@
++/*
++ * Copyright (C) 2009 - 2010, CyberTAN Corporation
++ *
++ * All Rights Reserved.
++ * You can redistribute it and/or modify it under the terms of the GPL v2
++ *
++ * THIS SOFTWARE IS OFFERED "AS IS", AND CYBERTAN GRANTS NO WARRANTIES OF ANY
++ * KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. CYBERTAN
++ * SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++ * FOR A SPECIFIC PURPOSE OR NON INFRINGEMENT CONCERNING THIS SOFTWARE.
++ *
++ ******************************************************************************************************
++ Includes Intel Corporation's changes/modifications
++ Changed/modified portions :
++ * -  X-tables API adapted for kernel 2.6.39
++ * -  Added IPT_TRIGGER_BOTH_PROTOCOLS (matches both TCP and UDP)
++ * -  Added, improved Debug prints
++ * -  Formatting improvements and general code cleanup
++ *
++ * Copyright © 2011-2016, Intel Corporation.
++ ******************************************************************************************************
++ */
++
++#ifndef _IPT_TRIGGER_H_target
++#define _IPT_TRIGGER_H_target
++#define IPT_TRIGGER_BOTH_PROTOCOLS 253  /* unassigned number */
++
++enum ipt_trigger_type
++{
++    IPT_TRIGGER_DNAT = 1,
++    IPT_TRIGGER_IN = 2,
++    IPT_TRIGGER_OUT = 3
++};
++
++struct ipt_trigger_ports {
++    u_int16_t mport[2];    /* Related destination port range */
++    u_int16_t rport[2];    /* Port range to map related destination port range to */
++};
++
++struct ipt_trigger_info {
++    enum ipt_trigger_type type;
++    u_int16_t proto;       /* Related protocol */
++    struct ipt_trigger_ports ports;
++};
++
++#endif /*_IPT_TRIGGER_H_target*/
+diff --git a/net/Kconfig b/net/Kconfig
+index 6373870..9b9799b 100644
+--- a/net/Kconfig
++++ b/net/Kconfig
+@@ -337,6 +337,12 @@ config INTEL_NF_GWMETA_SUPPORT
+         help
+         This feature allows to label skb data of ip packets (GWMETA module of iptables/Netfilter )
+ 
++config INTEL_NF_TRIGGER_SUPPORT
++        bool "Intel Netfilter Port Trigger"
++    default y
++        help
++        This feature allows to use Port Trigger module of iptables/Netfilter
++
+ source "net/ax25/Kconfig"
+ source "net/can/Kconfig"
+ source "net/irda/Kconfig"
+-- 
+2.10.1
+

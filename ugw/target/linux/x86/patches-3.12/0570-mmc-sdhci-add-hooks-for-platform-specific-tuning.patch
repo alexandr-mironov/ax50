@@ -1,0 +1,64 @@
+From 8f222faa4412bfb9cff59165f459a17477f371ab Mon Sep 17 00:00:00 2001
+From: Dong Aisheng <b29396@freescale.com>
+Date: Fri, 13 Sep 2013 19:11:30 +0800
+Subject: [PATCH 570/639] mmc: sdhci: add hooks for platform specific tuning
+
+The tuning of some platforms may not follow the standard host control
+spec v3.0, e.g. Freescale uSDHC on i.MX6Q/DL.
+Add a hook here to allow execute platform specific tuning instead of
+standard host controller tuning.
+
+The hook only replaces the tuning process, so it's placed after tuning
+checking and before the real tuning process.
+
+Some notes for the tuning hook:
+1) it needs handle lock itself if it wants to access host controller
+according platform specific implementation.
+2) do not need to handle runtime pm since it executes with runtime pm
+get already.
+
+Signed-off-by: Dong Aisheng <b29396@freescale.com>
+Acked-by: Shawn Guo <shawn.guo@linaro.org>
+Signed-off-by: Chris Ball <cjb@laptop.org>
+(cherry picked from commit 4525181245c0f4005788c17315aee4371662ddea)
+
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/host/sdhci.c | 8 ++++++++
+ drivers/mmc/host/sdhci.h | 1 +
+ 2 files changed, 9 insertions(+)
+
+diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
+index c37f9b7..a4ff5e0 100644
+--- a/drivers/mmc/host/sdhci.c
++++ b/drivers/mmc/host/sdhci.c
+@@ -1903,6 +1903,14 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ 		return 0;
+ 	}
+ 
++	if (host->ops->platform_execute_tuning) {
++		spin_unlock(&host->lock);
++		enable_irq(host->irq);
++		err = host->ops->platform_execute_tuning(host, opcode);
++		sdhci_runtime_pm_put(host);
++		return err;
++	}
++
+ 	sdhci_writew(host, ctrl, SDHCI_HOST_CONTROL2);
+ 
+ 	/*
+diff --git a/drivers/mmc/host/sdhci.h b/drivers/mmc/host/sdhci.h
+index e899931..02c8908 100644
+--- a/drivers/mmc/host/sdhci.h
++++ b/drivers/mmc/host/sdhci.h
+@@ -289,6 +289,7 @@ struct sdhci_ops {
+ 	unsigned int    (*get_ro)(struct sdhci_host *host);
+ 	void	(*platform_reset_enter)(struct sdhci_host *host, u8 mask);
+ 	void	(*platform_reset_exit)(struct sdhci_host *host, u8 mask);
++	int	(*platform_execute_tuning)(struct sdhci_host *host, u32 opcode);
+ 	int	(*set_uhs_signaling)(struct sdhci_host *host, unsigned int uhs);
+ 	void	(*hw_reset)(struct sdhci_host *host);
+ 	void	(*platform_suspend)(struct sdhci_host *host);
+-- 
+2.10.1
+

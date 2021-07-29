@@ -1,0 +1,37 @@
+From 52f4f0bcd259b4570bef6698d0213073a064dce0 Mon Sep 17 00:00:00 2001
+From: Srivikas <srivikas.vishnubhotla@intel.com>
+Date: Fri, 13 Jan 2017 12:59:18 -0700
+Subject: [PATCH 575/639] CGMPMSW-286
+
+Symptom: SFP device, once removed, would not be recognized when re-inserted.
+RootCause: When SFP device was removed, sfp state would go to state_off.
+Resolution: Instead of going to state_off, SFP state should remain at state_on.
+---
+ drivers/net/phy/sfp_phy.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/phy/sfp_phy.c b/drivers/net/phy/sfp_phy.c
+index 6ea4954..333d202 100644
+--- a/drivers/net/phy/sfp_phy.c
++++ b/drivers/net/phy/sfp_phy.c
+@@ -108,7 +108,7 @@ static void sfp_service_handler(struct work_struct *cmd_work)
+ 						PUMA_ACPI_NOTIFY_SFP_EVENT,
+ 						SFP_PRESENT);
+ 			} else {
+-				sfp_hdlr->state = SFP_STATE_OFF;
++				sfp_hdlr->state = SFP_STATE_ON;
+ 
+ 				/* Trigger a NetLink SFP inactive
+ 				 * event to Power Manager
+@@ -561,7 +561,7 @@ static int sfp_phy_probe(struct i2c_client *client)
+ 				__func__);
+ 		goto sfp_probe_error;
+ 	}
+-
++	printk(KERN_INFO "SFP driver built on %s @ %s\n", __DATE__, __TIME__);
+ 	return 0;
+ 
+ sfp_probe_error:
+-- 
+2.10.1
+

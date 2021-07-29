@@ -1,0 +1,20 @@
+Source-Makefile: feeds/ltq_packages/system/zram-swap/Makefile
+Package: zram-swap
+Version: 1-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-zram +!BUSYBOX_CONFIG_MKSWAP:swap-utils +!BUSYBOX_CONFIG_SWAPONOFF:block-mount
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Base system
+Title: ZRAM swap scripts
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  A script to activate swaping on a compressed zram partition. This 
+ could be used to increase the available memory, by using compressed 
+ memory.
+
+@@
+
+

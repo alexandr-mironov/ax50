@@ -1,0 +1,66 @@
+Source-Makefile: package/feeds/open_applications/ntfs_3g/Makefile
+Package: ntfs-3g
+Submenu: Filesystem
+Version: 1.616-3-fuseint
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-fuse +PACKAGE_NTFS-3G_USE_LIBFUSE:libfuse +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: utils
+Category: Utilities
+Title: Stable Read/Write NTFS Driver
+Maintainer: Bud <wrt_buddhay@gmx.net>
+Source: ntfs-3g-1.616.tgz
+Type: ipkg
+Description: Ntfs-3g is a NTFS driver, which can create, remove, rename,
+move files, directories, hard links, and streams. It can read
+and write files, including streams and sparse files. It can
+handle special files like symbolic links, devices, and FIFOs.
+Moreover it can also read transparently compressed files.
+
+Contains:
+ - ntfs-3g
+ - ntfs-3g.probe
+
+http://www.tuxera.com
+Bud <wrt_buddhay@gmx.net>
+@@
+Config:
+config PACKAGE_NTFS-3G_USE_LIBFUSE
+	bool "use external FUSE library (package libfuse)"
+	depends on PACKAGE_ntfs-3g
+	---help---
+	Ntfs-3g by default uses a minimalized lite version of FUSE.
+	If libfuse is part of your filesystem anyway (because of sshfs, owfs
+	etc.) it makes sense to activate this option and save some kilobytes
+	of space.
+@@
+
+Package: ntfs-3g-utils
+Submenu: Filesystem
+Default: n
+Version: 1.616-3-fuseint
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +ntfs-3g
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: utils
+Category: Utilities
+Title: ntfs-3g utilities (ntfs-3g.secaudit, ntfs-3g.usermap)
+Maintainer: Bud <wrt_buddhay@gmx.net>
+Source: ntfs-3g-1.616.tgz
+Type: ipkg
+Description: Additional ntfs-3g utilities. Not included by default for size
+considerations. All binaries except ntfs-3g, ntfs-3g.probe.
+
+Currently:
+ - ntfs-3g.secaudit
+ - ntfs-3g.usermap
+
+http://www.tuxera.com
+Bud <wrt_buddhay@gmx.net>
+@@
+
+

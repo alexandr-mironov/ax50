@@ -1,0 +1,20 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/hostapd.c hostapd-2.6/src/ap/hostapd.c
+--- hostapd-2.6-orig/src/ap/hostapd.c	2017-06-15 12:53:29.898165349 +0300
++++ hostapd-2.6/src/ap/hostapd.c	2017-06-15 16:39:43.086172051 +0300
+@@ -522,6 +522,7 @@ static int hostapd_flush_old_stations(st
+ 	if (hostapd_drv_none(hapd) || hapd->drv_priv == NULL)
+ 		return 0;
+ 
++#if 0 /* Will be removed in hostapd_free_stas() */
+ 	if (!hapd->iface->driver_ap_teardown) {
+ 		wpa_dbg(hapd->msg_ctx, MSG_DEBUG,
+ 			"Flushing old station entries");
+@@ -532,6 +533,8 @@ static int hostapd_flush_old_stations(st
+ 			ret = -1;
+ 		}
+ 	}
++#endif
++
+ 	wpa_dbg(hapd->msg_ctx, MSG_DEBUG, "Deauthenticate all stations");
+ 	os_memset(addr, 0xff, ETH_ALEN);
+ 	hostapd_drv_sta_deauth(hapd, addr, reason);

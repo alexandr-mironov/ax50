@@ -1,0 +1,26 @@
+# HG changeset patch
+# Parent 10a681001aa5851e721b3b1e2cba0e83d429f694
+
+diff --git a/net/bridge/br_forward.c b/net/bridge/br_forward.c
+--- a/net/bridge/br_forward.c
++++ b/net/bridge/br_forward.c
+@@ -56,12 +56,17 @@ static inline int should_deliver(const s
+ 	 *                   table entry bouncing
+ 	 *                            * -- Ritesh
+ 	 *                                     */
+-        if (!(skb->dev->priv_flags & IFF_802_1Q_VLAN))
++        if (!(skb->dev->priv_flags & IFF_802_1Q_VLAN) || !(p->dev->priv_flags & IFF_802_1Q_VLAN))
+                 goto lbl_ahead;
+-
++#ifdef CONFIG_TI_PACKET_PROCESSOR
++               if (skb->dev->pid_handle == p->dev->pid_handle) {
++                       return 0; /* don't forward */
++               }
++#else
+         if (!memcmp(p->dev->name, skb->dev->name, 4)) {
+                 return 0; /* don't forward */
+         }
++#endif
+ 
+ lbl_ahead:
+ #endif

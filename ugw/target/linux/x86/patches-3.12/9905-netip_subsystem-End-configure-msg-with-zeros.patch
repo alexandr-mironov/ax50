@@ -1,0 +1,78 @@
+From 429561059f6da68049f65270fa3dd0128dbe1fe0 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 11 May 2017 11:19:25 -0700
+Subject: [PATCH] netip_subsystem: End configure msg with zeros
+
+Currently configure message does not terminate with zeros in all cases.
+Add 1 or 2 or 3 or 4 bytes of zeros to make the message 4 byte aligned
+and also ending with zeros.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index 68a766d26ed1..e87fcae1492b 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -582,7 +582,7 @@ static void netss_send_configure_msg (void)
+    netss_configure_msg_t *cfg_msg;
+    uint8_t *msg;
+    uint32_t reply_len;
+-   int msg_len;
++   int msg_len, bytes_consumed=0;
+    int services_offset = sizeof(netss_configure_msg_t);
+    uint8_t service_id;
+ 
+@@ -590,8 +590,10 @@ static void netss_send_configure_msg (void)
+ 
+ #ifdef CONFIG_NETIP_SERVICES_ON_ATOM
+    msg_len += g_netip_services_on_atom;
+-   msg_len = ((msg_len + 3) & ~3);
+ #endif
++   /*Make 4 byte aligned, if it is already 4 byte aligned increment by 4 bytes for null termination */
++   msg_len = ((msg_len + 4) & ~3);
++
+    cfg_msg = kzalloc(msg_len, GFP_KERNEL);
+    if(!cfg_msg)
+    {
+@@ -619,6 +621,8 @@ static void netss_send_configure_msg (void)
+    cfg_msg->RCE_floor = RCE_Floor;
+    cfg_msg->RCE_filter = RCE_Filter;
+ 
++   bytes_consumed = sizeof(netss_configure_msg_t);
++
+ #ifdef CONFIG_NETIP_SERVICES_ON_ATOM
+    msg += services_offset;
+ 
+@@ -639,11 +643,15 @@ static void netss_send_configure_msg (void)
+    if (rgmii3_on_atom && service_id)
+       *msg++ = service_id;
+ 
++   bytes_consumed = msg - (uint8_t *)cfg_msg;
+    msg = (uint8_t *)cfg_msg;
+ #endif
+ 
+-   NETSS_PM_PRINT("configure Msg:");
+-   for(i=0; i<msg_len; i++)
++   /*Make 4 byte aligned, if it is already 4 byte aligned increment by 4 bytes for null termination */
++   bytes_consumed = ((bytes_consumed + 4) & ~3);
++
++   NETSS_PM_PRINT("configure Msg: msg_len=[%d] bytes_consumed=[%d]\n", msg_len, bytes_consumed);
++   for(i=0; i<bytes_consumed; i++)
+    {
+       if(i%4 == 0)
+       {
+@@ -652,7 +660,7 @@ static void netss_send_configure_msg (void)
+       NETSS_PM_PRINT("%2x\t", msg[i]);
+    }
+    NETSS_PM_PRINT("\n============================\n");
+-   ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU, 0, (uint8_t*)cfg_msg, msg_len, msg_len, &reply_len);
++   ret = hwMbox_sendOpcode(HW_MBOX_MASTER_NP_CPU, 0, (uint8_t*)cfg_msg, bytes_consumed, bytes_consumed, &reply_len);
+    if(ret)
+    {
+        printk(KERN_ERR "Send configure message failed ret %d \n", ret);
+-- 
+2.11.0
+

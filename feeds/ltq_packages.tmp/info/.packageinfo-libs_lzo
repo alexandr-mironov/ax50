@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/libs/lzo/Makefile
+Package: liblzo
+Version: 2.08-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: A real-time data compression library
+Maintainer: 
+Source: lzo-2.08.tar.gz
+License: GPL-2.0+
+Type: ipkg
+Description:  LZO is a data compression library which is suitable for data de-/compression
+ in real-time. This means it favours speed over compression ratio.
+http://www.oberhumer.com/opensource/lzo/
+
+@@
+
+

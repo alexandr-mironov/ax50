@@ -1,0 +1,51 @@
+From fcfff17ac89779a6ef511f5075817c8ab19c0d5d Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Thu, 17 Nov 2016 14:45:59 -0700
+Subject: [PATCH 521/639] netip_subsystem: wait for service_level set
+
+netip susbsystem driver was sending the service request message with
+default power level. Now it will start sending the service request
+messages only after service_level is set for the first time.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index d8a685a..63dc26f 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -128,6 +128,10 @@ static bool g_timer_created = false;
+ /**Need to notify once whether internal BBU is on or off */
+ static bool g_acpi_notified_bbu_status = false;
+ 
++/* Forces not to send service request untill power manger
++ * has set the service level */
++static bool g_service_level_initialized = false;
++
+ /**
+  * puma_netip_notify_state() - invoke to update the state of NETIP
+  * @state: state of NETIP, 0 - Active, 1 - BBU, 2 - Standby, 3 - Deep standby
+@@ -848,7 +852,7 @@ static int netss_configure_and_setup_netip_services(void *data)
+          netss_send_reply_ack();
+          /*process service status message */
+          ness_process_service_status_msg();
+-         if(!g_netip_service_request_reply_pending)
++         if(!g_netip_service_request_reply_pending && g_service_level_initialized)
+          {
+             /* send service request message */
+             netss_send_service_request_msg(g_netss_sysfs_attributes_info.service_level);
+@@ -1093,7 +1097,8 @@ int __netss_set_service_level(uint32_t level)
+ 			 */
+ 			ret = netss_send_service_request_msg(level);
+ 		}
+-	} else if (g_netss_sysfs_attributes_info.netip_soft_off) {
++	} else {
++		g_service_level_initialized = true;
+ 		ret = netss_send_service_request_msg(level);
+ 	}
+ 
+-- 
+2.10.1
+

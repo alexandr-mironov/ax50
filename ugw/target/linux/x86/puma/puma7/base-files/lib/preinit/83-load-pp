@@ -1,0 +1,12 @@
+#!/bin/sh
+# Copyright (C) 2012-2015 OpenWrt.org
+
+insmod /lib/modules/3.12.59/pdsp_drv.ko
+insmod /lib/modules/3.12.59/pp_drv.ko
+insmod /lib/modules/3.12.59/hil_drv.ko
+/opt/lantiq/usr/sbin/pp_fw_download
+insmod /lib/modules/3.12.59/wifi_proxy_drv.ko
+insmod /lib/modules/3.12.59/cppp.ko fwbypass=0 fwbufnum=16384 fwbuflen=2048 ucmapcfg=3
+insmod /lib/modules/3.12.59/ppa_puma_hal.ko
+insmod /lib/modules/3.12.59/puma_directpath_al.ko
+insmod /lib/modules/3.12.59/puma7_pp_init.ko

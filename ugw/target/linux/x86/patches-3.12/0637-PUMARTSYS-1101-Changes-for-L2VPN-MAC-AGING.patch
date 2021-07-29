@@ -1,0 +1,25 @@
+From 4ff6df6aec1760c8f66e830aef12c9c554159bed Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Wed, 26 Apr 2017 11:26:49 +0300
+Subject: [PATCH 637/639] PUMARTSYS-1101-Changes for L2VPN MAC-AGING
+
+---
+ include/linux/avalanche/puma7/ppsgc_defs.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/puma7/ppsgc_defs.h b/include/linux/avalanche/puma7/ppsgc_defs.h
+index 00ce8eb..84e4884 100644
+--- a/include/linux/avalanche/puma7/ppsgc_defs.h
++++ b/include/linux/avalanche/puma7/ppsgc_defs.h
+@@ -38,7 +38,7 @@
+ #define PPSGC_GROUP_COUNTERS_PER_SESSION    (8)
+ #define PPSGC_RC_FAILURE                    (-1)
+ #define PPSGC_RC_SUCCESS                    (0)
+-#define PPSGC_MAX_JIFFIES_VALUE             (0xFFFFFFFFFFFFFFFF)
++#define PPSGC_MAX_JIFFIES_VALUE             ULLONG_MAX
+ 
+ /*! \var struct PpsgcAssignedGroupCounters
+     \brief Structure defines the assigned session group counter IDs.
+-- 
+2.10.1
+

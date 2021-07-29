@@ -1,0 +1,7 @@
+/* Generated automatically. */
+static const char configuration_arguments[] = "/home/hd2/AX3000NPM/AX50_GPL/SDK/compile/UGW-7.5.1.40/build_dir/toolchain-mips_mips32_gcc-4.8-linaro_uClibc-0.9.33.2/gcc-linaro-4.8-2014.04/configure --with-bugurl=https://dev.openwrt.org/ --with-pkgversion='OpenWrt/Linaro GCC 4.8-2014.04 15.05_ltq' --prefix=/home/hd2/AX3000NPM/AX50_GPL/SDK/compile/UGW-7.5.1.40/staging_dir/toolchain-mips_mips32_gcc-4.8-linaro_uClibc-0.9.33.2 --build=i686-linux-gnu --host=i686-linux-gnu --target=mips-openwrt-linux-uclibc --with-gnu-ld --enable-target-optspace --disable-libgomp --disable-libmudflap --disable-multilib --disable-nls --with-host-libstdcxx=-lstdc++ --with-float=soft --with-gmp=/home/hd2/AX3000NPM/AX50_GPL/SDK/compile/UGW-7.5.1.40/staging_dir/host --with-mpfr=/home/hd2/AX3000NPM/AX50_GPL/SDK/compile/UGW-7.5.1.40/staging_dir/host --with-mpc=/home/hd2/AX3000NPM/AX50_GPL/SDK/compile/UGW-7.5.1.40/staging_dir/host --disable-decimal-float --with-mips-plt --enable-libssp --disable-__cxa_atexit --with-newlib --with-sysroot=/home/hd2/AX3000NPM/AX50_GPL/SDK/compile/UGW-7.5.1.40/staging_dir/toolchain-mips_mips32_gcc-4.8-linaro_uClibc-0.9.33.2 --enable-languages=c --disable-shared --disable-threads";
+static const char thread_model[] = "single";
+
+static const struct {
+  const char *name, *value;
+} configure_default_options[] = { { "float", "soft" }, { "llsc", "llsc" }, { "mips-plt", "plt" } };

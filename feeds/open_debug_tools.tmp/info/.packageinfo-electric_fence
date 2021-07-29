@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_debug_tools/electric_fence/Makefile
+Package: electric-fence
+Version: 2.1.13-0.1-0.1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: devel
+Category: Development
+Title: Electric_Fence
+Maintainer: 
+Source: electric-fence_2.1.13-0.1.tar.gz
+Type: ipkg
+Description: Electric Fence helps you detect two common programming bugs: software that overruns the boundaries of a malloc() memory allocation, and software that touches a memory allocation that has been released by free().
+http://perens.com/FreeSoftware/ElectricFence/ 
+
+@@
+
+

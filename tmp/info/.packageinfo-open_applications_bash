@@ -1,0 +1,22 @@
+Source-Makefile: package/feeds/open_applications/bash/Makefile
+Package: bash
+Menu: 1
+Version: 3.2.48-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libncurses
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Bash for Linux
+Maintainer: 
+Source: bash-3.2.48.tar.gz
+License: GPL-2.1+
+LicenseFiles: COPYING
+Type: ipkg
+Description:  The GNU Bourne-Again SHell
+https://tiswww.case.edu/php/chet/bash/bashtop.html
+
+@@
+
+

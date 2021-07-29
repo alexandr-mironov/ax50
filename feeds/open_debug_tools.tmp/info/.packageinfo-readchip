@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_debug_tools/readchip/Makefile
+Package: readchip
+Menu: 1
+Version: 1.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Lantiq
+Title: readchip
+Maintainer: Lantiq Beteiligungs-GmbH & Co. KG
+Source: 
+Type: ipkg
+Description: 	Chip ID information read tool
+http://www.lantiq.com
+Lantiq Beteiligungs-GmbH & Co. KG
+@@
+
+

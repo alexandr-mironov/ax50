@@ -1,0 +1,31 @@
+From ef13328f8a1a9600a96c8f2cb5cbd6079dbfc234 Mon Sep 17 00:00:00 2001
+From: "Michael L. Walker" <michael.l.walker@intel.com>
+Date: Fri, 20 Jan 2017 14:28:24 -0700
+Subject: [PATCH 584/639] net: The fragmented IPv6 packets can't pass through
+ the bridges on Puma7 platform
+
+Symptom: Reboot hangs tryign to rmmod network device drivers such as adp.ko
+RootCause: br_validate_ipv6() was taking a reference to the netdev and never
+returning it
+Resolution: Instead of in6_dev_get() call __in6_dev_get() which doesn't take a
+reference
+---
+ net/bridge/br_netfilter.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/bridge/br_netfilter.c b/net/bridge/br_netfilter.c
+index cfe2be0..e2e4d8f 100755
+--- a/net/bridge/br_netfilter.c
++++ b/net/bridge/br_netfilter.c
+@@ -380,7 +380,7 @@ static int br_validate_ipv6(struct sk_buff *skb)
+ {
+ 	const struct ipv6hdr *hdr;
+ 	struct net_device *dev = skb->dev;
+-	struct inet6_dev *idev = in6_dev_get(skb->dev);
++	struct inet6_dev *idev = __in6_dev_get(skb->dev);
+ 	u32 pkt_len;
+ 	u8 ip6h_len = sizeof(struct ipv6hdr);
+ 
+-- 
+2.10.1
+

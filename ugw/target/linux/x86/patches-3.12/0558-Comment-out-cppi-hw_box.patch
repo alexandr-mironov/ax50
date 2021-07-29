@@ -1,0 +1,24 @@
+From f4c30e5da426ca2785d5429d43dc69b3abef964f Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Wed, 21 Dec 2016 17:10:02 +0200
+Subject: [PATCH 558/639] Comment out cppi hw_box
+
+---
+ arch/x86/pal_cppi41/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/pal_cppi41/Makefile b/arch/x86/pal_cppi41/Makefile
+index c3e77ea..f70f5ec 100644
+--- a/arch/x86/pal_cppi41/Makefile
++++ b/arch/x86/pal_cppi41/Makefile
+@@ -19,7 +19,6 @@
+ 
+ obj-$(CONFIG_PAL_CPPI41_APPCPU) := pal_cppi41.o
+ obj-$(CONFIG_PAL_CPPI41_APPCPU) += cru_ctrl.o
+-obj-$(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL) += cppi41_hw_mbox_if.o
+ 
+ ccflags-y := -Werror \
+ 		-DCONFIG_X86_AVALANCHE_SOC \
+-- 
+2.10.1
+

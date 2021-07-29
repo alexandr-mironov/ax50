@@ -1,0 +1,24 @@
+From 2397c1f6c91d7f92e4c977be2dee6a5ba165b3f6 Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Mon, 16 Jan 2017 17:48:59 +0200
+Subject: [PATCH 578/639] PKTPROSSW-252: Added ICMP L4 lookup field
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 60ac90b..b06ebd2 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -781,6 +781,7 @@ typedef enum
+     PP_LOOKUP_FIELD_L4_PROTOCOL_UDP             = 1,
+     PP_LOOKUP_FIELD_L4_PROTOCOL_TCP             = 2,
+     PP_LOOKUP_FIELD_L4_PROTOCOL_L2TPv3          = 3,
++    PP_LOOKUP_FIELD_L4_PROTOCOL_ICMP            = 4,
+     PP_LOOKUP_FIELD_L4_PROTOCOL_0xFF            = 15
+ }PP_LOOKUP_FIELD_L4_TYPES_e;
+ 
+-- 
+2.10.1
+

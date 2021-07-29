@@ -1,0 +1,99 @@
+Source-Makefile: feeds/open_applications/procd/Makefile
+Package: procd
+Version: 2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +ubusd +ubus +libjson-script +ubox +libubox +libubus +NAND_SUPPORT:procd-nand
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: OpenWrt system process manager
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: procd-2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: OpenWrt system process manager
+John Crispin <blogic@openwrt.org>
+@@
+Config:
+menu "Configuration"
+	depends on PACKAGE_procd
+
+config PROCD_SHOW_BOOT
+	bool
+	default n
+	prompt "Print the shutdown to the console as well as logging it to syslog"
+
+config PROCD_ZRAM_TMPFS
+	bool
+	default n
+	prompt "Mount /tmp using zram."
+
+config PROCD_JAIL_SUPPORT
+	bool
+	default y
+	depends on (arm || armeb || mips || mipsel || i386 || x86_64) && PROCD_SECCOMP_SUPPORT
+
+config PROCD_SECCOMP_SUPPORT
+	bool
+	default y
+	depends on (arm || armeb || mips || mipsel || i386 || x86_64) && !TARGET_uml && @KERNEL_SECCOMP
+
+source "ugw/feeds_opensrc/packages/procd/config/Config.in"
+
+endmenu
+@@
+
+Package: procd-jail
+Default: n
+Version: 2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread procd +@KERNEL_NAMESPACES +@KERNEL_UTS_NS +@KERNEL_IPC_NS +@KERNEL_PID_NS @PROCD_JAIL_SUPPORT
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: OpenWrt process jail
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: procd-2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: OpenWrt process jail
+John Crispin <blogic@openwrt.org>
+@@
+
+Package: procd-nand
+Version: 2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @NAND_SUPPORT +ubi-utils
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: OpenWrt sysupgrade nand helper
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: procd-2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: OpenWrt sysupgrade nand helper
+John Crispin <blogic@openwrt.org>
+@@
+
+Package: procd-nand-firstboot
+Version: 2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread procd-nand
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: OpenWrt firstboot nand helper
+Maintainer: John Crispin <blogic@openwrt.org>
+Source: procd-2015-08-16-0da5bf2ff222d1a499172a6e09507388676b5a08.tar.gz
+License: GPL-2.0
+Type: ipkg
+Description: OpenWrt firstboot nand helper
+John Crispin <blogic@openwrt.org>
+@@
+
+

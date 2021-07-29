@@ -1,0 +1,38 @@
+Source-Makefile: package/feeds/open_applications/wireless-tools/Makefile
+Package: wireless-tools
+Version: 29-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Base system
+Title: Tools for manipulating Linux Wireless Extensions
+Maintainer: 
+Source: wireless_tools.29.tar.gz
+Type: ipkg
+Description:  This package contains a collection of tools for configuring wireless
+ adapters implementing the "Linux Wireless Extensions".
+http://hplabs.hp.com/personal/Jean_Tourrilhes/Linux/Tools.html
+
+@@
+
+Package: libiw
+Version: 29-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Library for manipulating Linux Wireless Extensions
+Maintainer: 
+Source: wireless_tools.29.tar.gz
+Type: ipkg
+Description:  This package contains a library for manipulating
+ "Linux Wireless Extensions".
+http://hplabs.hp.com/personal/Jean_Tourrilhes/Linux/Tools.html
+
+@@
+
+

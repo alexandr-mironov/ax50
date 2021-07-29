@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_applications/ipsec-tools/Makefile
+Package: ipsec-tools
+Submenu: VPN
+Version: 0.8.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: IPsec management tools
+Maintainer: 
+Source: ipsec-tools-0.8.1.tar.bz2
+Type: ipkg
+Description: IPsec management tools
+http://ipsec-tools.sourceforge.net/
+
+@@
+
+

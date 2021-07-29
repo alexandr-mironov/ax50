@@ -1,0 +1,86 @@
+From b182c76a4c284656cbd9efe194e3a2a26d8f379d Mon Sep 17 00:00:00 2001
+From: pukitis <martins.pukitis@intel.com>
+Date: Mon, 12 Feb 2018 15:20:56 +0200
+Subject: [PATCH 30/30] protect_beacon_changing_functions_with_wdev-lock
+
+---
+ net/wireless/nl80211.c | 23 ++++++++++++++++-------
+ 1 file changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 7196dda..c84667c 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -3274,6 +3274,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
+ 			return PTR_ERR(params.acl);
+ 	}
+ 
++	wdev_lock(wdev);
+ 	err = rdev_start_ap(rdev, dev, &params);
+ 	if (!err) {
+ 		wdev->preset_chandef = params.chandef;
+@@ -3282,6 +3283,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
+ 		wdev->ssid_len = params.ssid_len;
+ 		memcpy(wdev->ssid, params.ssid, wdev->ssid_len);
+ 	}
++	wdev_unlock(wdev);
+ 
+ 	kfree(params.acl);
+ 
+@@ -3310,7 +3312,11 @@ static int nl80211_set_beacon(struct sk_buff *skb, struct genl_info *info)
+ 	if (err)
+ 		return err;
+ 
+-	return rdev_change_beacon(rdev, dev, &params);
++	wdev_lock(wdev);
++	err = rdev_change_beacon(rdev, dev, &params);
++	wdev_unlock(wdev);
++
++	return err;
+ }
+ 
+ static int nl80211_stop_ap(struct sk_buff *skb, struct genl_info *info)
+@@ -4496,7 +4502,9 @@ static int nl80211_set_bss(struct sk_buff *skb, struct genl_info *info)
+ {
+ 	struct cfg80211_registered_device *rdev = info->user_ptr[0];
+ 	struct net_device *dev = info->user_ptr[1];
++	struct wireless_dev *wdev = dev->ieee80211_ptr;
+ 	struct bss_parameters params;
++	int err;
+ 
+ 	memset(&params, 0, sizeof(params));
+ 	/* default to not changing parameters */
+@@ -4562,7 +4570,11 @@ static int nl80211_set_bss(struct sk_buff *skb, struct genl_info *info)
+ 	    dev->ieee80211_ptr->iftype != NL80211_IFTYPE_P2P_GO)
+ 		return -EOPNOTSUPP;
+ 
+-	return rdev_change_bss(rdev, dev, &params);
++	wdev_lock(wdev);
++	err = rdev_change_bss(rdev, dev, &params);
++	wdev_unlock(wdev);
++
++	return err;
+ }
+ 
+ static const struct nla_policy reg_rule_policy[NL80211_REG_RULE_ATTR_MAX + 1] = {
+@@ -11038,15 +11050,12 @@ void cfg80211_ch_switch_notify(struct net_device *dev,
+ 	struct wiphy *wiphy = wdev->wiphy;
+ 	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
+ 
+-	trace_cfg80211_ch_switch_notify(dev, chandef);
++	ASSERT_WDEV_LOCK(wdev);
+ 
+-	wdev_lock(wdev);
++	trace_cfg80211_ch_switch_notify(dev, chandef);
+ 
+ 	wdev->channel = chandef->chan;
+ 	nl80211_ch_switch_notify(rdev, dev, chandef, GFP_KERNEL);
+-out:
+-	wdev_unlock(wdev);
+-	return;
+ }
+ EXPORT_SYMBOL(cfg80211_ch_switch_notify);
+ 
+-- 
+2.10.1
+

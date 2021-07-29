@@ -1,0 +1,44 @@
+Source-Makefile: package/feeds/open_applications/libjpeg/Makefile
+Package: libjpeg
+Version: 9a-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libltdl
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: The Independent JPEG Group's JPEG runtime library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: jpegsrc.v9a.tar.gz
+License: IJG
+LicenseFiles: README
+Type: ipkg
+Description: The Independent JPEG Group's JPEG runtime library
+http://www.ijg.org/
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+Package: jpeg-tools
+Version: 9a-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libjpeg
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libltdl
+Build-Types: host
+Section: utils
+Category: Utilities
+Title: The Independent JPEG Group's JPEG manipulation tools
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: jpegsrc.v9a.tar.gz
+License: IJG
+LicenseFiles: README
+Type: ipkg
+Description: The Independent JPEG Group's JPEG manipulation tools
+http://www.ijg.org/
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

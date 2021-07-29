@@ -1,0 +1,26 @@
+Source-Makefile: feeds/open_applications/libreadline6/Makefile
+Package: libreadline6
+Version: 6.3-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @!PACKAGE_libreadline
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Command lines edition library v6 (GPLv3)
+Maintainer: 
+Source: readline-6.3.tar.gz
+License: GPL-3.0
+LicenseFiles: COPYING
+Type: ipkg
+Description: 	The Readline library provides a set of functions for use by applications 
+	that allow users to edit command lines as they are typed in. Both Emacs 
+	and vi editing modes are available. The Readline library includes 
+	additional functions to maintain a list of previously-entered command 
+	lines, to recall and perhaps reedit those lines, and perform csh-like 
+	history expansion on previous commands.
+http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
+
+@@
+
+

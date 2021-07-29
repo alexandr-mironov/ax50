@@ -1,0 +1,18 @@
+Source-Makefile: feeds/ltq_packages/utils/fbtest/Makefile
+Package: fbtest
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @DISPLAY_SUPPORT
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Frame buffer device testing tool
+Maintainer: 
+Source: 
+Type: ipkg
+Description: Frame buffer device testing tool
+
+@@
+
+

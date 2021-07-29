@@ -1,0 +1,74 @@
+From 178ccccee565119c7d63596ec48728747bbc226d Mon Sep 17 00:00:00 2001
+From: "Brett T. Warden" <brett.t.warden@intel.com>
+Date: Tue, 13 Sep 2016 14:25:39 -0700
+Subject: [PATCH 476/639] intel_idle: Add C6N-CHT state
+
+Add C6N state to cht_cstates[], rename previous C6 to C6S. Clean up
+superfluous MWAIT comments in each entry. Adjust latency and residency
+times to match upstream.
+
+This is a more complete backport of Cherrytrail support from upstream
+kernel, specifically commit cab07a5652d1d124b505c2b7ed21c6823295c5d7,
+which was originally merged in v4.1-rc1.
+
+Signed-off-by: Brett T. Warden <brett.t.warden@intel.com>
+---
+ drivers/idle/intel_idle.c | 26 +++++++++++++++++---------
+ 1 file changed, 17 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index 6c8c8b9..6f533e8 100644
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -198,31 +198,39 @@ static struct cpuidle_state snb_cstates[] = {
+ };
+ 
+ static struct cpuidle_state cht_cstates[] = {
+-	{ /* MWAIT C1 */
++	{
+ 		.name = "C1-CHT",
+ 		.desc = "MWAIT 0x00",
+ 		.flags = MWAIT2flg(0x00) | CPUIDLE_FLAG_TIME_VALID,
+ 		.exit_latency = 1,
+-		.target_residency = 4,
++		.target_residency = 1,
++		.enter = &intel_idle },
++	{
++		.name = "C6N-CHT",
++		.desc = "MWAIT 0x58",
++		.flags = MWAIT2flg(0x58) | CPUIDLE_FLAG_TIME_VALID
++						| CPUIDLE_FLAG_TLB_FLUSHED,
++		.exit_latency = 80,
++		.target_residency = 275,
+ 		.enter = &intel_idle },
+-	{ /* MWAIT C6 */
+-		.name = "C6-CHT",
++	{
++		.name = "C6S-CHT",
+ 		.desc = "MWAIT 0x52",
+ 		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TIME_VALID
+ 						| CPUIDLE_FLAG_TLB_FLUSHED,
+-		.exit_latency = 140,
++		.exit_latency = 200,
+ 		.target_residency = 560,
+ 		.enter = &intel_idle },
+-	{ /* MWAIT C7-S0i1 */
+-		.name = "S0i1-CHT",
++	{
++		.name = "C7-CHT",
+ 		.desc = "MWAIT 0x60",
+ 		.flags = MWAIT2flg(0x60) | CPUIDLE_FLAG_TIME_VALID
+ 						| CPUIDLE_FLAG_TLB_FLUSHED,
+ 		.exit_latency = 1200,
+ 		.target_residency = 4000,
+ 		.enter = &intel_idle },
+-	{ /* MWAIT C9-S0i3 */
+-		.name = "S0i3-CHT",
++	{
++		.name = "C7S-CHT",
+ 		.desc = "MWAIT 0x64",
+ 		.flags = MWAIT2flg(0x64) | CPUIDLE_FLAG_TIME_VALID
+ 						| CPUIDLE_FLAG_TLB_FLUSHED,
+-- 
+2.10.1
+

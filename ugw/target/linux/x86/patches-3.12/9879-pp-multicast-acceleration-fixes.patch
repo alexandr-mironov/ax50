@@ -1,0 +1,115 @@
+# HG changeset patch
+# Parent 59860d9d58f8531cb939ece51ca778cfbb242c17
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -196,10 +196,8 @@ struct hil_core_notifier_param
+ /* Event generated when a multicast routing entry is deleted. */
+ #define TI_MFC_ENTRY_DELETED          (TI_MFC_EVENT + 0x2)
+ 
+-#define TI_MC_SESSION_DELETED         (TI_MFC_EVENT + 0x3)
+-
+-#define MC_SESSION_ADD_MEMBER         (TI_MFC_EVENT + 0x4)
+-#define MC_SESSION_DEL_MEMBER         (TI_MFC_EVENT + 0x5)
++#define MC_SESSION_ADD_MEMBER         (TI_MFC_EVENT + 0x3)
++#define MC_SESSION_DEL_MEMBER         (TI_MFC_EVENT + 0x4)
+ 
+ /**************************************************************************
+  **************************** PP PPP Event Identifiers *****************
+diff --git a/net/bridge/br_multicast.c b/net/bridge/br_multicast.c
+--- a/net/bridge/br_multicast.c
++++ b/net/bridge/br_multicast.c
+@@ -721,17 +721,6 @@ static int br_ip4_multicast_add_group(st
+ 	br_group.proto = htons(ETH_P_IP);
+ 	br_group.vid = vid;
+ 
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-	if (group && port && port->dev)
+-	{
+-		struct hil_mr_ipaddr hil_ip;
+-		hil_ip.type = HIL_MR_IPV4;
+-		hil_ip.addr.ip4.s_addr = group;
+-		hil_ip.vpid = port->dev->vpid_handle;
+-		ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
+-	}
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+-
+ 	return br_multicast_add_group(br, port, &br_group);
+ }
+ 
+@@ -750,17 +739,6 @@ static int br_ip6_multicast_add_group(st
+ 	br_group.proto = htons(ETH_P_IPV6);
+ 	br_group.vid = vid;
+ 
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-	if (group && port && port->dev)
+-	{
+-		struct hil_mr_ipaddr hil_ip;
+-		hil_ip.type = HIL_MR_IPV6;
+-		memcpy(&(hil_ip.addr.ip6), group, sizeof(struct in6_addr));
+-		hil_ip.vpid = port->dev->vpid_handle;
+-		ti_hil_pp_event (MC_SESSION_ADD_MEMBER, (void *)&hil_ip);
+-	}
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+-
+ 	return br_multicast_add_group(br, port, &br_group);
+ }
+ #endif
+@@ -1464,17 +1495,6 @@ static void br_ip4_multicast_leave_group
+ 	br_group.proto = htons(ETH_P_IP);
+ 	br_group.vid = vid;
+ 
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-	if (group && port && port->dev)
+-	{
+-		struct hil_mr_ipaddr hil_ip;
+-		hil_ip.type = HIL_MR_IPV4;
+-		hil_ip.addr.ip4.s_addr = group;
+-		hil_ip.vpid = port->dev->vpid_handle;
+-		ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
+-	}
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+-
+ 	br_multicast_leave_group(br, port, &br_group, &br->ip4_querier, query);
+ }
+ 
+@@ -1496,17 +1516,6 @@ static void br_ip6_multicast_leave_group
+ 	br_group.proto = htons(ETH_P_IPV6);
+ 	br_group.vid = vid;
+ 
+-#ifdef CONFIG_TI_PACKET_PROCESSOR
+-	if (group && port && port->dev)
+-	{
+-		struct hil_mr_ipaddr hil_ip;
+-		hil_ip.type = HIL_MR_IPV6;
+-		memcpy(&(hil_ip.addr.ip6), group, sizeof(struct in6_addr));
+-		hil_ip.vpid = port->dev->vpid_handle;
+-		ti_hil_pp_event (MC_SESSION_DEL_MEMBER, (void *)&hil_ip);
+-	}
+-#endif// CONFIG_TI_PACKET_PROCESSOR
+-
+ 	br_multicast_leave_group(br, port, &br_group, &br->ip6_querier, query);
+ }
+ #endif
+diff --git a/net/ipv4/ipmr.c b/net/ipv4/ipmr.c
+--- a/net/ipv4/ipmr.c
++++ b/net/ipv4/ipmr.c
+@@ -64,7 +64,6 @@
+ #include <net/ip_tunnels.h>
+ #include <net/checksum.h>
+ #include <net/netlink.h>
+-#include <linux/ti_hil.h>
+ #include <net/fib_rules.h>
+ #include <linux/netconf.h>
+ 
+@@ -1889,10 +1878,6 @@ forward:
+ 	/*
+ 	 *	Forward the frame
+ 	 */
+-    if ((cache->mfc_un.res.maxvif - cache->mfc_un.res.minvif) > 1)
+-    {
+-        TI_HIL_ADD_PP_INFO_FLAGS(skb, TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+-    }
+ 	if (cache->mfc_origin == htonl(INADDR_ANY) &&
+ 	    cache->mfc_mcastgrp == htonl(INADDR_ANY)) {
+ 		if (true_vifi >= 0 &&

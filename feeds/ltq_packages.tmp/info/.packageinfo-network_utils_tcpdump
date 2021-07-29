@@ -1,0 +1,40 @@
+Source-Makefile: feeds/ltq_packages/network/utils/tcpdump/Makefile
+Package: tcpdump
+Version: 4.5.1-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpcap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: full
+Section: net
+Category: Network
+Title: Network monitoring and data acquisition tool
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: tcpdump-4.5.1.tar.gz
+License: BSD-3-Clause
+Type: ipkg
+Description: Network monitoring and data acquisition tool
+http://www.tcpdump.org/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: tcpdump-mini
+Version: 4.5.1-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpcap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: mini
+Section: net
+Category: Network
+Title: Network monitoring and data acquisition tool (minimal version)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: tcpdump-4.5.1.tar.gz
+License: BSD-3-Clause
+Type: ipkg
+Description: Network monitoring and data acquisition tool (minimal version)
+http://www.tcpdump.org/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

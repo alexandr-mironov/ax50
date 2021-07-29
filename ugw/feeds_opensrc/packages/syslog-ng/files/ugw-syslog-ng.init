@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+
+START=06
+
+start() {
+	[ -f /opt/lantiq/etc/syslog-ng.conf ] || return 1
+
+	syslog-ng -f /opt/lantiq/etc/syslog-ng.conf
+}
+
+stop() {
+	killall -2 syslog-ng
+}
+
+reload() {
+	killall -2 syslog-ng
+	syslog-ng -f /opt/lantiq/etc/syslog-ng.conf
+}

@@ -1,0 +1,59 @@
+From 656d08c8324c30bd75a2e8d630b81f5aab7eb5ba Mon Sep 17 00:00:00 2001
+From: "Sukerkar, Amol N" <amol.n.sukerkar@intel.com>
+Date: Mon, 8 Aug 2016 08:56:08 -0700
+Subject: [PATCH 450/639] net: Change MAX_VPID to MAX_VPID+1 to align with UGW
+
+Due to a recent change in PPA(UGW) to support full offload on
+GRX750, puma-litepath and net/lpal_api are required to align
+with indexing mode previously defined in PPA(UGW) for full software
+acceleration for GRX550.This check-in reflects the aforementioned
+change.
+
+Signed-off-by: Sukerkar, Amol N <amol.n.sukerkar@intel.com>
+---
+ drivers/net/lpal_api/lpal_directpath.c | 4 ++--
+ include/net/lpal_api.h                 | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/lpal_api/lpal_directpath.c b/drivers/net/lpal_api/lpal_directpath.c
+index 11d8775..faa9201 100644
+--- a/drivers/net/lpal_api/lpal_directpath.c
++++ b/drivers/net/lpal_api/lpal_directpath.c
+@@ -55,7 +55,7 @@
+ 	pr_info("[LP-DP-DEBUG][%s:%d] "msg, __func__, __LINE__, ##arg);
+ 
+ /* This API are according to new lpal structure */
+-#define MAX_SUBIF       MAX_VPID
++#define MAX_SUBIF       (MAX_VPID+1)
+ #define DRV_REGISTER    ppa_drv_lpal_directpath_register
+ #define DRV_SEND        ppa_drv_lpal_directpath_send
+ #define DRV_ALLOC_SKB   ppa_drv_lpal_directpath_alloc_skb
+@@ -64,7 +64,7 @@
+  * \brief  PPA synchronization primitive for exclusion and/or synchronization
+  */
+ static spinlock_t g_lpal_dp_lock;
+-static uint32_t g_start_ifid = 0, g_end_ifid = MAX_PID * MAX_VPID;
++static uint32_t g_start_ifid = 0, g_end_ifid = MAX_PID * (MAX_VPID+1);
+ struct ppe_directpath_data *ppa_drv_g_ppe_directpath_data;
+ EXPORT_SYMBOL(ppa_drv_g_ppe_directpath_data);
+ 
+diff --git a/include/net/lpal_api.h b/include/net/lpal_api.h
+index 6a02000..251519f 100644
+--- a/include/net/lpal_api.h
++++ b/include/net/lpal_api.h
+@@ -23,9 +23,9 @@ enum {
+ #define	MAX_VPID (50)
+ 
+ #define DP_DATA_INDEX(__p) \
+-	((__p)->port_id * MAX_VPID + ((__p)->subif > 0 ? (__p)->subif : 0))
+-#define DP_PORT_ID(_idx)	((_idx) ? ((_idx) / MAX_VPID) : 0)
+-#define DP_SUBIF(_idx)		((_idx) ? ((_idx) % MAX_VPID) : 0)
++	((__p)->port_id * (MAX_VPID+1) + ((__p)->subif > 0 ? (__p)->subif : 0))
++#define DP_PORT_ID(_idx)	((_idx) ? ((_idx) / (MAX_VPID+1)) : 0)
++#define DP_SUBIF(_idx)		((_idx) ? ((_idx) % (MAX_VPID+1)) : 0)
+ 
+ #define PPA_SUCCESS    0
+ #define PPA_FAILURE   -1
+-- 
+2.10.1
+

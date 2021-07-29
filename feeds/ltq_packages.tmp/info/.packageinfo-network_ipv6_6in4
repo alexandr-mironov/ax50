@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/network/ipv6/6in4/Makefile
+Package: 6in4
+Version: 21-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-ipv6 +kmod-sit
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: IPv6-in-IPv4 configuration support
+Maintainer: Jo-Philipp Wich <xm@subsignal.org>
+Source: 
+License: GPL-2.0
+Type: ipkg
+Description: Provides support for 6in4 tunnels in /etc/config/network.
+Refer to http://wiki.openwrt.org/doc/uci/network for
+configuration details.
+Jo-Philipp Wich <xm@subsignal.org>
+@@
+
+

@@ -1,0 +1,43 @@
+From 76dcbbda53d38284923c6ba2e028eecb36f9dae2 Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 15:05:45 +0300
+Subject: [PATCH 07/20] kernel_nop
+
+---
+ net/wireless/core.c | 6 ++++++
+ net/wireless/mlme.c | 2 +-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index 11abaae..0f4bc86 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -740,6 +740,12 @@ void cfg80211_unregister_wdev(struct wireless_dev *wdev)
+ }
+ EXPORT_SYMBOL(cfg80211_unregister_wdev);
+ 
++struct workqueue_struct *cfg80211_get_cfg80211_wq(void)
++{
++	return cfg80211_wq;
++}
++EXPORT_SYMBOL(cfg80211_get_cfg80211_wq);
++
+ static struct device_type wiphy_type = {
+ 	.name	= "wlan",
+ };
+diff --git a/net/wireless/mlme.c b/net/wireless/mlme.c
+index 5d88a0a..7c57972 100644
+--- a/net/wireless/mlme.c
++++ b/net/wireless/mlme.c
+@@ -708,7 +708,7 @@ void cfg80211_dfs_channels_update_work(struct work_struct *work)
+ 				continue;
+ 
+ 			timeout = c->dfs_state_entered +
+-				  IEEE80211_DFS_MIN_NOP_TIME_MS;
++				msecs_to_jiffies(IEEE80211_DFS_MIN_NOP_TIME_MS);
+ 
+ 			if (time_after_eq(jiffies, timeout)) {
+ 				c->dfs_state = NL80211_DFS_USABLE;
+-- 
+2.10.1
+

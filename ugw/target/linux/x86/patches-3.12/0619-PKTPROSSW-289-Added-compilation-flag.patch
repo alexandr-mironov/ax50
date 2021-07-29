@@ -1,0 +1,57 @@
+From 48cca412bc5c138a7c686e8f159aabac25432483 Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Tue, 14 Mar 2017 13:53:39 +0200
+Subject: [PATCH 619/639] PKTPROSSW-289: Added compilation flag
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 5 +++--
+ net/ti.Kconfig                                     | 7 +++++++
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 902facb..6a1f3c9 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -767,7 +767,7 @@ typedef enum
+ #ifdef CONFIG_SESS_TIMEOUT_BY_THRESH
+ #define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  1
+ #define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_LOW     100
+-#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_HIGH    1000
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_HIGH    1500
+ #else
+ #define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  0
+ #endif
+@@ -1875,10 +1875,11 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_hw_interrupt_bundle_init  ( void );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_classification_mode(PP_CLASSIFICATION_MODE_e);
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_support_bp_frag(Uint8 EnDis);
+ extern PP_CLASSIFICATION_MODE_e avalanche_pp_get_classification_mode( void );
+-
++#ifdef CONFIG_SESS_TIMEOUT_BY_THRESH
+ extern AVALANCHE_PP_RET_e avalanche_pp_sess_timeout_thresholds_enable(Uint8);
+ extern AVALANCHE_PP_RET_e avalanche_pp_sess_timeout_thresholds_set(Uint16, Uint16);
+ #endif
++#endif
+ 
+ /* MISC APIs */
+ #define AVALANCHE_PP_LUT_HISTOGRAM_SIZE             8
+diff --git a/net/ti.Kconfig b/net/ti.Kconfig
+index 8d119e6..2035fe1 100644
+--- a/net/ti.Kconfig
++++ b/net/ti.Kconfig
+@@ -284,6 +284,13 @@ config NP_APP_DATAPIPE
+           If gateway capabilities is on NP-CPU(Arm11)
+           than select no.
+ 
++config SESS_TIMEOUT_BY_THRESH
++    	bool "Enable Session timeout by thresholds mechanism"
++    	default n
++	depends on TI_PACKET_PROCESSOR
++    help
++      Select if Sessions should be timedout according to high and low thresholds
++
+ endmenu
+ config INTEL_IRQ_THREAD_CHANGE_PRIORITY
+ 	bool "Change scheduler policy and priority "
+-- 
+2.10.1
+

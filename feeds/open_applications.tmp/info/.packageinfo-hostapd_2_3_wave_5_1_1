@@ -1,0 +1,50 @@
+Source-Makefile: feeds/open_applications/hostapd_2_3_wave_5_1_1/Makefile
+Package: hostapd_2_3_wave_5_1_1
+Menu: 1
+Version: 2.6-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libopenssl +libnl3 +librt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libopenssl libnl3 librt
+Section: net
+Category: Network
+Title: IEEE 802.1x Authenticator
+Maintainer: 
+Source: hostapd-2.6.tar.bz2
+Type: ipkg
+Description:   IEEE 802.11 AP, IEEE 802.1X/WPA/WPA2/EAP/RADIUS Authenticator
+http://hostap.epitest.fi/
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_hostapd_2_3_wave_5_1_1
+	config hostapd_2_3_wave_5_1_1_USE_CUSTOM_VERSION
+		depends on PACKAGE_hostapd_2_3_wave_5_1_1
+		bool "Use custom package version"
+		default n
+	config hostapd_2_3_wave_5_1_1_CUSTOM_VERSION
+		depends on hostapd_2_3_wave_5_1_1_USE_CUSTOM_VERSION
+		string "hostapd version as string (default version: 2.6)"
+		default "2.6"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_hostapd_2_3_wave_5_1_1
+	config hostapd_2_3_wave_5_1_1_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_hostapd_2_3_wave_5_1_1
+		bool "Use custom source directory"
+		default n
+	config hostapd_2_3_wave_5_1_1_CUSTOM_SOURCE_DIR
+		depends on hostapd_2_3_wave_5_1_1_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/ugw/feeds_opensrc/packages/hostapd_2_3_wave_5_1_1"
+	endmenu
+	config WIRELESS_STA
+	  depends on PACKAGE_hostapd_2_3_wave_5_1_1
+	  bool 'Linux WPA/WPA2/IEEE 802.1X Supplicant support'
+	  help
+	      Linux WPA/WPA2/IEEE 802.1X Supplicant
+@@
+
+

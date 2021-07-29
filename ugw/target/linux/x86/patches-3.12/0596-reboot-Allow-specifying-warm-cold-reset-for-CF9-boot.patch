@@ -1,0 +1,56 @@
+From 7418f8947927db355b0080b4ca370db93a4b5b47 Mon Sep 17 00:00:00 2001
+From: Li Fei <fei.li@intel.com>
+Date: Wed, 21 Aug 2013 16:13:57 +0800
+Subject: [PATCH 596/639] reboot: Allow specifying warm/cold reset for CF9 boot
+ type
+
+In current implementation for reboot type CF9 and CF9_COND,
+warm and cold reset are not differentiated, and both are
+performed by writing 0x06 to port 0xCF9.
+
+This commit will differentiate warm and cold reset:
+
+For warm reset, write 0x06 to port 0xCF9;
+For cold reset, write 0x0E to port 0xCF9.
+
+[ hpa: This meaning of "cold" and "warm" reset is different from other
+  reboot types use, where "warm" means "bypass BIOS POST".  It is also
+  not entirely clear that it actually solves any actual problem.  However,
+  it would seem fairly harmless to offer this additional option.]
+
+From: Liu Chuansheng <chuansheng.liu@intel.com>
+Signed-off-by: Li Fei <fei.li@intel.com>
+Link: http://lkml.kernel.org/r/1377072837.24556.2.camel@fli24-HP-Compaq-8100-Elite-CMT-PC
+Signed-off-by: H. Peter Anvin <hpa@linux.intel.com>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+(cherry picked from commit 16c21ae5ca636cfd38e581ebcf709c49d78ea56d)
+
+Change-Id: I1c23942edce5ae7b9a229a0c4c6704ce46da0a0f
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ arch/x86/kernel/reboot.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/reboot.c b/arch/x86/kernel/reboot.c
+index 52df363..6e0857d 100644
+--- a/arch/x86/kernel/reboot.c
++++ b/arch/x86/kernel/reboot.c
+@@ -595,10 +595,13 @@ static void native_machine_emergency_restart(void)
+ 
+ 		case BOOT_CF9_COND:
+ 			if (port_cf9_safe) {
+-				u8 cf9 = inb(0xcf9) & ~6;
++				u8 reboot_code = reboot_mode == REBOOT_WARM ?
++					0x06 : 0x0E;
++				u8 cf9 = inb(0xcf9) & ~0x0E;
+ 				outb(cf9|2, 0xcf9); /* Request hard reset */
+ 				udelay(50);
+-				outb(cf9|6, 0xcf9); /* Actually do the reset */
++				/* Actually do the reset */
++				outb(cf9|reboot_code, 0xcf9);
+ 				udelay(50);
+ 			}
+ 			reboot_type = BOOT_KBD;
+-- 
+2.10.1
+

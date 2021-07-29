@@ -1,0 +1,49 @@
+From 91e226cb13aba699db6b27282834aee26c773f35 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Fri, 18 Nov 2016 12:12:08 -0700
+Subject: [PATCH 522/639] Revert "netip_subsystem: wait for service_level set"
+
+This reverts commit fcfff17ac89779a6ef511f5075817c8ab19c0d5d.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index 63dc26f..d8a685a 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -128,10 +128,6 @@ static bool g_timer_created = false;
+ /**Need to notify once whether internal BBU is on or off */
+ static bool g_acpi_notified_bbu_status = false;
+ 
+-/* Forces not to send service request untill power manger
+- * has set the service level */
+-static bool g_service_level_initialized = false;
+-
+ /**
+  * puma_netip_notify_state() - invoke to update the state of NETIP
+  * @state: state of NETIP, 0 - Active, 1 - BBU, 2 - Standby, 3 - Deep standby
+@@ -852,7 +848,7 @@ static int netss_configure_and_setup_netip_services(void *data)
+          netss_send_reply_ack();
+          /*process service status message */
+          ness_process_service_status_msg();
+-         if(!g_netip_service_request_reply_pending && g_service_level_initialized)
++         if(!g_netip_service_request_reply_pending)
+          {
+             /* send service request message */
+             netss_send_service_request_msg(g_netss_sysfs_attributes_info.service_level);
+@@ -1097,8 +1093,7 @@ int __netss_set_service_level(uint32_t level)
+ 			 */
+ 			ret = netss_send_service_request_msg(level);
+ 		}
+-	} else {
+-		g_service_level_initialized = true;
++	} else if (g_netss_sysfs_attributes_info.netip_soft_off) {
+ 		ret = netss_send_service_request_msg(level);
+ 	}
+ 
+-- 
+2.10.1
+

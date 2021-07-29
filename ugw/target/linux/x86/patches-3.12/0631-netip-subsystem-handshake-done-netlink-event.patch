@@ -1,0 +1,59 @@
+From 85e6aca4e26e634a08f991986b015bb5b78bc7b8 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Wed, 5 Apr 2017 16:50:34 -0700
+Subject: [PATCH 631/639] netip-subsystem: handshake done netlink event
+
+Generate dual boot handshake done netlink event to notify the power mana
+ger so that it can suspend/resume the devices which are supposed to be
+done after the handshake done. Otherwise the devices need to be ON till
+the boot handshake will toggle between OFF or suspend and ON or resume
+and can cause delay in the boot and kernel panic. Example device is STC.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index f2fe9de..68a766d 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -3,7 +3,7 @@
+  *
+  *  GPL LICENSE SUMMARY
+  *
+- *  Copyright(c) 2015-2016 Intel Corporation. All rights reserved.
++ *  Copyright(c) 2015-2017 Intel Corporation. All rights reserved.
+  *
+  *  This program is free software; you can redistribute it and/or modify
+  *  it under the terms of version 2 of the GNU General Public License as
+@@ -41,11 +41,17 @@
+ #include "netip_subsystem_pm.h"
+ #include "netip_subsystem_sysfs.h"
+ #include <linux/netdevice.h>
++#include <acpi/acpi_bus.h>
+ 
+ #define NETIP_CRU0_MOD_STATE_OFFSET (0)
+ #define NETIP_CRU0_MOD_STATUS_OFFSET (4)
+ #define NETIP_CRU0_ENABLE (3)
+ 
++#define NETIP_DEV_CLASS "NETIP_SUBSYSTEM"
++#define NETIP_DEV_NAME  "80862be9"
++#define PUMA_ACPI_NOTIFY_NETIP_HANDSHAKE_DONE 0xA4
++
++
+ extern int docsis_chan_cfg;
+ extern int cm_mode;
+ extern int RCE_Floor;
+@@ -1168,6 +1174,8 @@ static int netss_configure_and_setup_netip_services(void *data)
+                if(g_netip_services_status_received  == g_netip_services_available)
+                {
+                   g_netss_boot_handshake_done = true;
++                  acpi_bus_generate_netlink_event(NETIP_DEV_CLASS, NETIP_DEV_NAME,
++					PUMA_ACPI_NOTIFY_NETIP_HANDSHAKE_DONE, 0);
+ 
+                   printk("Dual boot handshake is done services available %08X init complete %08X\n", g_netip_services_available, g_netip_services_init_complete);
+ #ifdef CONFIG_PM_RUNTIME
+-- 
+2.10.1
+

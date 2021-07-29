@@ -1,0 +1,57 @@
+Source-Makefile: feeds/ltq_packages/libs/ustream-ssl/Makefile
+Package: libustream-polarssl
+Version: 2015-07-09-c2d73c22618e8ee444e8d346695eca908ecb72d3
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox +libpolarssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: polarssl
+Default-Variant: polarssl
+Section: libs
+Category: Libraries
+Title: ustream SSL Library (polarssl)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ustream-ssl-2015-07-09-c2d73c22618e8ee444e8d346695eca908ecb72d3.tar.gz
+License: ISC
+Type: ipkg
+Description: ustream SSL Library (polarssl)
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: libustream-cyassl
+Version: 2015-07-09-c2d73c22618e8ee444e8d346695eca908ecb72d3
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox +PACKAGE_libustream-cyassl:libcyassl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: cyassl
+Section: libs
+Category: Libraries
+Title: ustream SSL Library (cyassl)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ustream-ssl-2015-07-09-c2d73c22618e8ee444e8d346695eca908ecb72d3.tar.gz
+License: ISC
+Type: ipkg
+Description: ustream SSL Library (cyassl)
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+Package: libustream-openssl
+Version: 2015-07-09-c2d73c22618e8ee444e8d346695eca908ecb72d3
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox +PACKAGE_libustream-openssl:libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: openssl
+Section: libs
+Category: Libraries
+Title: ustream SSL Library (openssl)
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: ustream-ssl-2015-07-09-c2d73c22618e8ee444e8d346695eca908ecb72d3.tar.gz
+License: ISC
+Type: ipkg
+Description: ustream SSL Library (openssl)
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

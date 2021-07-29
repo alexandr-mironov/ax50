@@ -1,0 +1,31 @@
+There is a NULL pointer dereference in ppp_pernet() from ppp_connect_channel(), i.e. pch->chan_net is NULL.
+
+This is due to that a parallel ppp_unregister_channel() could happen while we are in ppp_connect_channel(), during
+which pch->chan_net set to NULL. Since we need a reference to net per channel, it makes sense to sync the refcnt
+with the life time of the channel, therefore we should release this reference when we destroy it.
+
+Other data are handled this way: e.g. channel_count is incremented in
+ppp_register_net_channel() and decremented in ppp_destroy_channel()
+
+diff --git a/drivers/net/ppp/ppp_generic.c b/drivers/net/ppp/ppp_generic.c
+--- a/drivers/net/ppp/ppp_generic.c	2017-06-01 16:45:05.432342696 +0530
++++ b/drivers/net/ppp/ppp_generic.c	2017-06-01 16:46:01.047393853 +0530
+@@ -2340,8 +2340,6 @@
+ 	spin_lock_bh(&pn->all_channels_lock);
+ 	list_del(&pch->list);
+ 	spin_unlock_bh(&pn->all_channels_lock);
+-	put_net(pch->chan_net);
+-	pch->chan_net = NULL;
+ 
+ 	pch->file.dead = 1;
+ 	wake_up_interruptible(&pch->file.rwait);
+@@ -2948,6 +2946,9 @@
+  */
+ static void ppp_destroy_channel(struct channel *pch)
+ {
++	put_net(pch->chan_net);
++	pch->chan_net = NULL;
++
+ 	atomic_dec(&channel_count);
+ 
+ 	if (!pch->file.dead) {

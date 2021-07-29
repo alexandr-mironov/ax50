@@ -1,0 +1,53 @@
+From 679bcb15585cd31ee23b4ec7494461b03058e388 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Wed, 5 Jul 2017 17:47:52 +0300
+Subject: [PATCH 1/2] enable the option for add/remove/get vendor elements
+ on-the-fly
+
+this option should never have been under the ifdef of CONFIG_P2P
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ wpa_supplicant/wpa_cli.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
+index c780010..137f441 100644
+--- a/wpa_supplicant/wpa_cli.c
++++ b/wpa_supplicant/wpa_cli.c
+@@ -2338,6 +2338,7 @@ static int wpa_cli_cmd_p2p_remove_client(struct wpa_ctrl *ctrl, int argc,
+ 	return wpa_cli_cmd(ctrl, "P2P_REMOVE_CLIENT", 1, argc, argv);
+ }
+ 
++#endif /* CONFIG_P2P */
+ 
+ static int wpa_cli_cmd_vendor_elem_add(struct wpa_ctrl *ctrl, int argc,
+ 				       char *argv[])
+@@ -2359,7 +2360,7 @@ static int wpa_cli_cmd_vendor_elem_remove(struct wpa_ctrl *ctrl, int argc,
+ 	return wpa_cli_cmd(ctrl, "VENDOR_ELEM_REMOVE", 2, argc, argv);
+ }
+ 
+-#endif /* CONFIG_P2P */
++
+ 
+ #ifdef CONFIG_WIFI_DISPLAY
+ 
+@@ -3185,6 +3186,7 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
+ 	{ "p2p_remove_client", wpa_cli_cmd_p2p_remove_client,
+ 	  wpa_cli_complete_p2p_peer, cli_cmd_flag_none,
+ 	  "<address|iface=address> = remove a peer from all groups" },
++#endif /* CONFIG_P2P */
+ 	{ "vendor_elem_add", wpa_cli_cmd_vendor_elem_add, NULL,
+ 	  cli_cmd_flag_none,
+ 	  "<frame id> <hexdump of elem(s)> = add vendor specific IEs to frame(s)\n"
+@@ -3197,7 +3199,6 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
+ 	  cli_cmd_flag_none,
+ 	  "<frame id> <hexdump of elem(s)> = remove vendor specific IE(s) in frame(s)\n"
+ 	  VENDOR_ELEM_FRAME_ID },
+-#endif /* CONFIG_P2P */
+ #ifdef CONFIG_WIFI_DISPLAY
+ 	{ "wfd_subelem_set", wpa_cli_cmd_wfd_subelem_set, NULL,
+ 	  cli_cmd_flag_none,
+-- 
+2.10.1
+

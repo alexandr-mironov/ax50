@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ltq_packages/devel/strace/Makefile
+Package: strace
+Version: 4.8-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: System call tracer
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: strace-4.8.tar.xz
+License: BSD-3c
+LicenseFiles: COPYRIGHT
+Type: ipkg
+Description: A useful diagnostic, instructional, and debugging tool. Allows you to track what
+system calls a program makes while it is running.
+http://strace.sourceforge.net/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

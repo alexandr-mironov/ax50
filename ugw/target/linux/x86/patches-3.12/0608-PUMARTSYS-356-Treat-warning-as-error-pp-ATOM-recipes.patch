@@ -1,0 +1,35 @@
+From 381d38e78c689506cf43a0d8c07d1d2a836f6567 Mon Sep 17 00:00:00 2001
+From: ylermanx <ylermanx@intel.com>
+Date: Tue, 7 Mar 2017 08:36:56 +0200
+Subject: [PATCH 608/639] PUMARTSYS-356 Treat warning as error (pp ATOM
+ recipes)
+
+---
+ include/linux/avalanche/puma7/puma7.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/avalanche/puma7/puma7.h b/include/linux/avalanche/puma7/puma7.h
+index 8760295..577e02c 100644
+--- a/include/linux/avalanche/puma7/puma7.h
++++ b/include/linux/avalanche/puma7/puma7.h
+@@ -10,7 +10,7 @@
+ 
+   GPL LICENSE SUMMARY
+ 
+-  Copyright(c) 2014-2015 Intel Corporation.
++  Copyright(c) 2014-2017 Intel Corporation.
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License as
+@@ -75,7 +75,7 @@
+ #define IO_ADDRESS(addr) ((unsigned long)netip_mmio_to_virtual(addr))
+ #define IO_PHY2VIRT(addr)              (netip_mmio_to_virtual((unsigned long)addr))   /* X86 implementation here */
+ /* convert hardware virtual address to hardware physical address */
+-#define IO_VIRT2PHY(addr)             (netip_mmio_to_physical((unsigned long)addr))   /* X86 implementation here */
++#define IO_VIRT2PHY(addr)             (netip_mmio_to_physical(addr))  /* X86 implementation here */
+ 
+ #define AVALANCHE_GBE0_ADDR                         ((0xF0300000))
+ #define AVALANCHE_GBE1_ADDR                         ((0xF0304000))
+-- 
+2.10.1
+

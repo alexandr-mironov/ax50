@@ -1,0 +1,74 @@
+From 52b6d5bee395eb11edce771f40615bbc1ff42705 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Wed, 30 Nov 2016 16:12:11 -0700
+Subject: [PATCH 532/639] netip_subsystem: Notify pwr state during soft off
+
+NetIP subsystem driver now notifies the child drivers which has register
+ed NetIP power state change notification callbacks. This will help child
+driver not access HW when NetIP is in soft off state.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 27 ++++++++++++++++-----------
+ 1 file changed, 16 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index 0b6a743..cf1294f 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -54,6 +54,7 @@ void netss_sysfs_clean_up(uint32_t available_services);
+ 
+ int __netss_set_service_level(uint32_t level);
+ 
++int netss_notify_netip_power_state_to_child_drivers(netss_power_state_t state);
+ /*External variables */
+ extern struct net_subsystem_drv_data *pnetss_drv_data;
+ 
+@@ -682,29 +683,33 @@ static void netss_update_sysfs_attributes(netss_sysfs_attributes_info_t *sysfs_i
+       }
+       if(g_current_netip_power_state == NETSS_POWER_LEVEL_DEEP_STANDBY)
+       {
+-#ifdef CONFIG_PM_RUNTIME
+ 	 /**We are not suspending meaning not clocking gating etc,  but doing a netip soft off */
+-	 if(sysfs_info->netip_soft_off)
+-	 {
++         if(sysfs_info->netip_soft_off)
++         {
++            /**Notify the NetIP power state to all child drivers */
++            netss_notify_netip_power_state_to_child_drivers(NETSS_NETIP_POWER_STATE_OFF);
+ 	    /**Indicate that netip_soft_off exectution is complete, as we got reply for all service requests */
+-	    sysfs_info->netip_soft_off = 0;
+-	    /**Indicate that netip is in soft off state */
+-	    g_is_netip_in_soft_off_state = true;
++            sysfs_info->netip_soft_off = 0;
++            /**Indicate that netip is in soft off state */
++            g_is_netip_in_soft_off_state = true;
+ 	 }
+ 	 else
+ 	 {
++#ifdef CONFIG_PM_RUNTIME
+ 	    /**Let the usage counter go to zero */
+ 	    pm_runtime_put(&pnetss_drv_data->dev->dev);
+-	 }
+ #endif
++	 }
+       }
+       else if (g_current_netip_power_state == NETSS_POWER_LEVEL_ENABLE && temp == NETSS_POWER_LEVEL_DEEP_STANDBY)
+       {
+-	 /**NetIP came out of soft off state to active */
+-	 if(g_is_netip_in_soft_off_state)
++         /**NetIP came out of soft off state to active */
++         if(g_is_netip_in_soft_off_state)
+ 	 {
+-	    g_is_netip_in_soft_off_state = false;
+-	 }
++            /**Notify the NetIP power state to all child drivers */
++            netss_notify_netip_power_state_to_child_drivers(NETSS_NETIP_POWER_STATE_ACTIVE);
++            g_is_netip_in_soft_off_state = false;
++         }
+       }
+ 
+       if(temp < g_current_netip_power_state && g_current_netip_power_state != NETSS_POWER_LEVEL_DEEP_STANDBY)
+-- 
+2.10.1
+

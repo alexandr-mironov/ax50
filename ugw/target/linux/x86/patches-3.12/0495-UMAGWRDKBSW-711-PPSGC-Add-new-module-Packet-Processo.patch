@@ -1,0 +1,35 @@
+From f0fb601502b66a93871e6016ee6a1f162ee8ca48 Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Thu, 6 Oct 2016 14:03:07 +0300
+Subject: [PATCH 495/639] UMAGWRDKBSW-711-PPSGC: Add new module - Packet
+ Processor Sessions Group Counters - Fixes2
+
+---
+ include/linux/avalanche/puma7/ppsgc_defs.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/puma7/ppsgc_defs.h b/include/linux/avalanche/puma7/ppsgc_defs.h
+index 83711cb..38f4d15 100644
+--- a/include/linux/avalanche/puma7/ppsgc_defs.h
++++ b/include/linux/avalanche/puma7/ppsgc_defs.h
+@@ -45,12 +45,16 @@
+ #define PPSGC_GROUP_COUNTERS_PER_SESSION    (8)
+ #define PPSGC_RC_FAILURE                    (-1)
+ #define PPSGC_RC_SUCCESS                    (0)
+-#define PpsgcGroupCounterId_t               Uint16
+ 
+ 
+ /**************************************************************************/
+ /*      INTERFACE  Defines and Structs                                    */
+ /**************************************************************************/
++/*! \var typedef  PpsgcGroupCounterId_t
++    \brief Group counter ID type.
++*/
++typedef Uint16  PpsgcGroupCounterId_t;
++
+ /*! \var struct PpsgcAssignedGroupCounters
+     \brief Structure defines the assigned session group counter IDs.
+ */
+-- 
+2.10.1
+

@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/iw/Makefile
+Package: iw
+Version: 3.17-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: cfg80211 interface configuration utility
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: iw-3.17.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: cfg80211 interface configuration utility
+http://wireless.kernel.org/en/users/Documentation/iw
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

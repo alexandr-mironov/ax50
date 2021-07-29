@@ -1,0 +1,28 @@
+From 5ce28474f6fb46857329eae3eb1d4081c6876f72 Mon Sep 17 00:00:00 2001
+From: Andrei Danaila <andrei.danaila@intel.com>
+Date: Tue, 16 Aug 2016 13:19:15 -0400
+Subject: [PATCH 458/639] usb: hub: Remove unreferenced goto tag
+
+Remove unreferenced goto tag to prevent compilation
+failure.
+
+Signed-off-by: Andrei Danaila <andrei.danaila@intel.com>
+---
+ drivers/usb/core/hub.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+index 26a88f6..43ead2b 100644
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -1643,7 +1643,6 @@ static int hub_configure(struct usb_hub *hub,
+ 
+ fail:
+ 	hdev->maxchild = 0;
+-fail_keep_maxchild:
+ 	dev_err (hub_dev, "config failed, %s (err %d)\n",
+ 			message, ret);
+ 	/* hub_disconnect() frees urb and descriptor */
+-- 
+2.10.1
+

@@ -1,0 +1,18 @@
+Source-Makefile: package/feeds/ltq_packages/otrx/Makefile
+Package: otrx
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_brcm47xx||@TARGET_bcm53xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Base system
+Title: Utility for opening (analyzing) TRX firmware images
+Maintainer: Rafał Miłecki <zajec5@gmail.com>
+Source: 
+Type: ipkg
+Description:  This package contains an utility that allows validating TRX images.
+Rafał Miłecki <zajec5@gmail.com>
+@@
+
+

@@ -1,0 +1,85 @@
+#!/bin/sh
+# UGW System fine tune operations.
+#
+
+. /lib/lantiq.sh
+
+board=$(lantiq_board_name)
+
+# This routine configures memory tuning parameters
+tune_memory_parameters()
+{
+	if [ -z "${board/EASY550*/}" -o -z "${board/EASY350*/}" ]; then
+		sysctl -w vm.min_free_kbytes="8192"
+	elif [ -z "${board/EASY80920*/}" -o -z "${board/EASY220*/}" ]; then
+		sysctl -w vm.min_free_kbytes="1024"
+	else
+		sysctl -w vm.min_free_kbytes="4096"
+	fi
+
+	sysctl -w vm.lowmem_reserve_ratio="250"
+	sysctl -w vm.dirty_background_ratio="2"
+	sysctl -w vm.dirty_writeback_centisecs="250"
+	sysctl -w vm.dirty_ratio="10"
+	sysctl -w vm.max_map_count="16384"
+
+	#
+	# Following parameters ensure that user space applications are not allowed to
+	# consume more than 95% of the system RAM and when system is heavily used &
+	# under low memory, instead of OOM, user space application requesting for more
+	# momory will suffer.
+	#
+	sysctl -w vm.scan_unevictable_pages="1"
+	sysctl -w vm.overcommit_memory="0"
+}
+
+# This routine configures the network parameters
+tune_network_parameters()
+{
+	sysctl -w net.ipv4.route.max_size="4096"
+
+	if [ -f "/proc/sys/net/ipv4/tcp_min_tso_segs" ]; then
+		sysctl -w net.ipv4.tcp_min_tso_segs="44"
+	fi
+
+	# Optimize Routing & Conntrack cache - needs individual tuning based on model
+	if [ -f /etc/low_footprint ]; then
+		sysctl -w net.netfilter.nf_conntrack_max="512"
+		sysctl -w net.netfilter.nf_conntrack_expect_max="50"
+	else
+		if [ -z "${board/Intel*/}" ]; then
+			sysctl -w net.netfilter.nf_conntrack_max="25000"
+		else
+			sysctl -w net.netfilter.nf_conntrack_max="4096"
+		fi
+		sysctl -w net.netfilter.nf_conntrack_expect_max="100"
+	fi
+
+	if [ -z "${board/EASY550*/}" -o -z "${board/EASY350*/}" ]; then
+		sysctl -w net.netfilter.nf_conntrack_max="6144"
+		sysctl -w net.netfilter.nf_conntrack_expect_max="100"
+	fi
+
+	if [ -z "${board/EASY80920*/}" -o -z "${board/EASY220*/}" ]; then
+		sysctl -w net.netfilter.nf_conntrack_tcp_be_liberal="1"
+	fi
+}
+
+# Local traffic litepath hook for all platforms.
+set_local_session_learning()
+{
+	# -m comment --comment "local session learning hook for TCP litepath and LRO"
+	local iRule="INPUT -p tcp -m state --state ESTABLISHED -j EXTMARK --set-mark 0x80000000/0x80000000"
+	iptables -t mangle -C $iRule 2>/dev/null || {
+		iptables -t mangle -I $iRule
+	}
+}
+
+set_system_config()
+{
+	tune_memory_parameters
+	tune_network_parameters
+	set_local_session_learning
+}
+
+boot_hook_add preinit_essential set_system_config

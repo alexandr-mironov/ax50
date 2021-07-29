@@ -1,0 +1,13 @@
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -278,8 +278,8 @@ cygwinbin:
+ # We extend the standard install with a custom hook:
+ install-data-hook:
+ 	cd include && $(MAKE) install
+-	cd docs && $(MAKE) install
+-	cd docs/libcurl && $(MAKE) install
++	#cd docs && $(MAKE) install
++	#cd docs/libcurl && $(MAKE) install
+
+ # We extend the standard uninstall with a custom hook:
+ uninstall-hook:

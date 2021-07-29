@@ -1,0 +1,20 @@
+Source-Makefile: feeds/ltq_packages/utils/px5g/Makefile
+Package: px5g
+Version: 3
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpolarssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: X.509 certificate generator (using PolarSSL)
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: 
+Type: ipkg
+Description:  Px5g is a tiny standalone X.509 certificate generator.
+ It suitable to create key files and certificates in DER
+ and PEM format for use with stunnel, uhttpd and others.
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

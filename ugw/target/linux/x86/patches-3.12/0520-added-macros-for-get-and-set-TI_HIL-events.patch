@@ -1,0 +1,33 @@
+From 61cedc8d1e9be6117bcaa3e8410f3be0f45a9995 Mon Sep 17 00:00:00 2001
+From: Boris Shehter <borisx.shehter@intel.com>
+Date: Wed, 16 Nov 2016 16:37:36 +0200
+Subject: [PATCH 520/639] added macros for get and set TI_HIL events
+
+---
+ include/linux/ti_hil.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/include/linux/ti_hil.h b/include/linux/ti_hil.h
+index 249dd2a..e943f4d 100755
+--- a/include/linux/ti_hil.h
++++ b/include/linux/ti_hil.h
+@@ -47,6 +47,16 @@ struct hil_core_notifier_param
+ 
+ 
+ /**************************************************************************
++ **************** General Macros to get and set PP events *****************
++ **************************************************************************/
++
++#define TI_HIL_NETDEV_READ32_REG(x)                    ntohl(x)                /* convert network byte order to native host byte order */
++#define TI_HIL_NETDEV_WRITE32_REG(x)                   htonl(x)                /* convert native host byte order to network byte order */
++
++#define TI_HIL_NETDEV_GET_EVENT(skb)                   TI_HIL_NETDEV_READ32_REG( (SKB_GET_PP_INFO_P(skb)->flags) >> TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET)
++#define TI_HIL_NETDEV_SET_EVENT(skb, f)                (SKB_GET_PP_INFO_P(skb)->flags |= TI_HIL_NETDEV_WRITE32_REG((f) << TI_HIL_PACKET_FLAG_PP_SESSION_DROP_OFFSET))
++
++/**************************************************************************
+  ****************************** Module Identifers *************************
+  **************************************************************************/
+ 
+-- 
+2.10.1
+

@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/gearmand/Makefile
+Package: gearmand
+Version: 1.1.12
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread +librpc +librt +libsqlite3 +libubacktrace +libstdcpp +libevent +libevent2 +boost-program_options
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: gearmand -- prints a snarky message
+Maintainer: 
+Source: gearmand-1.1.12.tar.gz
+Type: ipkg
+Description: 	If you can't figure out what this program does, you're probably
+	brain-dead and need immediate medical attention.
+
+@@
+
+

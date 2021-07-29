@@ -1,0 +1,21 @@
+Source-Makefile: feeds/open_applications/safec/Makefile
+Package: safeclibs
+Version: 10052013
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: libsafec
+Section: libs
+Category: Libraries
+Title: Safec library build (default safec library)
+Maintainer: Bo Berry <bberryusa@users.sourceforge.net>
+Source: libsafec-10052013.tar.gz
+License: CISCO SYSTEMS
+LicenseFiles: COPYING
+Type: ipkg
+Description:  This package contains the safec  shared library.
+http://sourceforge.net/projects/safeclib
+Bo Berry <bberryusa@users.sourceforge.net>
+@@
+
+

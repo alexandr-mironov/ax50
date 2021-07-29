@@ -1,0 +1,21 @@
+Source-Makefile: feeds/open_applications/lxml/Makefile
+Package: lxml
+Version: 3.7.2-1							 
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends/host: libxml2/host libxslt/host
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: lxml 3.7.2
+Maintainer: 
+Source: lxml-3.7.2.tgz
+Type: ipkg
+Description: lxml 3.7.2
+http://www.lxml.de/
+
+@@
+
+

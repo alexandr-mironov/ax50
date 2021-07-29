@@ -1,0 +1,19 @@
+# HG changeset patch
+# Parent e56a1568ec460d4447ef1bad3d81d40210b9cdf4
+
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -33,6 +33,13 @@
+     help
+        Enable Puma7 conntrack MRPC between ATOM and ARM
+ 
++config MRPC_HANDSHAKE
++    tristate "handshake mrpc client"
++    depends on MRPC
++    default n
++    help
++       handshake mrpc client
++
+ config MRPC_PP_CLIENT
+     tristate "Packet Processor mrpc client"
+     depends on MRPC

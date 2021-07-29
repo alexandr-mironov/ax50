@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/open_debug_tools/io/Makefile
+Package: io
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Raw memory i/o utility
+Maintainer: 
+Source: 
+Type: ipkg
+Description: 	This tool can be used to access physical memory addresses from userspace.
+	It can be useful to access hardware for which no device driver exists!
+http://www.sleepie.demon.co.uk/linuxvme/io.c
+
+@@
+
+

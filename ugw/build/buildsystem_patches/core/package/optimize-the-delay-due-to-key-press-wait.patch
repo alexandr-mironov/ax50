@@ -1,0 +1,29 @@
+From c9e251ea5e43232678e8ab1463e2a9c09d58a72f Mon Sep 17 00:00:00 2001
+From: ashish8x <ashishx.s.kumar@intel.com>
+Date: Thu, 28 Jun 2018 15:50:30 +0530
+Subject: [PATCH] UGW_SW-26159: Remove the delay due to key press wait while
+ booting
+
+---
+ package/base-files/files/lib/preinit/30_failsafe_wait | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/package/base-files/files/lib/preinit/30_failsafe_wait b/package/base-files/files/lib/preinit/30_failsafe_wait
+index 3d69baf3a4..c8817625d2 100644
+--- a/package/base-files/files/lib/preinit/30_failsafe_wait
++++ b/package/base-files/files/lib/preinit/30_failsafe_wait
+@@ -33,7 +33,10 @@ fs_wait_for_key () {
+ 		while [ $timer -gt 0 ]; do
+ 			echo "$timer" >$keypress_sec
+ 			timer=$(($timer - 1))
+-			sleep 1
++			# Commented to reduce the BOOTTIME 
++			# The function is retained so that sequence of 
++			# boottime operation is not broken 
++			# sleep 1
+ 		done
+ 		lock -u $keypress_wait
+ 		rm -f $keypress_wait
+-- 
+2.11.0
+

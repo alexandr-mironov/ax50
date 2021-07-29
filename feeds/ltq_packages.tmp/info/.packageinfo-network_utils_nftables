@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/network/utils/nftables/Makefile
+Package: nftables
+Submenu: Firewall
+Version: 0.4+2015-04-09-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-nft-core +kmod-nft-nat +libnftnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: nftables packet filtering userspace utility
+Maintainer: Steven Barth <steven@midlink.org>
+Source: nftables-0.4+2015-04-09.tar.bz2
+License: GPL-2.0
+Type: ipkg
+Description: nftables packet filtering userspace utility
+http://netfilter.org/projects/nftables/
+Steven Barth <steven@midlink.org>
+@@
+
+

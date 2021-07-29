@@ -1,0 +1,21 @@
+Source-Makefile: package/feeds/open_debug_tools/popt/Makefile
+Package: libpopt
+Prereq-Check: 1
+Version: 1.7-5
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: libs
+Category: Libraries
+Title: A command line option parsing library
+Maintainer: 
+Source: popt-1.7.tar.gz
+Type: ipkg
+Description: A command line option parsing library
+http://rpm5.org/files/popt/
+
+@@
+
+

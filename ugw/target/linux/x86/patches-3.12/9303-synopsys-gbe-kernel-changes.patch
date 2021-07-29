@@ -1,0 +1,78 @@
+From eb0a452958675a86028cc2388f51c8e8d505c69c Mon Sep 17 00:00:00 2001
+From: Your Name <Your Email Address>
+Date: Mon, 8 Feb 2016 10:46:52 +0200
+Subject: [PATCH 1/4] synopsys-gbe-kernel-changes
+
+---
+ arch/x86/Kconfig                                   |   14 +
+ arch/x86/Makefile                                  |    2 +
+ arch/x86/avalanche_intd/Makefile                   |   18 +
+ arch/x86/avalanche_intd/avalanche_intd.c           |  271 +++
+ include/linux/avalanche/generic/_tistdtypes.h      |    1 +
+ include/linux/avalanche/generic/avalanche_intd.h   |  165 ++
+ include/linux/avalanche/generic/avalanche_pp_api.h |   53 +-
+ include/linux/avalanche/generic/pal.h              |   89 +
+ include/linux/avalanche/generic/pal_cppi41.h       |  572 ++++++
+ include/linux/avalanche/generic/pal_defs.h         |  265 +++
+ include/linux/avalanche/generic/pal_sys.h          |  230 +++
+ include/linux/avalanche/puma7/puma7.h              |  249 +++
+ include/linux/avalanche/puma7/puma7_cppi.h         |  103 +-
+ .../linux/avalanche/puma7/puma7_cppi_dsgqmgr_q.h   |  126 ++
+ .../linux/avalanche/puma7/puma7_cppi_gqmgr0_q.h    | 1842 +++++++++++++++++++
+ .../linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h    |  574 ++++++
+ .../linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h    |  574 ++++++
+ include/linux/avalanche/puma7/puma7_cppi_lqmgr_q.h |   95 +
+ include/linux/avalanche/puma7/puma7_cppi_prv.h     | 1891 +++++++++++++++++++-
+ .../linux/avalanche/puma7/puma7_cppi_usqmgr_q.h    |  574 ++++++
+ include/linux/avalanche/puma7/puma7_cru_ctrl.h     |  125 ++
+ include/linux/avalanche/puma7/puma7_interrupts.h   |  180 ++
+ include/linux/avalanche/puma7/puma7_pp.h           |  538 ++++++
+ .../linux/avalanche/puma7/synopsys_gbe_interface.h |   87 +
+ include/linux/netdevice.h                          |   41 +
+ include/linux/netip_mem_util.h                     |   36 +
+ include/linux/netip_subsystem.h                    |   25 +-
+ include/uapi/linux/mii.h                           |    3 +
+ 35 files changed, 9952 insertions(+), 99 deletions(-)
+ create mode 100755 arch/x86/avalanche_intd/Makefile
+ create mode 100644 arch/x86/avalanche_intd/avalanche_intd.c
+ create mode 100644 include/linux/avalanche/generic/avalanche_intd.h
+ create mode 100755 include/linux/avalanche/generic/pal.h
+ create mode 100644 include/linux/avalanche/generic/pal_cppi41.h
+ create mode 100755 include/linux/avalanche/generic/pal_defs.h
+ create mode 100755 include/linux/avalanche/generic/pal_sys.h
+ create mode 100755 include/linux/avalanche/puma7/puma7.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cppi_dsgqmgr_q.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cppi_gqmgr0_q.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cppi_gqmgr1_q.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cppi_gqmgr2_q.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cppi_lqmgr_q.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cppi_usqmgr_q.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_cru_ctrl.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_interrupts.h
+ create mode 100755 include/linux/avalanche/puma7/puma7_pp.h
+ create mode 100755 include/linux/avalanche/puma7/synopsys_gbe_interface.h
+ create mode 100644 include/linux/netip_mem_util.h
+
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -469,6 +469,20 @@ menu "Intel Puma7 LitePath Support"
+           and receive network packets.
+ endmenu
+ 
++config AVALANCHE_INTD_APPCPU
++	bool "avalance intd interrupt controller support for Intel CE2600 platform"
++        depends on X86_PUMA7 || X86_PUMA6
++	default y
++	---help---
++	  This is the avalance intd interrupt controller support for Intel CE2600 platform.
++
++config PAL_CPPI41_APPCPU
++	bool "cppi41 on appcpu support for Intel CE2600 platform"
++        depends on X86_PUMA7 || X86_PUMA6
++	default y
++	---help---
++	  This is the cppi41 on appcpu support for Intel CE2600 platform.
++
+ menu  "Intel PUMA7 AVALANCHE support"
+     config ARM_AVALANCHE_PDSP_PP
+         bool "TI Packet processor support for net-infra structure"

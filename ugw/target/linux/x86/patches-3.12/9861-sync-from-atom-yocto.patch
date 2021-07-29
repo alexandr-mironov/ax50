@@ -1,0 +1,66 @@
+# HG changeset patch
+# Parent 1afdb4f85a5a4f3916b12129a73dc9fa56b42da9
+
+diff --git a/include/linux/avalanche/generic/modphy_mrpc_api.h b/include/linux/avalanche/generic/modphy_mrpc_api.h
+--- a/include/linux/avalanche/generic/modphy_mrpc_api.h
++++ b/include/linux/avalanche/generic/modphy_mrpc_api.h
+@@ -82,6 +82,10 @@
+ #define MODPHY_OK   (0)
+ #define MODPHY_FAIL (-1)
+ 
++#define MODPHY_DEV_NAME  "/dev/modphy_drv"
++#define MODPHY_NAME "modphy_drv"
++
++
+ typedef enum modphyController_e
+ {
+     MODPHY_MOCA_CLIENT_ID,
+@@ -111,6 +115,21 @@ typedef struct modphyClient_t
+     ModphyLanes_e      laneId;
+ }ModphyClient_t;
+ 
++#define MODPHY_DRIVER_DEV_NAME                  MODPHY_DEV_NAME
++#define MODPHY_DRIVER_ID                        (0xBE)
++#define MODPHY_INIT                             _IOW(MODPHY_DRIVER_ID, 1, ModphyController_e)
++#define MODPHY_CFG                              _IOW(MODPHY_DRIVER_ID, 2, ModphyClient_t)
++#define MODPHY_DISABLE_TX                       _IOW(MODPHY_DRIVER_ID, 3, ModphyClient_t)
++#define MODPHY_RESET_K_ALIGN                    _IOW(MODPHY_DRIVER_ID, 4, ModphyController_e)
++#define MODPHY_RESET_LANE                       _IOW(MODPHY_DRIVER_ID, 5, ModphyController_e)
++#define MODPHY_GO2_FAST_RECOVERY                _IOW(MODPHY_DRIVER_ID, 6, ModphyClient_t)
++#define MODPHY_GO2_FULL_FUNCTIONAL              _IOW(MODPHY_DRIVER_ID, 7, ModphyClient_t)
++#define MODPHY_COMMON_LANE_RESET                _IOW(MODPHY_DRIVER_ID, 8, ModphyController_e)
++#define MODPHY_COMMON_LANE_INIT                 _IOW(MODPHY_DRIVER_ID, 9, ModphyController_e)
++#define MODPHY_SET_KGREGS                       _IOW(MODPHY_DRIVER_ID, 10, modphyClientKgregs_t)
++#define MODPHY_LANE_POWER_STATE_TRANSITION      _IOW(MODPHY_DRIVER_ID, 11, ModphyClientPowerGate_t)
++
++
+ /*********************************************************************************************************/
+ /*! \fn int modphy_init(ModphyController_e modphyClientId)
+  *********************************************************************************************************
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -1679,6 +1679,7 @@
+ }PAL_CPPI_PP_ACCUMULATOR_INTERRUPT_VECTORS_e;
+ 
+ #define PAL_CPPI41_GBE_ACC_INTV_NUM(devInstance, pri)       (PAL_CPPI_PP_SGMII0_LOW_RX_INTD0_ACC_INTV_NUM + ((devInstance)*2) + (pri))
++#define ARM_TX_COMPLETE_MAP_INTD1_VEC_TO_ACC_INT(irq)  (irq + PAL_CPPI_PP_ACCUMULATOR_INTD0_MAX_INTERRUPT_VECTORS)
+ 
+ typedef enum PAL_CPPI_PP_ACCUMULATOR_INTD1_INTERRUPT_VECTORS
+ {
+diff --git a/net/ti.Kconfig b/net/ti.Kconfig
+--- a/net/ti.Kconfig
++++ b/net/ti.Kconfig
+@@ -186,6 +186,12 @@
+ 
+ menu "TI Packet Processor Subsystem"
+ 
++config NPCPU_HARDCODED_OFFCHIP_INFO
++	bool "Hard coded address and size of NPCPU"
++	default n
++	help
++		Force Mapping NPCPU DDR in a hardcoded manner
++		Address and size will be hardcoded
+ 
+ config EXCLUDE_GMAC4
+         bool "Exclude GMAC4"

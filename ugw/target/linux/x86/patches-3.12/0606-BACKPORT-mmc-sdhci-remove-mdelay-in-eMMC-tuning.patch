@@ -1,0 +1,53 @@
+From 2d8a3a7fac825efc9b41b1c7af2e1dbc46bb9552 Mon Sep 17 00:00:00 2001
+From: Nick Sanders <nsanders@chromium.org>
+Date: Tue, 6 May 2014 18:52:38 -0700
+Subject: [PATCH 606/639] BACKPORT: mmc: sdhci: remove mdelay in eMMC tuning
+
+This patch removes an unneccesary 1ms mdelay in the HS200 tuning
+loop, called 40 times per retuning. Currently this causes a latency
+of >40ms on any emmc accesses triggering wake from runtime PM,
+which can occur for a significant portion of reads on a mostly idle system.
+
+The delay is left in place for SD Cards, which use
+MMC_SEND_TUNING_BLOCK rather than MMC_SEND_TUNING_BLOCK_HS200.
+I'm not able to find evidence that this is required for SD in the
+specs I have access to, however this delay has been present from
+initial checkin for SD so I have preserved the original behavior for
+compatibility.
+
+This has been verified to fix observed glitching on local audio
+playback and recording on apps with inbuilt assumptions on storage
+latency.
+
+Change-Id: I77e6cdcfea1cb9bb4248ec8c61084fb82a737296
+Signed-off-by: Nick Sanders <nsanders@chromium.org>
+Reviewed-by: Grant Grundler <grundler@chromium.org>
+Reviewed-by: Doug Anderson <dianders@chromium.org>
+Acked-by: Ulf Hansson <ulf.hansson@linaro.org>
+Signed-off-by: Chris Ball <chris@printf.net>
+(cherry picked from commit c2a54319b1289d8687bf1fb305257b35992d8a76)
+
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/host/sdhci.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
+index 277db32..5cf43a1 100644
+--- a/drivers/mmc/host/sdhci.c
++++ b/drivers/mmc/host/sdhci.c
+@@ -2002,7 +2002,10 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ 		ctrl = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+ 		tuning_loop_counter--;
+ 		timeout--;
+-		mdelay(1);
++
++		/* eMMC spec does not require a delay between tuning cycles */
++		if (opcode == MMC_SEND_TUNING_BLOCK)
++			mdelay(1);
+ 	} while (ctrl & SDHCI_CTRL_EXEC_TUNING);
+ 
+ 	/*
+-- 
+2.10.1
+

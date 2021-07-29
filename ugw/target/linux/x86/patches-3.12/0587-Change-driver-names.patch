@@ -1,0 +1,93 @@
+From 1fa823f28c61ad4c8d23874f05473659cd5ec976 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Thu, 26 Jan 2017 10:18:47 +0200
+Subject: [PATCH 587/639] Change driver names
+
+---
+ drivers/mrpc/handshake_client.c | 8 +++++---
+ drivers/mrpc/handshake_server.c | 8 +++++---
+ 2 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/mrpc/handshake_client.c b/drivers/mrpc/handshake_client.c
+index ebaeee3..14423de 100644
+--- a/drivers/mrpc/handshake_client.c
++++ b/drivers/mrpc/handshake_client.c
+@@ -54,6 +54,8 @@
+ #define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
+ #endif
+ 
++#define HANDSHAKE_CLIENT_NAME "handshake"
++
+ /* driver private database */
+ struct handshake_private {
+     struct platform_device *pdev;   /* platform device */
+@@ -132,7 +134,7 @@ static int handshake_mrpc_probe(struct platform_device *pdev)
+         return ret;
+     }
+ 
+-    priv->mrpc = mrpc_client_register(MRPC_RESERVED_ID_HANDSHAKE, "handshake");
++    priv->mrpc = mrpc_client_register(MRPC_RESERVED_ID_HANDSHAKE, HANDSHAKE_CLIENT_NAME);
+     if (!priv->mrpc) {
+         pr_err("failed to register handshake");
+         ret = -ENODEV;
+@@ -170,7 +172,7 @@ static int handshake_mrpc_remove(struct platform_device *pdev)
+ 
+ static struct platform_driver handshake_driver = {
+     .driver = {
+-        .name   = "handshake",
++        .name   = HANDSHAKE_CLIENT_NAME,
+     },
+     .probe = handshake_mrpc_probe,
+     .remove = handshake_mrpc_remove,
+@@ -188,7 +190,7 @@ static int __init handshake_mrpc_init(void)
+         return ret;
+     }
+ 
+-    handshake_device = platform_device_register_simple("handshake", -1, NULL, 0);
++    handshake_device = platform_device_register_simple(HANDSHAKE_CLIENT_NAME, -1, NULL, 0);
+     if (IS_ERR(handshake_device)) {
+         ret = PTR_ERR(handshake_device);
+         pr_err("Failed to register handshake platform device: %d\n", ret);
+diff --git a/drivers/mrpc/handshake_server.c b/drivers/mrpc/handshake_server.c
+index 052cbe9..6103cea 100644
+--- a/drivers/mrpc/handshake_server.c
++++ b/drivers/mrpc/handshake_server.c
+@@ -55,6 +55,8 @@
+ #define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
+ #endif
+ 
++#define HANDSHAKE_SERVER_NAME "handshake_server"
++
+ /* driver private database */
+ struct handshake_private {
+     struct platform_device *pdev;   /* platform device */
+@@ -177,7 +179,7 @@ static int handshake_probe(struct platform_device *pdev)
+         return ret;
+     }
+ 
+-    priv->mrpc = mrpc_server_register(MRPC_RESERVED_ID_HANDSHAKE, "handshake",
++    priv->mrpc = mrpc_server_register(MRPC_RESERVED_ID_HANDSHAKE, HANDSHAKE_SERVER_NAME,
+                                     handshake_server_procs,
+                                     ARRAY_SIZE(handshake_server_procs));
+     if (!priv->mrpc) {
+@@ -215,7 +217,7 @@ static int handshake_remove(struct platform_device *pdev)
+ 
+ static struct platform_driver handshake_driver = {
+     .driver = {
+-        .name   = "handshake",
++        .name   = HANDSHAKE_SERVER_NAME,
+     },
+     .probe = handshake_probe,
+     .remove = handshake_remove,
+@@ -233,7 +235,7 @@ static int __init handshake_server_init(void)
+         return ret;
+     }
+ 
+-    handshake_device = platform_device_register_simple("handshake", -1, NULL, 0);
++    handshake_device = platform_device_register_simple(HANDSHAKE_SERVER_NAME, -1, NULL, 0);
+     if (IS_ERR(handshake_device)) {
+         pr_err("Failed to register handshake platform device\n");
+         platform_driver_unregister(&handshake_driver);
+-- 
+2.10.1
+

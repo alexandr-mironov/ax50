@@ -1,0 +1,24 @@
+diff -Npur hostapd-2.6-orig/src/drivers/driver_nl80211_event.c hostapd-2.6/src/drivers/driver_nl80211_event.c
+--- hostapd-2.6-orig/src/drivers/driver_nl80211_event.c	2017-05-17 12:09:44.000000000 +0300
++++ hostapd-2.6/src/drivers/driver_nl80211_event.c	2017-07-05 10:51:22.000000000 +0300
+@@ -245,6 +245,20 @@ static void mlme_event_assoc(struct wpa_
+ 	}
+ 
+ 	drv->associated = 1;
++
++        if (drv->ignore_next_local_deauth == 1){
++            /*
++             * In case the flag to ignore deauth event triggered by
++             * local deauthentication was not reset (because kernel did not
++             * actually send the deauth event) reset ignore_next_local_deauth 
++             * flag 
++             */
++	    wpa_printf(MSG_DEBUG,
++                    "nl80211: Resetting flag that prevents raising deauth event"
++                    " triggered by local deauth");
++            drv->ignore_next_local_deauth = 0;
++        }
++
+ 	os_memcpy(drv->bssid, mgmt->sa, ETH_ALEN);
+ 	os_memcpy(drv->prev_bssid, mgmt->sa, ETH_ALEN);
+ 

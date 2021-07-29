@@ -1,0 +1,99 @@
+From 7a1977baf0e62207717bb28a5bba47089ad2a396 Mon Sep 17 00:00:00 2001
+From: akomisax <aaronx.komisar@intel.com>
+Date: Thu, 27 Jul 2017 16:42:13 +0300
+Subject: [PATCH] mac80211: Fix possible sband related NULL pointer
+
+this commit is taken from upstream kernel -
+commit 21a8e9dd52 - Thu Apr 27, 2017.
+we took the related parts for our use.
+this is the commit message:
+"Existing API 'ieee80211_get_sdata_band' returns default 2 GHz band even
+if the channel context configuration is NULL. This crashes for chipsets
+which support 5 Ghz alone when it tries to access members of 'sband'.
+Channel context configuration can be NULL in multivif case and when
+channel switch is in progress (or) when it fails."
+
+the fix is basically to check that sband is not NULL.
+
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ net/mac80211/cfg.c  | 18 ++++++++++++++----
+ net/mac80211/mlme.c |  5 +++++
+ 2 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
+index 285882d..40d26c1 100644
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -400,8 +400,10 @@ void sta_set_rate_info_tx(struct sta_info *sta,
+ 
+ 		sband = sta->local->hw.wiphy->bands[
+ 				ieee80211_get_sdata_band(sta->sdata)];
+-		brate = sband->bitrates[rate->idx].bitrate;
+-		rinfo->legacy = DIV_ROUND_UP(brate, 1 << shift);
++                if (sband) {
++		    brate = sband->bitrates[rate->idx].bitrate;
++		    rinfo->legacy = DIV_ROUND_UP(brate, 1 << shift);
++                }
+ 	}
+ 	if (rate->flags & IEEE80211_TX_RC_40_MHZ_WIDTH)
+ 		rinfo->flags |= RATE_INFO_FLAGS_40_MHZ_WIDTH;
+@@ -431,8 +433,10 @@ void sta_set_rate_info_rx(struct sta_info *sta, struct rate_info *rinfo)
+ 
+ 		sband = sta->local->hw.wiphy->bands[
+ 				ieee80211_get_sdata_band(sta->sdata)];
+-		brate = sband->bitrates[sta->last_rx_rate_idx].bitrate;
+-		rinfo->legacy = DIV_ROUND_UP(brate, 1 << shift);
++                if (sband) {
++		    brate = sband->bitrates[sta->last_rx_rate_idx].bitrate;
++		    rinfo->legacy = DIV_ROUND_UP(brate, 1 << shift);
++                }
+ 	}
+ 
+ 	if (sta->last_rx_rate_flag & RX_FLAG_40MHZ)
+@@ -1217,6 +1221,8 @@ static int sta_apply_parameters(struct ieee80211_local *local,
+ 	u32 mask, set;
+ 
+ 	sband = local->hw.wiphy->bands[band];
++        if (!sband)
++            return -EINVAL;
+ 
+ 	mask = params->sta_flags_mask;
+ 	set = params->sta_flags_set;
+@@ -1933,6 +1939,7 @@ static int ieee80211_change_bss(struct wiphy *wiphy,
+ 				struct bss_parameters *params)
+ {
+ 	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
++        struct ieee80211_supported_band *sband;
+ 	enum ieee80211_band band;
+ 	u32 changed = 0;
+ 
+@@ -1940,6 +1947,9 @@ static int ieee80211_change_bss(struct wiphy *wiphy,
+ 		return -ENOENT;
+ 
+ 	band = ieee80211_get_sdata_band(sdata);
++        sband = wiphy->bands[band];
++        if (!sband)
++            return -EINVAL;
+ 
+ 	if (params->use_cts_prot >= 0) {
+ 		sdata->vif.bss_conf.use_cts_prot = params->use_cts_prot;
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index d6d4ad2..34a8c5f3 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -2706,6 +2706,11 @@ static bool ieee80211_assoc_success(struct ieee80211_sub_if_data *sdata,
+ 	}
+ 
+ 	sband = local->hw.wiphy->bands[ieee80211_get_sdata_band(sdata)];
++        if (!sband) {
++            mutex_unlock(&sdata->local->sta_mtx);
++            ret = false;
++            goto out;
++        }
+ 
+ 	/* Set up internal HT/VHT capabilities */
+ 	if (elems.ht_cap_elem && !(ifmgd->flags & IEEE80211_STA_DISABLE_HT))
+-- 
+2.10.1
+

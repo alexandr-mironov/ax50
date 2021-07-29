@@ -1,0 +1,18 @@
+Source-Makefile: package/feeds/ltq_packages/rssileds/Makefile
+Package: rssileds
+Version: 0.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libiwinfo
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: RSSI real-time LED indicator
+Maintainer: Daniel Golle <dgolle@allnet.de>
+Source: 
+Type: ipkg
+Description:   A small process written in C to update the signal-strength indicator LEDs
+Daniel Golle <dgolle@allnet.de>
+@@
+
+

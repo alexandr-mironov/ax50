@@ -1,0 +1,90 @@
+From e8fe1d59c4e273af3431e2ccb02b53468700006e Mon Sep 17 00:00:00 2001
+From: Utkarsh Patel <utkarsh.h.patel@intel.com>
+Date: Tue, 22 Nov 2016 10:21:28 -0800
+Subject: [PATCH 525/639] drivers: modified cougarmountain codename refrence
+
+Modified cougarmountian codename refrences with puma7 ATOMOSSW-394
+
+Signed-off-by: Utkarsh Patel <utkarsh.h.patel@intel.com>
+---
+ drivers/acpi/acpi_lpss.c   | 2 +-
+ drivers/ata/ata_piix.c     | 2 +-
+ drivers/mfd/lpc_ich.c      | 8 ++++----
+ drivers/misc/mei/pci-txe.c | 2 +-
+ 4 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/acpi/acpi_lpss.c b/drivers/acpi/acpi_lpss.c
+index efbd8aa..4b5a6609 100644
+--- a/drivers/acpi/acpi_lpss.c
++++ b/drivers/acpi/acpi_lpss.c
+@@ -201,7 +201,7 @@ static const struct acpi_device_id acpi_lpss_device_ids[] = {
+ 	{ "8086228E", (unsigned long)&byt_spi_dev_desc },
+ 	{ "80862288", }, /* CHT PWM */
+ 
+-	/* Cougar Mountain LPSS devices */
++	/* Puma7 LPSS devices */
+ 	{ "80862BC1", (unsigned long)&cht_i2c_dev_desc },
+ 	{ "80862B8A", (unsigned long)&byt_uart_dev_desc },
+ 	{ "80862B86", (unsigned long)&lpss_dma_desc },
+diff --git a/drivers/ata/ata_piix.c b/drivers/ata/ata_piix.c
+index 47db911..f699bb4 100644
+--- a/drivers/ata/ata_piix.c
++++ b/drivers/ata/ata_piix.c
+@@ -348,7 +348,7 @@ static const struct pci_device_id piix_pci_tbl[] = {
+ 	{ 0x8086, 0x8c80, PCI_ANY_ID, PCI_ANY_ID, 0, 0, ich8_sata_snb },
+ 	/* SATA Controller IDE (9 Series) */
+ 	{ 0x8086, 0x8c81, PCI_ANY_ID, PCI_ANY_ID, 0, 0, ich8_sata_snb },
+-	/* SATA Controller IDE (Cougar Mountain).
++	/* SATA Controller IDE (Puma7).
+ 	 * Attach iff the controller is in IDE mode. */
+ 	{ 0x8086, 0x2ba0, PCI_ANY_ID, PCI_ANY_ID,
+ 	  PCI_CLASS_STORAGE_IDE << 8, 0xffff00, ich8_2port_sata },
+diff --git a/drivers/mfd/lpc_ich.c b/drivers/mfd/lpc_ich.c
+index b59ec01..cd4193a 100644
+--- a/drivers/mfd/lpc_ich.c
++++ b/drivers/mfd/lpc_ich.c
+@@ -218,7 +218,7 @@ enum lpc_chipsets {
+ 	LPC_COLETO,	/* Coleto Creek */
+ 	LPC_WPT_LP,	/* Wildcat Point-LP */
+ 	LPC_CHERRYTRAIL,/* Cherry Trail SoC */
+-	LPC_COUGARMOUNTAIN,/* Cougar Mountain SoC */
++	LPC_PUMA7,/* Puma7 SoC */
+ };
+ 
+ static struct lpc_ich_info lpc_chipset_info[] = {
+@@ -523,8 +523,8 @@ static struct lpc_ich_info lpc_chipset_info[] = {
+ 		.name = "Cherry Trail SoC",
+ 		.iTCO_version = 3,
+ 	},
+-	[LPC_COUGARMOUNTAIN] = {
+-		.name = "Cougar Mountain SoC",
++	[LPC_PUMA7] = {
++		.name = "Puma7 SoC",
+ 		.iTCO_version = 3,
+ 	},
+ };
+@@ -754,7 +754,7 @@ static const struct pci_device_id lpc_ich_ids[] = {
+ 	{ PCI_VDEVICE(INTEL, 0x9cc7), LPC_WPT_LP},
+ 	{ PCI_VDEVICE(INTEL, 0x9cc9), LPC_WPT_LP},
+ 	{ PCI_VDEVICE(INTEL, 0x229c), LPC_CHERRYTRAIL},
+-	{ PCI_VDEVICE(INTEL, 0x2b9c), LPC_COUGARMOUNTAIN},
++	{ PCI_VDEVICE(INTEL, 0x2b9c), LPC_PUMA7},
+ 	{ 0, },			/* End of list */
+ };
+ MODULE_DEVICE_TABLE(pci, lpc_ich_ids);
+diff --git a/drivers/misc/mei/pci-txe.c b/drivers/misc/mei/pci-txe.c
+index 2192246..b584a4b 100644
+--- a/drivers/misc/mei/pci-txe.c
++++ b/drivers/misc/mei/pci-txe.c
+@@ -38,7 +38,7 @@
+ static const struct pci_device_id mei_txe_pci_tbl[] = {
+ 	{MEI_PCI_DEVICE(0x0F18, mei_txe_cfg)}, /* Baytrail */
+ 	{MEI_PCI_DEVICE(0x2298, mei_txe_cfg)}, /* Cherrytrail */
+-	{MEI_PCI_DEVICE(0x2B98, mei_txe_cfg)}, /* Cougar mountain */
++	{MEI_PCI_DEVICE(0x2B98, mei_txe_cfg)}, /* Puma7 */
+ 	{0, }
+ };
+ MODULE_DEVICE_TABLE(pci, mei_txe_pci_tbl);
+-- 
+2.10.1
+

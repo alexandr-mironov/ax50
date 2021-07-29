@@ -1,0 +1,55 @@
+From a4b7b2cf75c966421e561617b108ae4ac84fef99 Mon Sep 17 00:00:00 2001
+From: opeyrik <oleg.peyrik@intel.com>
+Date: Wed, 28 Dec 2016 14:20:11 +0200
+Subject: [PATCH 555/639] PUMALANSW-20 - LAG support fixes.
+
+---
+ drivers/net/bonding/bond_main.c  | 4 ++++
+ drivers/net/bonding/bond_sysfs.c | 2 --
+ drivers/net/bonding/bonding.h    | 2 +-
+ 3 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/bonding/bond_main.c b/drivers/net/bonding/bond_main.c
+index 8c724c3..7b0165d 100644
+--- a/drivers/net/bonding/bond_main.c
++++ b/drivers/net/bonding/bond_main.c
+@@ -1414,6 +1414,10 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
+ 
+ 	sysfs_attr_init(&new_slave->man_linkprop.attr);
+ 	new_slave->man_linkprop.attr.name = kzalloc(strlen(slave_dev->name) + sizeof("_man_linkprop") + 1, GFP_KERNEL);
++	if (!new_slave->man_linkprop.attr.name) {
++		res = -ENOMEM;
++		goto err_undo_flags;
++	}
+ 	sprintf(new_slave->man_linkprop.attr.name, "%s_man_linkprop", slave_dev->name);
+ 
+ 	new_slave->man_linkprop.attr.mode = 0644;
+diff --git a/drivers/net/bonding/bond_sysfs.c b/drivers/net/bonding/bond_sysfs.c
+index 5ef4ac8..25a15dd 100644
+--- a/drivers/net/bonding/bond_sysfs.c
++++ b/drivers/net/bonding/bond_sysfs.c
+@@ -1842,8 +1842,6 @@ ssize_t bonding_show_man_linkprop(struct device *dev, struct device_attribute *a
+ {
+ 	struct slave * slave;
+ 
+-	printk(KERN_ERR"bonding_show_man_linkprop\n");
+-
+ 	slave = container_of(attr, struct slave, man_linkprop);
+ 
+ 	return scnprintf(buf, (ssize_t)PAGE_SIZE, "%d %d %d\n", slave->man_link, slave->man_speed, slave->man_duplex);
+diff --git a/drivers/net/bonding/bonding.h b/drivers/net/bonding/bonding.h
+index 36f6689..f1c97b9 100644
+--- a/drivers/net/bonding/bonding.h
++++ b/drivers/net/bonding/bonding.h
+@@ -217,7 +217,7 @@ struct slave {
+ 	struct netpoll *np;
+ #endif
+ 
+-	struct device_attribute man_linkprop;
++	struct device_attribute man_linkprop; /* For manual link status override */
+ 
+ 	int man_speed;
+ 	int man_duplex;
+-- 
+2.10.1
+

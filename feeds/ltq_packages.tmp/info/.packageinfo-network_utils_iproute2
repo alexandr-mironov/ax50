@@ -1,0 +1,118 @@
+Source-Makefile: feeds/ltq_packages/network/utils/iproute2/Makefile
+Package: ip
+Submenu: Routing and Redirection
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl-tiny
+Conflicts: ip-full
+Menu-Depends: 
+Provides: 
+Build-Variant: tiny
+Section: net
+Category: Network
+Title: Routing control utility (Minimal)
+Maintainer: Russell Senior <russell@personaltelco.net>
+Source: iproute2-4.0.0.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: Routing control utility (Minimal)
+http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
+Russell Senior <russell@personaltelco.net>
+@@
+
+Package: ip-full
+Submenu: Routing and Redirection
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: full
+Section: net
+Category: Network
+Title: Routing control utility (Full)
+Maintainer: Russell Senior <russell@personaltelco.net>
+Source: iproute2-4.0.0.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: Routing control utility (Full)
+http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
+Russell Senior <russell@personaltelco.net>
+@@
+
+Package: tc
+Submenu: Routing and Redirection
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-sched-core
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Traffic control utility
+Maintainer: Russell Senior <russell@personaltelco.net>
+Source: iproute2-4.0.0.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: Traffic control utility
+http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
+Russell Senior <russell@personaltelco.net>
+@@
+
+Package: genl
+Submenu: Routing and Redirection
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: General netlink utility frontend
+Maintainer: Russell Senior <russell@personaltelco.net>
+Source: iproute2-4.0.0.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: General netlink utility frontend
+http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
+Russell Senior <russell@personaltelco.net>
+@@
+
+Package: ip-bridge
+Submenu: Routing and Redirection
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Bridge configuration utility from iproute2
+Maintainer: Russell Senior <russell@personaltelco.net>
+Source: iproute2-4.0.0.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: Bridge configuration utility from iproute2
+http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
+Russell Senior <russell@personaltelco.net>
+@@
+
+Package: ss
+Submenu: Routing and Redirection
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Socket statistics utility
+Maintainer: Russell Senior <russell@personaltelco.net>
+Source: iproute2-4.0.0.tar.xz
+License: GPL-2.0
+Type: ipkg
+Description: Socket statistics utility
+http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
+Russell Senior <russell@personaltelco.net>
+@@
+
+

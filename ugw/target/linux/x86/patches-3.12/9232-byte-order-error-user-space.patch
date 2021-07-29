@@ -1,0 +1,20 @@
+# HG changeset patch
+# Parent 7fecac6f5b77ba7db54179cc0d3196bb34699664
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -92,13 +92,13 @@
+ #include <linux/avalanche/puma7/puma7_defs.h>
+ #include <linux/avalanche/puma7/puma7_cppi.h>
+ #include <linux/avalanche/puma7/puma7_pp.h>
++#include <asm/byteorder.h>
+ #else
+ #include "_tistdtypes.h"
+ #endif
+ #endif
+ 
+ #include <linux/ioctl.h>
+-#include <asm/byteorder.h>
+ /**************************************************************************
+  ****************************** Limit Definitions *************************
+  **************************************************************************/

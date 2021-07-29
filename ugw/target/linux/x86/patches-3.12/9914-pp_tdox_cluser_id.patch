@@ -1,0 +1,37 @@
+# HG changeset patch
+# Parent 9294d9c9178027b789647286478e37ea730df49e
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1380,6 +1380,7 @@ typedef struct // former TI_PP_SESSION
+     Uint8                   priority;
+ #if PUMA7_OR_NEWER_SOC_TYPE
+     Uint8                   phy_cluster_id;
++    Uint8                   tdox_cluster_id;
+ #else
+     Uint8                   cluster;
+ #endif
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -609,6 +609,19 @@ PP_QOS_MGR_RET_e pp_qos_get_cluster_by_i
+  *  Returns PP_QOS_RC_SUCCESS if pass.
+  */
+ PP_QOS_MGR_RET_e pp_qos_get_cluster_stats(Uint8 phy_cluster_id, PP_QOS_MIB_STATS_t *cluster_stats);
++
++/*
++ *  pp_qos_get_tdox_cluster_by_cluster_id - check for SP flow
++ *  configuration by given cluster id.
++ *  @cluster_id: Cluster ID
++ *  @tdox_cluster_id: Pointer to return the TDOX Cluster ID
++ *
++ *  Returns PP_QOS_RC_SUCCESS if pass
++ *   a. Cluster's scheduling is SP
++ *   b. Cluster's scheduling is WFQ and the egress queue is an input of an SP cluster with more than 1 input queue.
++ */
++PP_QOS_MGR_RET_e pp_qos_get_tdox_cluster_by_cluster_id(uint8_t cluster_id, uint8_t *tdox_cluster_id);
++
+ /**
+  *  pp_qos_get_cluster_by_queue_id - Get the cluster
+  *  configuration by a given queue id

@@ -1,0 +1,44 @@
+From ed4f15fdceba95a6dbece4ce8a0dac86b5970072 Mon Sep 17 00:00:00 2001
+From: Kiran Antony Babu <kiran.a.babu@intel.com>
+Date: Thu, 1 Dec 2016 19:33:27 -0700
+Subject: [PATCH 539/639] Title: P7 MoCA 2.0 - Support PP on Atom Configuration
+ for MoCA
+
+Owner: kababu
+Issue: CGMPMSW-415
+System Impact: MoCA doesn't come up in PP on Atom builds
+Description: Fixes made
+a. Add dependencies for MoCA Network driver ported to Atom
+Attestation: I confirm that I understand the authorized content and license
+obligations listed in the IP Plan(s) for the SDK release and I have delivered
+content in accordance with those IP Plan(s): Yes
+Approvers: Jesus Menchaca, Shu Zhang, Emergi Idan
+CodeReview: https://gts.lantiq.com/projects/SW_ATOM/repos/kernel/pull-requests/149/diff
+---
+ include/linux/avalanche/puma7/puma7.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/include/linux/avalanche/puma7/puma7.h b/include/linux/avalanche/puma7/puma7.h
+index eb5b027..8760295 100644
+--- a/include/linux/avalanche/puma7/puma7.h
++++ b/include/linux/avalanche/puma7/puma7.h
+@@ -83,6 +83,7 @@
+ #define AVALANCHE_GBE3_ADDR                         ((0xF030C000))
+ #define AVALANCHE_GBE4_ADDR                         ((0xF0310000))
+ #define AVALANCHE_GBE5_ADDR                         ((0xF0314000))
++#define AVALANCHE_MOCA_ADDR                         ((0xFF800000))
+ 
+ #define AVALANCHE_PFI_REGS                          (IO_ADDRESS(0xF0210000))
+ #define AVALANCHE_PFI_WIN_REGS                      (IO_ADDRESS(0xF0210400))
+@@ -97,6 +98,8 @@
+ #define AVALANCHE_GBE_INT_CTRL_1                    (IO_ADDRESS(0xF031A400))
+ #define AVALANCHE_PHY_SLAVE                         (IO_ADDRESS(0xF0500000))
+ 
++#define AVALANCHE_MOCA                              (IO_ADDRESS(AVALANCHE_MOCA_ADDR))
++
+ #define AVALANCHE_CRU_BASE                          (IO_ADDRESS(0xF00D0000))
+ /**
+  * Interrupts Distributor 0 (INTD0) base address, has 32 ip
+-- 
+2.10.1
+

@@ -1,0 +1,61 @@
+From a7643e93fbccda6e8ac4ac2d904ea3675274a8f9 Mon Sep 17 00:00:00 2001
+From: Denis <dennis.begun@intel.com>
+Date: Sun, 26 Feb 2017 14:28:18 +0200
+Subject: [PATCH 616/639] PKTPROSSW-289: Added support for adaptive session
+ deletion based on number of open sessions
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h |  4 ++--
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 14 +++++++++-----
+ 2 files changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index 5042020..5878559 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -155,8 +155,8 @@ typedef enum
+     PDSP_SESSION_CACHE_SESSION_CMD  = 0x83,
+     PDSP_SESSION_CACHE_FLUSH_ALL    = 0x84,
+     PDSP_SESSION_CACHE_SESSION_TIMEOUT  = 0x85,
+-    PDSP_SESSION_CACHE_DELETION_THRESHOLDS_SET = 0x86,
+-    PDSP_SESSION_CACHE_DELETION_THRESHOLDS_ENABLE = 0x87,
++    PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_SET = 0x86,
++    PDSP_SESSION_CACHE_TIMEOUT_THRESHOLDS_ENABLE = 0x87,
+ 
+     // tDox Commands
+     PDSP_TDOX_CONFIGURE_PARAMS          = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 94c5047..21cf238 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -764,9 +764,13 @@ typedef enum
+ #endif
+ 
+ /* Session cache deletion thresholds */
+-#define SESSION_CACHE_DEFAULT_DEL_THRESHOLDS_ENABLE 1
+-#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_LOW     100
+-#define SESSION_CACHE_DEFAULT_DEL_THRESHOLD_HIGH    1000
++#ifdef CONFIG_SESS_TIMEOUT_BY_THRESH
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  1
++#else
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  0
++#endif
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_LOW     100
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_HIGH    1000
+ 
+ typedef enum
+ {
+@@ -1871,8 +1875,8 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_set_classification_mode(PP_CLASSIFICAT
+ extern AVALANCHE_PP_RET_e    avalanche_pp_set_support_bp_frag(Uint8 EnDis);
+ extern PP_CLASSIFICATION_MODE_e avalanche_pp_get_classification_mode( void );
+ 
+-extern AVALANCHE_PP_RET_e avalanche_pp_cache_del_thresholds_enable(Uint8);
+-extern AVALANCHE_PP_RET_e avalanche_pp_cache_del_thresholds_set(Uint16, Uint16);
++extern AVALANCHE_PP_RET_e avalanche_pp_sess_timeout_thresholds_enable(Uint8);
++extern AVALANCHE_PP_RET_e avalanche_pp_sess_timeout_thresholds_set(Uint16, Uint16);
+ #endif
+ 
+ /* MISC APIs */
+-- 
+2.10.1
+

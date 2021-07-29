@@ -1,0 +1,20 @@
+Source-Makefile: feeds/open_applications/ugw-qos-scripts/Makefile
+Package: ugw-qos-scripts
+Version: 1.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Base system
+Title: UGW QoS scripts
+Maintainer: 
+Source: 
+Type: ipkg
+Description:  A set of scripts that abstract QoS configuration into a simple 
+ configuration file supporting stanzas that specify any number of QoS 
+ entries.
+
+@@
+
+

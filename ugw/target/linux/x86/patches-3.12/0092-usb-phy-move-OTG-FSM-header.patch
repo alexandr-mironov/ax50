@@ -1,0 +1,53 @@
+From e3543e45f291c70a72dc58b6caa54288ea4d8255 Mon Sep 17 00:00:00 2001
+From: Anton Tikhomirov <av.tikhomirov@samsung.com>
+Date: Tue, 26 Nov 2013 11:47:02 +0900
+Subject: [PATCH 092/639] usb: phy: move OTG FSM header
+
+Other USB drivers may want to use OTG final state machine
+implementation, so make this header available for them.
+
+Signed-off-by: Anton Tikhomirov <av.tikhomirov@samsung.com>
+Signed-off-by: Felipe Balbi <balbi@ti.com>
+(cherry picked from commit 5653668c9585441926dd2575791f6b5bb84bb254)
+Signed-off-by: Maladau Mou <maladau.mou@intel.com>
+---
+ drivers/usb/phy/phy-fsl-usb.h                                | 2 +-
+ drivers/usb/phy/phy-fsm-usb.c                                | 3 +--
+ drivers/usb/phy/phy-fsm-usb.h => include/linux/usb/otg-fsm.h | 0
+ 3 files changed, 2 insertions(+), 3 deletions(-)
+ rename drivers/usb/phy/phy-fsm-usb.h => include/linux/usb/otg-fsm.h (100%)
+
+diff --git a/drivers/usb/phy/phy-fsl-usb.h b/drivers/usb/phy/phy-fsl-usb.h
+index e1859b8..4e05d58 100644
+--- a/drivers/usb/phy/phy-fsl-usb.h
++++ b/drivers/usb/phy/phy-fsl-usb.h
+@@ -15,7 +15,7 @@
+  * 675 Mass Ave, Cambridge, MA 02139, USA.
+  */
+ 
+-#include "phy-fsm-usb.h"
++#include <linux/usb/otg-fsm.h>
+ #include <linux/usb/otg.h>
+ #include <linux/ioctl.h>
+ 
+diff --git a/drivers/usb/phy/phy-fsm-usb.c b/drivers/usb/phy/phy-fsm-usb.c
+index 89eebd3..8cf0059 100644
+--- a/drivers/usb/phy/phy-fsm-usb.c
++++ b/drivers/usb/phy/phy-fsm-usb.c
+@@ -28,8 +28,7 @@
+ #include <linux/usb.h>
+ #include <linux/usb/gadget.h>
+ #include <linux/usb/otg.h>
+-
+-#include "phy-fsm-usb.h"
++#include <linux/usb/otg-fsm.h>
+ 
+ /* Change USB protocol when there is a protocol change */
+ static int otg_set_protocol(struct otg_fsm *fsm, int protocol)
+diff --git a/drivers/usb/phy/phy-fsm-usb.h b/include/linux/usb/otg-fsm.h
+similarity index 100%
+rename from drivers/usb/phy/phy-fsm-usb.h
+rename to include/linux/usb/otg-fsm.h
+-- 
+2.10.1
+

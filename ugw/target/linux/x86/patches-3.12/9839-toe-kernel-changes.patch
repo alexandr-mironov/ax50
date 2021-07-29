@@ -1,0 +1,32 @@
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2947,6 +2947,9 @@
+ 	int rc = -ENOMEM;
+ 	int ret=0;
+ 
++	if (toe_dev_queue_xmit_hook && toe_dev_queue_xmit_hook(skb))
++		dev = skb->dev;
++
+ #ifdef CONFIG_TI_META_DATA_CONSOLE_DUMP
+     if (skb->ti_meta_info != 0x0)
+         printk ("Core Networking Device Layer: %s SKB 0x%p has META Data 0x%x\n", skb->dev->name, skb, skb->ti_meta_info);
+@@ -2968,9 +2971,6 @@
+ 	ppa_update_pp_add_fn(skb);
+ #endif
+ 
+-	if (toe_dev_queue_xmit_hook && toe_dev_queue_xmit_hook(skb))
+-		dev = skb->dev;
+-
+ 	skb_reset_mac_header(skb);
+ 
+ 	/* Disable soft irqs for various locks below. Also
+--- a/net/core/ti_dev.c
++++ b/net/core/ti_dev.c
+@@ -347,6 +347,7 @@ int ti_deregister_egress_hook_handler (s
+ 
+ EXPORT_SYMBOL(ti_register_egress_hook_handler); 
+ EXPORT_SYMBOL(ti_deregister_egress_hook_handler);
++EXPORT_SYMBOL(ti_egress_hook_handler);
+ EXPORT_SYMBOL(ti_protocol_handler); 
+ 
+ #endif /* CONFIG_TI_EGRESS_HOOK */

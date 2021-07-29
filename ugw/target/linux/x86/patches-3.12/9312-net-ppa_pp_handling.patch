@@ -1,0 +1,27 @@
+# HG changeset patch
+# Parent 4e353101d3bb0dda01fd48bc9cd4974489c172f1
+# handling of PPA add with PP to avoid conflict in session learning
+
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2835,6 +2835,8 @@ int dev_loopback_xmit(struct sk_buff *sk
+ }
+ EXPORT_SYMBOL(dev_loopback_xmit);
+ 
++extern void ppa_update_pp_add_fn(struct sk_buff *skb);
++
+ static int (*toe_receive_skb_hook)(struct sk_buff *skb) = NULL;
+ static int (*toe_dev_queue_xmit_hook)(struct sk_buff *skb) = NULL;
+ 
+@@ -2944,6 +2946,10 @@ int dev_queue_xmit(struct sk_buff *skb)
+        return rc;
+ #endif /* CONFIG_TI_DOCSIS_EGRESS_HOOK */
+ 
++#ifdef CONFIG_PPA_PUMA7
++	ppa_update_pp_add_fn(skb);
++#endif
++
+ 	if (toe_dev_queue_xmit_hook && toe_dev_queue_xmit_hook(skb))
+ 		dev = skb->dev;
+ 

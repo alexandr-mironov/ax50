@@ -1,0 +1,52 @@
+From 9f054a5750e7983b5e3f24761f303da36aafcd91 Mon Sep 17 00:00:00 2001
+From: grishche <a.grishchenko@intel.com>
+Date: Tue, 6 Jun 2017 15:05:41 +0300
+Subject: [PATCH 01/20] save_last_association_response_frame
+
+---
+ include/net/cfg80211.h | 5 +++++
+ net/wireless/nl80211.c | 5 +++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index cb71091..0e186db 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -735,6 +735,9 @@ enum station_parameters_apply_mask {
+  * @capability: station capability
+  * @ext_capab: extended capabilities of the station
+  * @ext_capab_len: number of extended capabilities
++ * @resp: last association response frame
++ *	(or NULL for no change)
++ * @resp_len: length of last association response
+  */
+ struct station_parameters {
+ 	const u8 *supported_rates;
+@@ -754,6 +757,8 @@ struct station_parameters {
+ 	u16 capability;
+ 	const u8 *ext_capab;
+ 	u8 ext_capab_len;
++	u8 *resp;
++	size_t resp_len;
+ };
+ 
+ /**
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 79c3e64..b22b927 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -4054,6 +4054,11 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+ 	params.listen_interval =
+ 		nla_get_u16(info->attrs[NL80211_ATTR_STA_LISTEN_INTERVAL]);
+ 
++	if (info->attrs[NL80211_ATTR_FRAME]) {
++		params.resp = nla_data(info->attrs[NL80211_ATTR_FRAME]);
++		params.resp_len = nla_len(info->attrs[NL80211_ATTR_FRAME]);
++	}
++
+ 	if (info->attrs[NL80211_ATTR_PEER_AID])
+ 		params.aid = nla_get_u16(info->attrs[NL80211_ATTR_PEER_AID]);
+ 	else
+-- 
+2.10.1
+

@@ -1,0 +1,31 @@
+From 5fa8f642df4a8ac41338a9935ea688128105ab65 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Tue, 7 Mar 2017 19:59:11 -0700
+Subject: [PATCH 611/639] puma-litepath: separate full, partial offload.
+
+This is to make the Kconfig options of Puma litepath partial offload and
+full offload features mutual exclusive in the compiled atom image. This
+is done as work around for ring buffer leak issue when both partial and
+full offloads features exist in atom image simultaneously.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/net/ethernet/lantiq/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/lantiq/Kconfig b/drivers/net/ethernet/lantiq/Kconfig
+index 10df80fb..766c136 100644
+--- a/drivers/net/ethernet/lantiq/Kconfig
++++ b/drivers/net/ethernet/lantiq/Kconfig
+@@ -63,7 +63,7 @@ config LTQ_DIRECTCONNECT_DP_DBG
+ config LTQ_DATAPATH
+         bool "Datapath Lib"
+         default n
+-	depends on WIFI_PROXY
++	depends on !PUMA_LITEPATH && WIFI_PROXY
+         ---help---
+         Datapath Lib is to provide common rx/tx wrapper API without taking
+         care of much HW knowledge and also provide common interface for legacy
+-- 
+2.10.1
+

@@ -1,0 +1,40 @@
+From d04b5ac9e70b2056a8a12f768f4b46773576025e Mon Sep 17 00:00:00 2001
+From: Luciano Coelho <luciano.coelho@intel.com>
+Date: Fri, 7 Nov 2014 14:31:37 +0200
+Subject: [PATCH] cfg80211/mac80211: allow any interface to send channel switch
+ notifications
+
+For multi-vif channel switches, we want to send
+NL80211_CMD_CH_SWITCH_NOTIFY to the userspace to let it decide whether
+other interfaces need to be moved as well.  This is needed when we
+want a P2P GO interface to follow the channel of a station, for
+example.
+
+Modify the code so that all interfaces can send CSA notifications.
+Additionally, send notifications for STA CSA as well.
+
+Signed-off-by: Luciano Coelho <luciano.coelho@intel.com>
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ net/wireless/nl80211.c       | 6 ------
+ 3 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 24fd292..d0a8361 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -10682,11 +10682,5 @@ void cfg80211_ch_switch_notify(struct net_device *dev,
+ 
+ 	trace_cfg80211_ch_switch_notify(dev, chandef);
+ 
+-	if (WARN_ON(wdev->iftype != NL80211_IFTYPE_AP &&
+-		    wdev->iftype != NL80211_IFTYPE_P2P_GO &&
+-		    wdev->iftype != NL80211_IFTYPE_ADHOC &&
+-		    wdev->iftype != NL80211_IFTYPE_MESH_POINT))
+-		return;
+-
+ 	wdev->channel = chandef->chan;
+ 	nl80211_ch_switch_notify(rdev, dev, chandef, GFP_KERNEL);
+-- 
+2.10.1
+

@@ -1,0 +1,52 @@
+From 9cef9e3c01e9b20efd11b0579d4de6fcb9d05b4b Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Wed, 25 Jan 2017 15:11:01 +0200
+Subject: [PATCH 586/639] Add boot report from pp_init module
+
+---
+ arch/x86/pp_init/puma7_pp_init.c | 6 +++++-
+ drivers/mrpc/handshake_server.c  | 4 ++--
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/pp_init/puma7_pp_init.c b/arch/x86/pp_init/puma7_pp_init.c
+index 4a82da7..9720c2f 100644
+--- a/arch/x86/pp_init/puma7_pp_init.c
++++ b/arch/x86/pp_init/puma7_pp_init.c
+@@ -44,7 +44,7 @@
+ #include <linux/unistd.h>
+ #include <linux/interrupt.h>
+ #include <linux/netip_subsystem.h>
+-
++#include <linux/handshake_server.h>
+ 
+ #ifdef CONFIG_ARM_AVALANCHE_SOC
+ /* interrupts NPCPU*/
+@@ -480,6 +480,10 @@ static int __init tx_comp_init(void)
+         goto tx_comp_exit;
+     }
+ 
++#ifdef CONFIG_MRPC_HANDSHAKE
++        boot_status_report(HANDSHAKE_ID_PP_INIT);
++#endif
++
+ tx_comp_exit:
+     return ret;
+ }
+diff --git a/drivers/mrpc/handshake_server.c b/drivers/mrpc/handshake_server.c
+index f86d331..052cbe9 100644
+--- a/drivers/mrpc/handshake_server.c
++++ b/drivers/mrpc/handshake_server.c
+@@ -46,8 +46,8 @@
+ #include <linux/types.h>
+ #include <linux/mutex.h>
+ #include <linux/err.h>
+-#include <linux/mrpc/mrpc.h>
+-#include <linux/mrpc/handshake_server.h>
++#include <linux/mrpc.h>
++#include <linux/handshake_server.h>
+ 
+ #ifdef DEBUG
+ #define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
+-- 
+2.10.1
+

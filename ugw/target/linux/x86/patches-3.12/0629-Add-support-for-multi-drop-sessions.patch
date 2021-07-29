@@ -1,0 +1,37 @@
+From a203065e98f442c7b253c4d3a2de8e0bcfd0b681 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Wed, 29 Mar 2017 14:55:13 +0300
+Subject: [PATCH 629/639] Add support for multi drop sessions
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h | 1 +
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index 796e22b..d12b6253 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -134,6 +134,7 @@ typedef enum
+     PDSP_CLASSIFIER2_CLASSIFICATION_MODE_COMMAND = 0x84,
+     PDSP_CLASSIFIER2_MOCA_IRREG_SESS_OPEN = 0x85,
+     PDSP_CLASSIFIER2_SUPPORT_BP_FRAG      = 0x86,
++    PDSP_CLASSIFIER2_SUPPORT_MULTI_DROP   = 0x87,
+ 
+     // PDSP ReSequencer commands
+     PDSP_RESEQUENCER_SET_SYNC_Q_THRSHOLD = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index afdfe7a..5df0970 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1895,6 +1895,7 @@ typedef struct
+     Uint32                              active_PIDs;
+     Uint32                              active_VPIDs;
+     Uint32                              active_sessions;
++    Uint32                              active_drop_sessions;
+     Uint32                              active_irreg_moca_sessions;
+     Uint32                              max_active_sessions;
+     Uint32                              lut2_histogram[AVALANCHE_PP_LUT_HISTOGRAM_SIZE];
+-- 
+2.10.1
+

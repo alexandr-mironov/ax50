@@ -1,0 +1,50 @@
+From 0719705e927dbe6077f2554b85ccad145647c9ee Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Mon, 20 Feb 2017 13:14:23 +0200
+Subject: [PATCH 599/639] Add tDox configure average packet size cmd
+
+---
+ include/linux/avalanche/generic/avalanche_pdsp_api.h | 2 ++
+ include/linux/avalanche/generic/avalanche_pp_api.h   | 6 +++++-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pdsp_api.h b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+index 94d2871..e1fa583 100755
+--- a/include/linux/avalanche/generic/avalanche_pdsp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pdsp_api.h
+@@ -156,6 +156,8 @@ typedef enum
+     PDSP_SESSION_CACHE_FLUSH_ALL    = 0x84,
+     PDSP_SESSION_CACHE_SESSION_TIMEOUT  = 0x85,
+ 
++    // tDox Commands
++    PDSP_TDOX_CONFIGURE_PARAMS          = 0x83,
+ 
+     // Moca Commands
+     PDSP_MOCA_SET_PADDING                = 0x83,
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index c7e3a37..306070d 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -798,7 +798,10 @@ typedef enum
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH           = 9,
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE_IPSEC_AH       = 10,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH */
+     PP_LOOKUP_FIELD_TUNNEL_TYPE_DsLITE_IPSEC_AH    = 11,            /* PP_LOOKUP_FIELD_TUNNEL_TYPE_GRE + PP_LOOKUP_FIELD_TUNNEL_TYPE_IPSEC_AH */
+-    PP_LOOKUP_FIELD_TUNNEL_TYPE_NOT_VALID          = 16
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_RESERVED1          = 12,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_RESERVED2          = 13,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_RESERVED3          = 14,
++    PP_LOOKUP_FIELD_TUNNEL_TYPE_LAST               = 15
+ }PP_LOOKUP_FIELD_TUNNEL_TYPE_e;
+ 
+ typedef enum
+@@ -1902,6 +1905,7 @@ extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_set( Uint32 se
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_get( Uint32 session_handle, Bool *   enable, Bool * qualified );
+ extern AVALANCHE_PP_RET_e    avalanche_pp_get_tdox_candidate_session( Uint32* session_handle);
++extern AVALANCHE_PP_RET_e    avalanche_pp_configure_tdox_params( Uint16 avgPktSize,  Uint16 evalPPS, Uint16 evalTime);
+ #else
+ extern AVALANCHE_PP_RET_e    avalanche_pp_session_tdox_capability_get( Uint32 session_handle, Bool *   enable );
+ #endif
+-- 
+2.10.1
+

@@ -1,0 +1,46 @@
+diff --git a/authenc.c b/authenc.c
+index fc32f43..7c236cf 100644
+--- a/authenc.c
++++ b/authenc.c
+@@ -62,7 +62,7 @@ static int get_userbuf_tls(struct csession *ses, struct kernel_crypt_auth_op *kc
+ 		return -EINVAL;
+ 
+ 	if (ses->alignmask) {
+-		if (!IS_ALIGNED((unsigned long)caop->dst, ses->alignmask))
++		if (!IS_ALIGNED((unsigned long)caop->dst, ses->alignmask + 1))
+ 			dwarning(2, "careful - source address %p is not %d byte aligned",
+ 					caop->dst, ses->alignmask + 1);
+ 	}
+@@ -116,10 +116,10 @@ static int get_userbuf_srtp(struct csession *ses, struct kernel_crypt_auth_op *k
+ 	}
+ 
+ 	if (ses->alignmask) {
+-		if (!IS_ALIGNED((unsigned long)caop->dst, ses->alignmask))
++		if (!IS_ALIGNED((unsigned long)caop->dst, ses->alignmask + 1))
+ 			dwarning(2, "careful - source address %p is not %d byte aligned",
+ 					caop->dst, ses->alignmask + 1);
+-		if (!IS_ALIGNED((unsigned long)caop->auth_src, ses->alignmask))
++		if (!IS_ALIGNED((unsigned long)caop->auth_src, ses->alignmask + 1))
+ 			dwarning(2, "careful - source address %p is not %d byte aligned",
+ 					caop->auth_src, ses->alignmask + 1);
+ 	}
+diff --git a/main.c b/main.c
+index 81c4550..4c8a757 100644
+--- a/main.c
++++ b/main.c
+@@ -223,13 +223,13 @@ int crypto_run(struct fcrypt *fcr, struct kernel_crypt_op *kcop)
+ 
+ 	if (likely(cop->len)) {
+ 		if (!(cop->flags & COP_FLAG_NO_ZC)) {
+-			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->src, ses_ptr->alignmask))) {
++			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->src, ses_ptr->alignmask + 1))) {
+ 				dwarning(2, "source address %p is not %d byte aligned - disabling zero copy",
+ 						cop->src, ses_ptr->alignmask + 1);
+ 				cop->flags |= COP_FLAG_NO_ZC;
+ 			}
+ 
+-			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->dst, ses_ptr->alignmask))) {
++			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->dst, ses_ptr->alignmask + 1))) {
+ 				dwarning(2, "destination address %p is not %d byte aligned - disabling zero copy",
+ 						cop->dst, ses_ptr->alignmask + 1);
+ 				cop->flags |= COP_FLAG_NO_ZC;

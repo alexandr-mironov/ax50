@@ -1,0 +1,34 @@
+From 111433de28250f5dcd59fe1d646538627b80f127 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Wed, 30 Nov 2016 12:54:07 -0700
+Subject: [PATCH 530/639] netip_subsystem: Set port_mapping default val -1
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index b1765a8..0b6a743 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -156,7 +156,7 @@ static void netss_pm_init_data(void)
+    g_netss_sysfs_attributes_info.service_status = 0xFFFFFFF3;
+    g_netss_sysfs_attributes_info.service_level = 0xFFFFFFF0;
+    g_netss_sysfs_attributes_info.service_ready = 0x0;
+-   g_netss_sysfs_attributes_info.port_mapping = 0x0;
++   g_netss_sysfs_attributes_info.port_mapping = 0xFFFFFFFF;
+ }
+ 
+ static uint8_t mapid_to_interfaceid(uint8_t map_id)
+@@ -419,6 +419,7 @@ static void ness_process_port_mapping_msg(void)
+ 	netss_sysfs_attributes_info_t *sysfs = &g_netss_sysfs_attributes_info;
+ 	int i = 0;
+ 
++	sysfs->port_mapping = 0;
+ 	for (i = 0; i < MAX_BOARD_INTERFACES; i++)
+ 		sysfs->port_mapping |= data[i] << (i*8);
+ 
+-- 
+2.10.1
+

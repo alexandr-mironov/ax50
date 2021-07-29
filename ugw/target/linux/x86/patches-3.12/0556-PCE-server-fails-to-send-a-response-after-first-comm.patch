@@ -1,0 +1,48 @@
+From 309c19943b39962126f1259879324092f8eaf40d Mon Sep 17 00:00:00 2001
+From: Vinodkumar Mudaliar <vinodkumar.mudaliar@intel.com>
+Date: Thu, 29 Dec 2016 09:09:00 -0700
+Subject: [PATCH 556/639] PCE server fails to send a response after first
+ command
+
+RootCause: xgmii power driver did not send a Ack after it received its first
+response
+Resolution: Send Ack for opcode after processing the response from PCE
+---
+ drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+index af6aefc..4a327f3 100644
+--- a/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
++++ b/drivers/power/xgmii-pwr-ctrl/xgmii-power-control.c
+@@ -220,20 +220,25 @@ static int  xgmii_pce_rsp_msg_cb(hw_mbox_Masters_e commander,
+ {
+ 	struct xgmii_pce_response_msg *msg;
+ 
+-	msg = (struct xgmii_pce_response_msg *)dataBuf;
++	msg = (struct xgmii_pce_response_msg *) dataBuf;        
+ 
+ 	if (msg->opcode != PCE_MSG_OPCODE) {
+-		pr_err("Invalid Opcode %d in pce response\n", msg->opcode);
++		pr_err("Invalid Opcode %d in pce response\n",msg->opcode);		
+ 		return -1;
+ 	}
+ 	if (g_pce_rsp_status == PCE_RSP_UNKNOWN) {
+ 		g_pce_rsp_status = msg->response;
+ 		wake_up(&xgmii_wq);
+ 		pr_debug("pce reply msg cb rsp %d\n", g_pce_rsp_status);
++		
+ 	} else {
+ 		pr_err("Unexpected pce response %d\n", msg->response);
+ 	}
++
++	hwMbox_sendAckOpcode(HW_MBOX_MASTER_NP_CPU);
++
+ 	return 0;
++
+ }
+ 
+ static int xgmii_send_pce_command(enum pce_cmd cmd, enum rsc_id id)
+-- 
+2.10.1
+

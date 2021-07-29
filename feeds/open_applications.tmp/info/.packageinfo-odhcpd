@@ -1,0 +1,31 @@
+Source-Makefile: feeds/open_applications/odhcpd/Makefile
+Package: odhcpd
+Version: 2015-09-07-1-cb1842c117030e6779f9556cd5d86b1a0ef145d7
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox +libuci +libubus
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: OpenWrt DHCP/DHCPv6(-PD)/RA Server & Relay
+Maintainer: Steven Barth <steven@midlink.org>
+Source: odhcpd-2015-09-07-1.tar.bz2
+License: GPL-2.0
+Type: ipkg
+Description:  odhcpd is a daemon for serving and relaying IP management protocols to
+ configure clients and downstream routers. It tries to follow the RFC 6204
+ requirements for IPv6 home routers.
+ 
+ odhcpd provides server services for DHCP, RA, stateless and stateful DHCPv6,
+ prefix delegation and can be used to relay RA, DHCPv6 and NDP between routed
+ (non-bridged) interfaces in case no delegated prefixes are available.
+Steven Barth <steven@midlink.org>
+@@
+Config:
+  config PACKAGE_odhcpd_ext_cer_id
+    int "CER-ID Extension ID (0 = disabled)"
+    depends on PACKAGE_odhcpd
+    default 0
+@@
+
+

@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ltq_packages/network/services/ead/Makefile
+Package: ead
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libpcap
+Section: net
+Category: Base system
+Title: Emergency Access Daemon
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: 
+License: GPL-2.0
+Type: ipkg
+Description:   Provides remote access to your device even if IP and firewall
+  configuration settings are defunct
+http://bridge.sourceforge.net/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

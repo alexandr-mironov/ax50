@@ -1,0 +1,26 @@
+From 884e5d8017647af6a40a346fbf70ed3f82383473 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Mon, 24 Oct 2016 18:14:30 -0700
+Subject: [PATCH 505/639] netip-subsystem: Make RCE_Floor default val = 2
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_lld.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+index a9cda5f..2ec2769 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_lld.c
+@@ -57,7 +57,7 @@ static const struct dev_pm_ops netss_pm_ops = {
+ #endif
+ int docsis_chan_cfg = 0;
+ int  cm_mode = 0;
+-int RCE_Floor = 0;
++int RCE_Floor = 2;
+ int RCE_Filter = 0;
+ 
+ static const struct pci_device_id net_subsystem_pci_tbl[] = {
+-- 
+2.10.1
+

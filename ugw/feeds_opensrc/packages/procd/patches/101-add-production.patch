@@ -1,0 +1,34 @@
+diff --git a/initd/init.c b/initd/init.c
+index 9818c4f..f515923 100644
+--- a/initd/init.c
++++ b/initd/init.c
+@@ -71,6 +71,7 @@ int
+ main(int argc, char **argv)
+ {
+ 	pid_t pid;
++	char production_val[16] = "";
+ 
+ 	ulog_open(ULOG_KMSG, LOG_DAEMON, "init");
+ 
+@@ -82,6 +83,13 @@ main(int argc, char **argv)
+ 	cmdline();
+ 	watchdog_init(1);
+ 
++	if (get_cmdline_val("Production", production_val, sizeof(production_val)) != NULL) {
++		if (strcmp(production_val, "true") == 0) {
++			LOG("bootting in production mode\n");
++			goto start_uloop;
++		}
++	}
++
+ 	pid = fork();
+ 	if (!pid) {
+ 		char *kmod[] = { "/sbin/kmodloader", "/etc/modules-boot.d/", NULL };
+@@ -113,6 +121,7 @@ main(int argc, char **argv)
+ 			watchdog_ping();
+ 		}
+ 	}
++start_uloop:
+ 	uloop_init();
+ 	preinit();
+ 	uloop_run();

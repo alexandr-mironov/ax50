@@ -1,0 +1,42 @@
+Source-Makefile: feeds/ltq_packages/boot/uboot-mxs/Makefile
+Package: uboot-mxs-mx23_olinuxino
+Version: 2015.01-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_mxs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: mx23_olinuxino
+Section: boot
+Category: Boot Loaders
+Title: U-Boot 2015.01 for the Olinuxino i.MX233
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot 2015.01 for the Olinuxino i.MX233
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+Package: uboot-mxs-duckbill
+Version: 2015.01-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_mxs
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Variant: duckbill
+Section: boot
+Category: Boot Loaders
+Title: U-Boot 2015.01 for the I2SE Duckbill
+Maintainer: Zoltan HERPAI <wigyori@uid0.hu>
+Source: u-boot-2015.01.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description: U-Boot 2015.01 for the I2SE Duckbill
+http://www.denx.de/wiki/U-Boot
+Zoltan HERPAI <wigyori@uid0.hu>
+@@
+
+

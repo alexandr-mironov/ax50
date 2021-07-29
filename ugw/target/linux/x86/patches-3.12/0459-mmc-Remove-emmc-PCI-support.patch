@@ -1,0 +1,120 @@
+From 08b0141399230e966151262226ab13f20cf9aa9d Mon Sep 17 00:00:00 2001
+From: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+Date: Wed, 27 Jul 2016 17:08:23 -0700
+Subject: [PATCH 459/639] mmc: Remove emmc PCI support.
+
+eMMC0 is shared with ARM, it needs to be able to ignore
+interrupts caused by ARM but not intended for ATOM. To do that,
+the IRQ is masked while not in use. In ACPI mode, the eMMC has a
+private IRQ. In PCI mode, the eMMC is on a shared IRQ. If the
+shared IRQ were masked, it would mask out all other devices'interrupts.
+Therefore PCI mode is not supported. PCI mode was originally
+used during pre-silicon environments and now needs to be removed.
+
+Change-Id: I1babc34f6837193a413e312205a54dcc7b493a10
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/host/sdhci-pci.c | 52 +-------------------------------------------
+ 1 file changed, 1 insertion(+), 51 deletions(-)
+
+diff --git a/drivers/mmc/host/sdhci-pci.c b/drivers/mmc/host/sdhci-pci.c
+index 2bd8f30..d408382 100644
+--- a/drivers/mmc/host/sdhci-pci.c
++++ b/drivers/mmc/host/sdhci-pci.c
+@@ -42,9 +42,6 @@
+ #define PCI_DEVICE_ID_INTEL_BYT_SDIO	0x0f15
+ #define PCI_DEVICE_ID_INTEL_BYT_SD	0x0f16
+ #define PCI_DEVICE_ID_INTEL_BYT_EMMC2	0x0f50
+-#define PCI_DEVICE_ID_INTEL_PUMA7_EMMC	0x2B94
+-#define PCI_DEVICE_ID_INTEL_PUMA7_EMMC2	0x2B95
+-#define PCI_DEVICE_ID_INTEL_PUMA7_SD	    0x2B96
+ 
+ /*
+  * PCI registers
+@@ -328,15 +325,6 @@ static int byt_sdio_probe_slot(struct sdhci_pci_slot *slot)
+ 	return 0;
+ }
+ 
+-static int puma7_emmc_probe_shared_slot(struct sdhci_pci_slot *slot)
+-{
+-	slot->host->mmc->caps |= MMC_CAP_8_BIT_DATA | MMC_CAP_NONREMOVABLE |
+-				 MMC_CAP_HW_RESET;
+-	slot->host->mmc->caps2 |= MMC_CAP2_HC_ERASE_SZ;
+-	slot->hw_reset = sdhci_pci_int_hw_reset;
+-	return 0;
+-}
+-
+ static const struct sdhci_pci_fixes sdhci_intel_byt_emmc = {
+ 	.allow_runtime_pm = true,
+ 	.probe_slot	= byt_emmc_probe_slot,
+@@ -378,11 +366,6 @@ static const struct sdhci_pci_fixes sdhci_intel_mrfl_mmc = {
+ 	.probe_slot	= intel_mrfl_mmc_probe_slot,
+ };
+ 
+-static const struct sdhci_pci_fixes sdhci_intel_puma7_shared_emmc = {
+-	.allow_runtime_pm = true,
+-	.probe_slot	= puma7_emmc_probe_shared_slot,
+-};
+-
+ /* O2Micro extra registers */
+ #define O2_SD_LOCK_WP		0xD3
+ #define O2_SD_MULTI_VCC3V	0xEE
+@@ -996,30 +979,6 @@ static const struct pci_device_id pci_ids[] = {
+ 
+ 	{
+ 		.vendor		= PCI_VENDOR_ID_INTEL,
+-		.device		= PCI_DEVICE_ID_INTEL_PUMA7_EMMC,
+-		.subvendor	= PCI_ANY_ID,
+-		.subdevice	= PCI_ANY_ID,
+-		.driver_data = (kernel_ulong_t)&sdhci_intel_puma7_shared_emmc,
+-	},
+-
+-	{
+-		.vendor		= PCI_VENDOR_ID_INTEL,
+-		.device		= PCI_DEVICE_ID_INTEL_PUMA7_EMMC2,
+-		.subvendor	= PCI_ANY_ID,
+-		.subdevice	= PCI_ANY_ID,
+-		.driver_data	= (kernel_ulong_t)&sdhci_intel_byt_emmc,
+-	},
+-
+-	{
+-		.vendor		= PCI_VENDOR_ID_INTEL,
+-		.device		= PCI_DEVICE_ID_INTEL_PUMA7_SD,
+-		.subvendor	= PCI_ANY_ID,
+-		.subdevice	= PCI_ANY_ID,
+-		.driver_data	= (kernel_ulong_t)&sdhci_intel_byt_sd,
+-	},
+-
+-	{
+-		.vendor		= PCI_VENDOR_ID_INTEL,
+ 		.device		= PCI_DEVICE_ID_INTEL_BSW_EMMC,
+ 		.subvendor	= PCI_ANY_ID,
+ 		.subdevice	= PCI_ANY_ID,
+@@ -1700,8 +1659,7 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
+ 
+ #ifdef CONFIG_X86_PUMA6
+ 	intelce_get_soc_info(&id, NULL);
+-	if (id != CE2600_SOC_DEVICE_ID)
+-    {
++	if (id != CE2600_SOC_DEVICE_ID) {
+ 		if(pdev->revision >= 0x2)
+ 			host->flags |= SDHCI_SUPPORT_DDR;
+ 	}
+@@ -1760,14 +1718,6 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
+ 	}
+ #endif /*CONFIG_CE_MAILBOX */
+ 
+-#elif defined(CONFIG_X86_PUMA7) && defined(CONFIG_HW_MUTEXES)
+-	/* If there's a HW Mutex controller that exists, then we'll need to use a HW Mutex
+-	 * to make sure and use exclusive controller access from different processors */
+-	//Lock the HW Mutex (Gain Control)
+-	MMC_LOCK_HW_MUTEX(host->mmc);
+-	ret = sdhci_add_host(host);
+-	MMC_UNLOCK_HW_MUTEX(host->mmc);
+-#else
+ 	ret = sdhci_add_host(host);
+ #endif
+ 
+-- 
+2.10.1
+

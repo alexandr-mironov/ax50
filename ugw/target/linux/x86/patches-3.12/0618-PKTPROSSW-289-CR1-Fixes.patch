@@ -1,0 +1,31 @@
+From b6f2fda944edd2ead694674fa32f4432bfa16cd2 Mon Sep 17 00:00:00 2001
+From: egerber <eli.gerber@intel.com>
+Date: Tue, 14 Mar 2017 11:38:57 +0200
+Subject: [PATCH 618/639] PKTPROSSW-289: CR1 Fixes
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index bdfe61d..902facb 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -766,11 +766,12 @@ typedef enum
+ /* Session cache deletion thresholds */
+ #ifdef CONFIG_SESS_TIMEOUT_BY_THRESH
+ #define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  1
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_LOW     100
++#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_HIGH    1000
+ #else
+ #define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_ENABLE  0
+ #endif
+-#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_LOW     100
+-#define SESSION_CACHE_DEFAULT_TIMEOUT_BY_THRESHOLD_HIGH    1000
++
+ 
+ typedef enum
+ {
+-- 
+2.10.1
+

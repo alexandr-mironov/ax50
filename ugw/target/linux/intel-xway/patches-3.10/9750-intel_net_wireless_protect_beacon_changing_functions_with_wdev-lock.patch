@@ -1,0 +1,68 @@
+From 9256b97085ba61b1d8ef2b57565e420a521a0598 Mon Sep 17 00:00:00 2001
+From: pukitis <martins.pukitis@intel.com>
+Date: Fri, 9 Feb 2018 16:31:32 +0200
+Subject: [PATCH 30/30] protect_beacon_changing_functions_with_wdev-lock
+
+---
+ net/wireless/nl80211.c | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index a154d4e..698b2b7 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -3257,6 +3257,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
+ 			return PTR_ERR(params.acl);
+ 	}
+ 
++	wdev_lock(wdev);
+ 	err = rdev_start_ap(rdev, dev, &params);
+ 	if (!err) {
+ 		wdev->preset_chandef = params.chandef;
+@@ -3265,6 +3266,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
+ 		wdev->ssid_len = params.ssid_len;
+ 		memcpy(wdev->ssid, params.ssid, wdev->ssid_len);
+ 	}
++	wdev_unlock(wdev);
+ 
+ 	kfree(params.acl);
+ 
+@@ -3293,7 +3295,11 @@ static int nl80211_set_beacon(struct sk_buff *skb, struct genl_info *info)
+ 	if (err)
+ 		return err;
+ 
+-	return rdev_change_beacon(rdev, dev, &params);
++	wdev_lock(wdev);
++	err = rdev_change_beacon(rdev, dev, &params);
++	wdev_unlock(wdev);
++
++	return err;
+ }
+ 
+ static int nl80211_stop_ap(struct sk_buff *skb, struct genl_info *info)
+@@ -4433,7 +4439,9 @@ static int nl80211_set_bss(struct sk_buff *skb, struct genl_info *info)
+ {
+ 	struct cfg80211_registered_device *rdev = info->user_ptr[0];
+ 	struct net_device *dev = info->user_ptr[1];
++	struct wireless_dev *wdev = dev->ieee80211_ptr;
+ 	struct bss_parameters params;
++	int err;
+ 
+ 	memset(&params, 0, sizeof(params));
+ 	/* default to not changing parameters */
+@@ -4499,7 +4507,11 @@ static int nl80211_set_bss(struct sk_buff *skb, struct genl_info *info)
+ 	    dev->ieee80211_ptr->iftype != NL80211_IFTYPE_P2P_GO)
+ 		return -EOPNOTSUPP;
+ 
+-	return rdev_change_bss(rdev, dev, &params);
++	wdev_lock(wdev);
++	err = rdev_change_bss(rdev, dev, &params);
++	wdev_unlock(wdev);
++
++	return err;
+ }
+ 
+ static const struct nla_policy reg_rule_policy[NL80211_REG_RULE_ATTR_MAX + 1] = {
+-- 
+2.10.1
+

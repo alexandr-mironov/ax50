@@ -1,0 +1,13 @@
+Index: ppp-2.4.5/pppd/plugins/pppol2tp/pppol2tp.c
+===================================================================
+--- ppp-2.4.5.orig/pppd/plugins/pppol2tp/pppol2tp.c
++++ ppp-2.4.5/pppd/plugins/pppol2tp/pppol2tp.c
+@@ -86,7 +86,7 @@ void (*pppol2tp_ip_updown_hook)(int tunn
+ 
+ static option_t pppol2tp_options[] = {
+ 	{ "pppol2tp", o_special, &setdevname_pppol2tp,
+-	  "FD for PPPoL2TP socket", OPT_DEVNAM | OPT_A2STRVAL,
++	  "FD for PPPoL2TP socket", OPT_DEVNAM | OPT_A2STRVAL | OPT_STATIC,
+           &pppol2tp_fd_str },
+ 	{ "pppol2tp_lns_mode", o_bool, &pppol2tp_lns_mode,
+ 	  "PPPoL2TP LNS behavior. Default off.",

@@ -1,0 +1,65 @@
+From 3f1198765a9a2236d5e66edf905e6368dd87ec62 Mon Sep 17 00:00:00 2001
+From: "Michael L. Walker" <michael.l.walker@intel.com>
+Date: Tue, 13 Dec 2016 01:10:47 -0700
+Subject: [PATCH 541/639] Add Netfilter GWMETA extension to kernel
+
+Symptom: Need to allow iptables rules to bypass PP acceleration
+RootCause: This patch was previously in rdkb-compat layer
+Resolution: Add GWMETA extension to kernel
+---
+ net/netfilter/xt_GWMETA.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/net/netfilter/xt_GWMETA.c b/net/netfilter/xt_GWMETA.c
+index 816e6fb..3e92f6e 100644
+--- a/net/netfilter/xt_GWMETA.c
++++ b/net/netfilter/xt_GWMETA.c
+@@ -68,6 +68,15 @@
+     #define DEBUGP(DEBUG_LEVEL, format, args...)
+ #endif
+ 
++/* Define macros to convert to/from HIL endian-ness */
++/* If HIL is running on Atom, no need to do byte swap */
++#ifdef CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL
++    #define htoppl(val) val
++    #define pptohl(val) val
++#else
++    #define htoppl(val) htonl(val)
++    #define pptohl(val) ntohl(val)
++#endif
+ 
+ static unsigned int
+ do_target_job(struct sk_buff *skb, const struct xt_action_param *par)
+@@ -79,23 +88,23 @@ do_target_job(struct sk_buff *skb, const struct xt_action_param *par)
+     if (info->type == XT_GW_META)
+     {
+         DEBUGP( DEBUG_LEVEL " %s: mark with i %x \n", __FUNCTION__, info->gwmask);
+-        host_val = ntohl(skb->ti_gw_meta);
++        host_val = pptohl(skb->ti_gw_meta);
+         host_val |= info->gwmask;
+-        skb->ti_gw_meta = htonl(host_val);
++        skb->ti_gw_meta = htoppl(host_val);
+     }
+     else if (info->type == XT_GW_DIS_PP)
+     {
+         /*DISABLE PP */
+-        host_val = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
++        host_val = pptohl(SKB_GET_PP_INFO_P(skb)->flags);
+         host_val |= TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS;
+-        SKB_GET_PP_INFO_P(skb)->flags = htonl(host_val);
++        SKB_GET_PP_INFO_P(skb)->flags = htoppl(host_val);
+     }
+     else if (info->type == XT_GW_EN_PP)
+     {
+         /*ENABLE PP */
+-        host_val = ntohl(SKB_GET_PP_INFO_P(skb)->flags);
++        host_val = pptohl(SKB_GET_PP_INFO_P(skb)->flags);
+         host_val &= ~(TI_HIL_PACKET_FLAG_PP_SESSION_BYPASS);
+-        SKB_GET_PP_INFO_P(skb)->flags = htonl(host_val);
++        SKB_GET_PP_INFO_P(skb)->flags = htoppl(host_val);
+     }
+ 
+     return XT_CONTINUE;
+-- 
+2.10.1
+

@@ -1,0 +1,47 @@
+# HG changeset patch
+# Parent 55d31f597a912734db5279beffe8d48b49931ac0
+
+diff --git a/include/linux/extmark.h b/include/linux/extmark.h
+--- a/include/linux/extmark.h
++++ b/include/linux/extmark.h
+@@ -7,6 +7,7 @@
+ #define CPEID_NO_OF_BITS 5
+ #define CPEID_MASK 0x1f
+ 
++
+ #define QUEPRIO_START_BIT_POS 5
+ #define QUEPRIO_NO_OF_BITS 5
+ #define QUEPRIO_MASK 0x3e0
+@@ -35,4 +36,9 @@
+ #define LROSESS_NO_OF_BITS 1
+ #define LROSESS_MASK 0x80000000
+ 
++// LRO bit is being reused to mark packet is acclerated by SAE
++#define FILTERTAP_START_BIT_POS 31 
++#define FILTERTAP_NO_OF_BITS 1
++#define FILTERTAP_MASK 0x80000000
++
+ #endif
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2596,10 +2596,19 @@ int dev_hard_start_xmit(struct sk_buff *
+ 		}
+ 
+ #if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
++	#ifdef CONFIG_NETWORK_EXTMARK
++		if (!list_empty(&ptype_all) &&
++					!(skb->imq_flags & IMQ_F_ENQUEUE) && !(skb->extmark & FILTERTAP_MASK))
++	#else
+ 		if (!list_empty(&ptype_all) &&
+ 					!(skb->imq_flags & IMQ_F_ENQUEUE))
++	#endif
+ #else
++	#ifdef CONFIG_NETWORK_EXTMARK
++		if (!list_empty(&ptype_all) && !(skb->extmark & FILTERTAP_MASK))
++	#else
+ 		if (!list_empty(&ptype_all))
++	#endif
+ #endif
+ 			dev_queue_xmit_nit(skb, dev);
+ 

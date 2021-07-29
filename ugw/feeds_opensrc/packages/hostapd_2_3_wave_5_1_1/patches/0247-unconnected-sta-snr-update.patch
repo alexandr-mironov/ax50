@@ -1,0 +1,42 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/drv_callbacks.c hostapd-2.6/src/ap/drv_callbacks.c
+--- hostapd-2.6-orig/src/ap/drv_callbacks.c	2017-07-28 10:05:44.241173516 +0300
++++ hostapd-2.6/src/ap/drv_callbacks.c	2017-07-28 15:13:20.259387419 +0300
+@@ -1131,7 +1131,10 @@ static void hostapd_event_ltq_unconnecte
+     "rssi=%d %d %d %d SNR=%d %d %d %d rate=%d",
+     buf, unc_sta->rx_bytes, unc_sta->rx_packets,
+     unc_sta->rssi[0], unc_sta->rssi[1], unc_sta->rssi[2], unc_sta->rssi[3],
+-    unc_sta->noise[0], unc_sta->noise[1], unc_sta->noise[2], unc_sta->noise[3],
++    unc_sta->noise[0] ? unc_sta->rssi[0] - unc_sta->noise[0] : 0, /* RSSI and noise to SNR */
++    unc_sta->noise[1] ? unc_sta->rssi[1] - unc_sta->noise[1] : 0, /* RSSI and noise to SNR */
++    unc_sta->noise[2] ? unc_sta->rssi[2] - unc_sta->noise[2] : 0, /* RSSI and noise to SNR */
++    unc_sta->noise[3] ? unc_sta->rssi[3] - unc_sta->noise[3] : 0, /* RSSI and noise to SNR */
+     unc_sta->rate);
+ }
+ 
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/drivers/driver.h hostapd-2.6/src/drivers/driver.h
+--- hostapd-2.6-orig/src/drivers/driver.h	2017-07-28 10:05:44.233173677 +0300
++++ hostapd-2.6/src/drivers/driver.h	2017-07-28 13:49:15.957844698 +0300
+@@ -5221,7 +5221,7 @@ union wpa_event_data {
+ 	  u32 rx_packets;
+ 	  s8 rssi[HOSTAPD_CHAN_RX_ANTENNAS];
+ 	  u8 addr[ETH_ALEN];
+-	  u8 noise[HOSTAPD_CHAN_RX_ANTENNAS];
++	  s8 noise[HOSTAPD_CHAN_RX_ANTENNAS];
+ 	  u16 rate;
+ 	} ltq_unconnected_sta;
+ 
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/wpa_supplicant/events.c hostapd-2.6/wpa_supplicant/events.c
+--- hostapd-2.6-orig/wpa_supplicant/events.c	2017-07-28 10:05:44.219173963 +0300
++++ hostapd-2.6/wpa_supplicant/events.c	2017-07-28 15:12:36.203909628 +0300
+@@ -3512,7 +3512,10 @@ static void wpa_supplicant_event_ltq_unc
+     "rssi=%d %d %d %d SNR=%d %d %d %d rate=%d",
+     wpa_s->ifname, buf, unc_sta->rx_bytes, unc_sta->rx_packets,
+     unc_sta->rssi[0], unc_sta->rssi[1], unc_sta->rssi[2], unc_sta->rssi[3],
+-    unc_sta->noise[0], unc_sta->noise[1], unc_sta->noise[2], unc_sta->noise[3],
++    unc_sta->noise[0] ? unc_sta->rssi[0] - unc_sta->noise[0] : 0, /* RSSI and noise to SNR */
++    unc_sta->noise[1] ? unc_sta->rssi[1] - unc_sta->noise[1] : 0, /* RSSI and noise to SNR */
++    unc_sta->noise[2] ? unc_sta->rssi[2] - unc_sta->noise[2] : 0, /* RSSI and noise to SNR */
++    unc_sta->noise[3] ? unc_sta->rssi[3] - unc_sta->noise[3] : 0, /* RSSI and noise to SNR */
+     unc_sta->rate);
+ }
+ 

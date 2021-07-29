@@ -1,0 +1,49 @@
+From 2e515691e79d528f677e89562b6dd469ab30a5c0 Mon Sep 17 00:00:00 2001
+From: "Brett T. Warden" <brett.t.warden@intel.com>
+Date: Wed, 28 Sep 2016 21:58:02 -0700
+Subject: [PATCH 489/639] netip: use 32-bit addresses in cppi41 message
+
+Changes physical address and size in
+Cppi41HwMboxOffChipMemInfoReplyMsg_t hardware mailbox message back to
+32-bits to remain in sync with equivalent code on NPCPU.
+
+JIRA: ATOMOSSW-261
+
+Signed-off-by: Brett T. Warden <brett.t.warden@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_mem_util.c           | 4 ++--
+ include/linux/avalanche/generic/cppi41_hw_mbox_if.h | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_mem_util.c b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+index 4a98f24..f33011d 100644
+--- a/arch/x86/NetIP_SubSystem/netip_mem_util.c
++++ b/arch/x86/NetIP_SubSystem/netip_mem_util.c
+@@ -200,8 +200,8 @@ int netip_memmap_init(void)
+ 		return -ECOMM;
+ 	}
+ 
+-	npcpu_rpc_phys_addr = be64_to_cpu(off_chip_reply.off_chip_phy_addr);
+-	npcpu_rpc_mem_size = be64_to_cpu(off_chip_reply.length);
++	npcpu_rpc_phys_addr = be32_to_cpu(off_chip_reply.off_chip_phy_addr);
++	npcpu_rpc_mem_size = be32_to_cpu(off_chip_reply.length);
+ 
+ 	max_phys_addr = sizeof(phys_addr_t) > 4 ? U64_MAX : U32_MAX;
+ 
+diff --git a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+index f830239..4dab4dc 100644
+--- a/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
++++ b/include/linux/avalanche/generic/cppi41_hw_mbox_if.h
+@@ -111,7 +111,7 @@ typedef struct
+ typedef struct
+ {
+     Cppi41HwMboxCmd_e   cmd;                /* command type */
+-    Uint64              off_chip_phy_addr;  /* offChip physical address */
+-    Uint64              length;             /* offChip memory length in bytes */
++    Uint32              off_chip_phy_addr;  /* offChip physical address */
++    Uint32              length;             /* offChip memory length in bytes */
+ } Cppi41HwMboxOffChipMemInfoReplyMsg_t;
+ #endif /* __CPPI41_HW_MBOX_IF_H__ */
+-- 
+2.10.1
+

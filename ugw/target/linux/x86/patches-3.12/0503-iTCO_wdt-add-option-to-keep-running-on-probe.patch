@@ -1,0 +1,125 @@
+From 8859bfa649453d69085750369cdbc56962daf8ce Mon Sep 17 00:00:00 2001
+From: "Brett T. Warden" <brett.t.warden@intel.com>
+Date: Tue, 18 Oct 2016 14:56:55 -0700
+Subject: [PATCH 503/639] iTCO_wdt: add option to keep running on probe
+
+Add a kernel config option, ITCO_WDT_KEEP_RUNNING_ON_PROBE.
+
+By default, the iTCO_wdt driver stops the watchdog timer during probe,
+and waits for a user-space client to connect to restart it. Enabling
+this option keeps the watchdog timer running throughout the probe, and
+will allow the watchdog to reboot the platform in the case that a
+user-space client never connects.
+
+Add a module parameter, stop_timer, which can be used to override the
+configured behavior on boot.
+
+ATOMOSSW-173
+
+Signed-off-by: Brett T. Warden <brett.t.warden@intel.com>
+---
+ drivers/watchdog/Kconfig    | 17 +++++++++++++++++
+ drivers/watchdog/iTCO_wdt.c | 31 +++++++++++++++++++++++++++----
+ 2 files changed, 44 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/watchdog/Kconfig b/drivers/watchdog/Kconfig
+index 0269a9d..ff821bc 100644
+--- a/drivers/watchdog/Kconfig
++++ b/drivers/watchdog/Kconfig
+@@ -652,6 +652,23 @@ config ITCO_WDT
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called iTCO_wdt.
+ 
++config ITCO_WDT_KEEP_RUNNING_ON_PROBE
++	bool "Keep the Intel TCO timer running after the driver is probed"
++	depends on ITCO_WDT
++	default n
++	---help---
++	  By default, the Intel TCO timer driver stops the timer (disabling
++	  the watchdog) once the driver has been probed. It will be restarted
++	  only when the watchdog device is opened and written, e.g. by a
++	  watchdog daemon. Enable this option if you want to have the driver
++	  leave the timer running, but ping it once when initially probing the
++	  device. This will give an additional heartbeat interval for a
++	  software daemon to start pinging the watchdog, but will reset the
++	  platform if it fails to start.
++
++	  Only enable this option if you have a watchdog daemon configured to
++	  run at boot!
++
+ config ITCO_VENDOR_SUPPORT
+ 	bool "Intel TCO Timer/Watchdog Specific Vendor Support"
+ 	depends on ITCO_WDT
+diff --git a/drivers/watchdog/iTCO_wdt.c b/drivers/watchdog/iTCO_wdt.c
+index a2b8af8..a38ae70 100644
+--- a/drivers/watchdog/iTCO_wdt.c
++++ b/drivers/watchdog/iTCO_wdt.c
+@@ -132,6 +132,11 @@ module_param(turn_SMI_watchdog_clear_off, int, 0);
+ MODULE_PARM_DESC(turn_SMI_watchdog_clear_off,
+ 	"Turn off SMI clearing watchdog (depends on TCO-version)(default=1)");
+ 
++static bool stop_timer = !IS_ENABLED(CONFIG_ITCO_WDT_KEEP_RUNNING_ON_PROBE);
++module_param(stop_timer, bool, 0444);
++MODULE_PARM_DESC(stop_timer,
++	"Stop the watchdog timer once probed, until a client connects");
++
+ /*
+  * Some TCO specific functions
+  */
+@@ -538,8 +543,13 @@ static int iTCO_wdt_probe(struct platform_device *dev)
+ 		goto unmap_gcs_pmc;
+ 	}
+ 
+-	/* Set the NO_REBOOT bit to prevent later reboots, just for sure */
+-	iTCO_wdt_set_NO_REBOOT_bit();
++	if (stop_timer) {
++		/*
++		 * Set the NO_REBOOT bit to prevent later reboots, just for
++		 * sure
++		 */
++		iTCO_wdt_set_NO_REBOOT_bit();
++	}
+ 
+ 	/* The TCO logic uses the TCO_EN bit in the SMI_EN register */
+ 	if (!request_region(iTCO_wdt_private.smi_res->start,
+@@ -591,8 +601,10 @@ static int iTCO_wdt_probe(struct platform_device *dev)
+ 		outl(val32, TCO1_CNT);
+ 	}
+ 
+-	/* Make sure the watchdog is not running */
+-	iTCO_wdt_stop(&iTCO_wdt_watchdog_dev);
++	if (stop_timer) {
++		/* Make sure the watchdog is not running */
++		iTCO_wdt_stop(&iTCO_wdt_watchdog_dev);
++	}
+ 
+ 	/* Check that the heartbeat value is within it's range;
+ 	   if not reset to the default */
+@@ -602,6 +614,14 @@ static int iTCO_wdt_probe(struct platform_device *dev)
+ 			WATCHDOG_TIMEOUT);
+ 	}
+ 
++	if (!stop_timer) {
++		/*
++		 * Ping the timer to reload with the new timeout and give the
++		 * software daemon a chance to connect.
++		 */
++		iTCO_wdt_ping(&iTCO_wdt_watchdog_dev);
++	}
++
+ 	ret = watchdog_register_device(&iTCO_wdt_watchdog_dev);
+ 	if (ret != 0) {
+ 		pr_err("cannot register watchdog device (err=%d)\n", ret);
+@@ -611,6 +631,9 @@ static int iTCO_wdt_probe(struct platform_device *dev)
+ 	pr_info("initialized. heartbeat=%d sec (nowayout=%d)\n",
+ 		heartbeat, nowayout);
+ 
++	if (!stop_timer)
++		pr_info("timer still running");
++
+ 	return 0;
+ 
+ unreg_tco:
+-- 
+2.10.1
+

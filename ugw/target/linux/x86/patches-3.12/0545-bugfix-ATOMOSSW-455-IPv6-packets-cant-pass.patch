@@ -1,0 +1,39 @@
+From 9672458140c3d71d405a80be17930cba6f062bbd Mon Sep 17 00:00:00 2001
+From: Priyalee Kushwaha <priyalee.kushwaha@intel.com>
+Date: Fri, 16 Dec 2016 22:27:52 -0800
+Subject: [PATCH 545/639] bugfix/ATOMOSSW-455: IPv6 packets cant pass through
+ the bridges for packets larger than MTU
+
+Signed-off-by: Priyalee Kushwaha <priyalee.kushwaha@intel.com>
+---
+ net/bridge/br_netfilter.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/net/bridge/br_netfilter.c b/net/bridge/br_netfilter.c
+index c92d846..30e348d 100644
+--- a/net/bridge/br_netfilter.c
++++ b/net/bridge/br_netfilter.c
+@@ -342,7 +342,7 @@ static int check_hbh_len(struct sk_buff *skb)
+ 		switch (nh[off]) {
+ 		case IPV6_TLV_PAD1:
+ 			optlen = 1;
+-  			break;
++			break;
+ 
+ 		case IPV6_TLV_PADN:
+ 			break;
+@@ -351,9 +351,9 @@ static int check_hbh_len(struct sk_buff *skb)
+ 			if (nh[off + 1] != 4 || (off & 3) != 2)
+ 				goto bad;
+ 			pkt_len = ntohl(*(__be32 *) (nh + off + 2));
+-			if (pkt_len <= IPV6_MAXPLEN || 
++			if (pkt_len <= IPV6_MAXPLEN ||
+ 				ipv6_hdr(skb)->payload_len)
+- 				goto bad;
++				goto bad;
+ 			if (pkt_len > skb->len - sizeof(struct ipv6hdr))
+ 				goto bad;
+ 			if (pskb_trim_rcsum(skb,
+-- 
+2.10.1
+

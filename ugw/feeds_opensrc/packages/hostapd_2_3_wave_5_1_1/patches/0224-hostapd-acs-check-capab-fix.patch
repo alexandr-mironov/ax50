@@ -1,0 +1,31 @@
+diff -Npur --exclude=.cproject --exclude=.project --exclude=.settings --exclude=hostapd_debug --exclude='*.orig' hostapd-2.6-orig/src/ap/hw_features.c hostapd-2.6/src/ap/hw_features.c
+--- hostapd-2.6-orig/src/ap/hw_features.c	2017-05-02 16:46:15.809999363 +0300
++++ hostapd-2.6/src/ap/hw_features.c	2017-05-02 16:59:24.067334159 +0300
+@@ -752,6 +752,12 @@ static int ieee80211n_check_40mhz(struct
+ 	if (iface->conf->ignore_40_mhz_intolerant)
+ 		return 0;
+ 
++#ifdef CONFIG_ACS
++	/* ACS smart already includes these checks */
++	if (iface->conf->acs_algo == ACS_ALGO_SMART && iface->conf->acs_init_done)
++		return 0;
++#endif /* CONFIG_ACS */
++
+ 	hostapd_set_state(iface, HAPD_IFACE_HT_SCAN);
+ 	wpa_printf(MSG_DEBUG, "Scan for neighboring BSSes prior to enabling "
+ 		   "40 MHz channel");
+@@ -1241,11 +1247,9 @@ int hostapd_acs_completed(struct hostapd
+ 		goto out;
+ 	}
+ 
+-  if (iface->conf->acs_algo != ACS_ALGO_SMART) {
+-    ret = hostapd_check_ht_capab(iface);
+-    if (ret < 0)
+-      goto out;
+-  } else ret = 0;
++	ret = hostapd_check_ht_capab(iface);
++	if (ret < 0)
++		goto out;
+ 
+ 	if (ret == 1) {
+ 		wpa_printf(MSG_DEBUG, "Interface initialization will be completed in a callback");

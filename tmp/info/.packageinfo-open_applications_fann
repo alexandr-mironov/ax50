@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/open_applications/fann/Makefile
+Package: fann
+Version: 2.1.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: fann -- prints a snarky message
+Maintainer: 
+Source: fann-2.1.0beta.zip
+Type: ipkg
+Description: 	If you can't figure out what this program does, you're probably
+	brain-dead and need immediate medical attention.
+
+@@
+
+

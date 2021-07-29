@@ -1,0 +1,48 @@
+Source-Makefile: package/feeds/open_applications/ezipupdate/Makefile
+Package: ez-ipupdate
+Submenu: DDNS 
+Version: 3.0.11b8-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: +libugwhelper
+Section: net
+Category: Network
+Title: ez-ipupdate (ipupdate service)
+Maintainer: 
+Source: ez-ipupdate_3.0.11b8.orig.tar.gz
+Type: ipkg
+Description:       ez-ipupdate for updating ipaddress using DDNS servers
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_ez-ipupdate
+	config ez-ipupdate_USE_CUSTOM_VERSION
+		depends on PACKAGE_ez-ipupdate
+		bool "Use custom package version"
+		default n
+	config ez-ipupdate_CUSTOM_VERSION
+		depends on ez-ipupdate_USE_CUSTOM_VERSION
+		string "ez-ipupdate version as string (default version: 3.0.11b8)"
+		default "3.0.11b8"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_ez-ipupdate
+	config ez-ipupdate_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_ez-ipupdate
+		bool "Use custom source directory"
+		default n
+	config ez-ipupdate_CUSTOM_SOURCE_DIR
+		depends on ez-ipupdate_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/home/hd2/AX3000NPM/AX50_GPL/SDK/UGW-7.5.1.40-OPENSRC-CD/UGW-7.5.1.40-SW-CD/Software/Sources/UGW-7.5.1.40/../../../wlnsw/wireline_sw_linux26/open_ez_ipupdate"
+	endmenu
+#	config FEATURE_DDNS
+#           bool
+#      	   default y
+#              depends on PACKAGE_ez-ipupdate
+@@
+
+

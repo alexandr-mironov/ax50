@@ -1,0 +1,52 @@
+# HG changeset patch
+# Parent f5ad6431c1f40789a6c633f6f8bbdae3010d5a2f
+
+diff --git a/drivers/net/ethernet/lantiq/Makefile b/drivers/net/ethernet/lantiq/Makefile
+--- a/drivers/net/ethernet/lantiq/Makefile
++++ b/drivers/net/ethernet/lantiq/Makefile
+@@ -5,7 +5,9 @@ ifneq ($(CONFIG_LTQ_ETH_OAM),)
+   obj-y += ltq_eth_oam_netif.o
+ endif
+ obj-$(CONFIG_LTQ_ETHSW_API) += switch-api/
++ifeq ($(CONFIG_SOC_XWAY),)
+ obj-$(CONFIG_LTQ_DATAPATH) += datapath/
++endif
+ obj-$(CONFIG_LTQ_TMU) += tmu/
+ obj-$(CONFIG_LTQ_CBM) += cbm/
+ obj-$(CONFIG_LTQ_ETH_XRX500) += ltq_eth_drv_xrx500.o
+diff --git a/drivers/net/ethernet/lantiq/datapath/Kconfig b/drivers/net/ethernet/lantiq/datapath/Kconfig
+--- a/drivers/net/ethernet/lantiq/datapath/Kconfig
++++ b/drivers/net/ethernet/lantiq/datapath/Kconfig
+@@ -4,7 +4,7 @@
+ config LTQ_DATAPATH
+ 	bool "Datapath Lib"
+ 	default y
+-	depends on SOC_GRX500
++	depends on SOC_GRX500 || SOC_XWAY
+ 	---help---
+ 	  Datapath Lib is to provide common rx/tx wrapper API without taking
+ 	  care of much HW knowledge and also provide common interface for legacy
+diff --git a/include/net/datapath_api.h b/include/net/datapath_api.h
+--- a/include/net/datapath_api.h
++++ b/include/net/datapath_api.h
+@@ -4,7 +4,9 @@
+ #include <linux/skbuff.h>
+ #include <linux/etherdevice.h>	/* eth_type_trans */
+ #include <linux/atmdev.h>  /*atm_vcc*/
++#ifndef CONFIG_SOC_XWAY
+ #include <xway/switch-api/lantiq_gsw_api.h> /*Switch related structures */
++#endif
+ #include <cpufreq/ltq_cpufreq.h>
+ #ifdef CONFIG_LTQ_DATAPATH_CPUFREQ
+ #include <linux/cpufreq.h>
+@@ -45,6 +47,10 @@ the information necessary to accelerate 
+ #define DP_TX_INSERT_PMAC    4	/*! It only for special test purpose so far */
+ #define DP_TX_OAM            8	/*! OAM packet */
+ #define DP_TX_TO_DL_MPEFW    0x10/*! Send Pkt directly to DL FW */
++#ifdef CONFIG_SOC_TYPE_XWAY
++#define DP_TX_ATM	0x20
++#define DP_TX_BOND	0x40
++#endif /* CONFIG_SOC_TYPE_XWAY */
+ 
+ /*Default, here define each enum member's value.
+   Later it will be overridden to define its mapped string array

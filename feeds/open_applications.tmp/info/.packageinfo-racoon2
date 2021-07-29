@@ -1,0 +1,19 @@
+Source-Makefile: feeds/open_applications/racoon2/Makefile
+Package: racoon2
+Version: 20100526a-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @!LINUX_2_4 +libopenssl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: racoon2
+Maintainer: 
+Source: racoon2-20100526a.tgz
+Type: ipkg
+Description: racoon2
+http://www.racoon2.wide.ad.jp/w/
+
+@@
+
+

@@ -1,0 +1,44 @@
+From 59917c8a77eda53e35bc0d5c938233f1a3e7cf98 Mon Sep 17 00:00:00 2001
+From: sdinkinx <simonx.dinkin@intel.com>
+Date: Wed, 18 Oct 2017 17:56:35 +0300
+Subject: [PATCH 10/14] Add debug prints on PMK configuration in WPA supplicant
+
+This makes it easier to understand the cases where PMK gets configured
+based on information from upper layer call (e.g., a PSK).
+
+Signed-off-by: Jouni Malinen <j@w1.fi>
+Signed-off-by: sdinkinx <simonx.dinkin@intel.com>
+---
+ src/rsn_supp/wpa.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
+index 67b7a63..2f64cec 100644
+--- a/src/rsn_supp/wpa.c
++++ b/src/rsn_supp/wpa.c
+@@ -2480,6 +2480,8 @@ void wpa_sm_set_pmk(struct wpa_sm *sm, const u8 *pmk, size_t pmk_len,
+ 	if (sm == NULL)
+ 		return;
+ 
++	wpa_hexdump_key(MSG_DEBUG, "WPA: Set PMK based on external data",
++			pmk, pmk_len);
+ 	sm->pmk_len = pmk_len;
+ 	os_memcpy(sm->pmk, pmk, pmk_len);
+ 
+@@ -2510,9 +2512,13 @@ void wpa_sm_set_pmk_from_pmksa(struct wpa_sm *sm)
+ 		return;
+ 
+ 	if (sm->cur_pmksa) {
++		wpa_hexdump_key(MSG_DEBUG,
++				"WPA: Set PMK based on current PMKSA",
++				sm->cur_pmksa->pmk, sm->cur_pmksa->pmk_len);
+ 		sm->pmk_len = sm->cur_pmksa->pmk_len;
+ 		os_memcpy(sm->pmk, sm->cur_pmksa->pmk, sm->pmk_len);
+ 	} else {
++		wpa_printf(MSG_DEBUG, "WPA: No current PMKSA - clear PMK");
+ 		sm->pmk_len = PMK_LEN;
+ 		os_memset(sm->pmk, 0, PMK_LEN);
+ 	}
+-- 
+2.10.1
+

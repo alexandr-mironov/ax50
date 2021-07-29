@@ -1,0 +1,91 @@
+From 0b40e00a08572c347685ef71a854114c89b74d5e Mon Sep 17 00:00:00 2001
+From: omerefrx <omerx.efrat@intel.com>
+Date: Thu, 2 Nov 2017 17:56:49 +0200
+Subject: [PATCH] Discard driver events if hostapd's interface didn't finished
+ initialization yet. This may happen when driver sends irrelevant events due
+ to station mode actions
+
+
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index c23a87c..1104171 100644
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -1062,6 +1062,14 @@ static void hostapd_event_ltq_flush_stations_rx(struct hostapd_data *hapd,
+   struct hostapd_iface *iface = hapd->iface;
+   s32 flush;
+ 
++  /* Discard event if interface didn't finished initialization.
++   * This may happen when driver sends irrelevant events due to station mode actions
++   */
++  if (iface->state != HAPD_IFACE_ENABLED) {
++    wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
++    return;
++  }
++
+   if (data_len != sizeof(s32))
+     flush = LTQ_FLUSH_RADIO;
+   else
+@@ -1117,6 +1125,14 @@ static void hostapd_event_ltq_chan_data(struct hostapd_data *hapd,
+ {
+   struct hostapd_iface *iface = hapd->iface;
+ 
++  /* Discard event if interface didn't finished initialization.
++   * This may happen when driver sends irrelevant events due to station mode actions
++   */
++  if (iface->state != HAPD_IFACE_ENABLED) {
++    wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
++    return;
++  }
++
+   hostapd_ltq_update_channel_data(iface, data, data_len);
+ }
+ 
+@@ -1125,6 +1141,14 @@ static void hostapd_event_ltq_unconnected_sta_rx(struct hostapd_data *hapd,
+ {
+   char buf[30];
+ 
++  /* Discard event if interface didn't finished initialization.
++   * This may happen when driver sends irrelevant events due to station mode actions
++   */
++  if (hapd->iface->state != HAPD_IFACE_ENABLED) {
++    wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
++    return;
++  }
++
+   os_snprintf(buf, sizeof(buf), MACSTR, MAC2STR(unc_sta->addr));
+   wpa_msg(hapd->msg_ctx, MSG_INFO,
+     UNCONNECTED_STA_RSSI "%s rx_bytes=%llu rx_packets=%u "
+@@ -1225,6 +1249,14 @@ static void hostapd_event_ltq_wds_connect_rx(struct hostapd_data *hapd,
+ 	u16 resp, i, capab_info = 0;
+ 	int new_assoc = 1;
+ 
++	/* Discard event if interface didn't finished initialization.
++	 * This may happen when driver sends irrelevant events due to station mode actions
++	 */
++	if (hapd->iface->state != HAPD_IFACE_ENABLED) {
++	  wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
++	  return;
++	}
++
+ 	if (data_len != sizeof(*wds_sta) + wds_sta->assoc_req_ies_len) {
+ 		wpa_printf(MSG_ERROR, "Wrong hostapd_wds_sta_connect data length");
+ 		return;
+@@ -1370,6 +1402,15 @@ static void hostapd_event_ltq_wds_disconnect_rx(struct hostapd_data *hapd,
+ {
+ 	struct wv_wds_sta_info *wds_sta = (struct wv_wds_sta_info *)data;
+ 
++	/* Discard event if interface didn't finished initialization.
++	 * This may happen when driver sends irrelevant events due to station mode actions
++	 */
++	if (hapd->iface->state != HAPD_IFACE_ENABLED) {
++	  wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
++	  return;
++	}
++
++
+ 	if (data_len != sizeof(*wds_sta) + wds_sta->assoc_req_ies_len) {
+ 		wpa_printf(MSG_ERROR, "Wrong hostapd_wds_sta_disconnect data length");
+ 		return;
+-- 
+2.10.1
+

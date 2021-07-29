@@ -1,0 +1,55 @@
+# HG changeset patch
+# Parent 57c0d0a8b4b85cad0e1173ab9c2134bcf0cb0a18
+
+diff --git a/arch/x86/platform/intel-ce2700/intel-ce2700.c b/arch/x86/platform/intel-ce2700/intel-ce2700.c
+--- a/arch/x86/platform/intel-ce2700/intel-ce2700.c
++++ b/arch/x86/platform/intel-ce2700/intel-ce2700.c
+@@ -200,6 +200,40 @@ static int __init ce2700_register_spi(st
+ 	return platform_device_register_full(&ce2700_pcu_spi);
+ }
+ 
++static struct gpio_keys_button gpio_keys[] = {
++        {
++        .desc = "wps",
++        .type = EV_KEY,
++        .code = KEY_WPS_BUTTON,
++        .debounce_interval = 60,
++        .gpio = 51,
++        .active_low = 1,
++        },
++
++};
++
++static struct gpio_keys_platform_data gpio_keys_data = {
++        .nbuttons = ARRAY_SIZE(gpio_keys),
++        .buttons = gpio_keys,
++        .poll_interval = 100,
++};
++
++static struct platform_device wps_button_dev = {
++        .name = "gpio-keys-polled",
++        .id = -1,
++        .dev.platform_data = &gpio_keys_data,
++};
++
++static struct __initdata platform_device *wps_devs[] = {
++ 
++	&wps_button_dev,
++ 
++};
++
++static int __init add_wps_devs()
++{
++	return platform_add_devices(wps_devs, ARRAY_SIZE(wps_devs));
++}
+ 
+ static int __init intel_ce_platform_init(void)
+ {
+@@ -221,6 +255,7 @@ static int __init intel_ce_platform_init
+ 		{
+ 		case EASY750_BOARD_ID:
+ 			platform_device_register(&ce2700_gpio_leds);
++			platform_add_devices(wps_devs, ARRAY_SIZE(wps_devs));
+ 			break;
+ 		case HVP_BOARD_ID:
+ 			add_hvp_devs();

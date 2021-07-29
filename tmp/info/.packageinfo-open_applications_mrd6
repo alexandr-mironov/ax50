@@ -1,0 +1,44 @@
+Source-Makefile: package/feeds/open_applications/mrd6/Makefile
+Package: mrd6
+Menu: 1
+Version: 0.9.6-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Base system
+Title: MRD6
+Maintainer: 
+Source: mrd6-0.9.6.tar.gz
+Type: ipkg
+Description:   Package for MRD6 Support 
+http://en.sourceforge.jp/
+
+@@
+Config:
+   	menu "overwrite package version"
+		depends on PACKAGE_mrd6
+	config mrd6_USE_CUSTOM_VERSION
+		depends on PACKAGE_mrd6
+		bool "Use custom package version"
+		default n
+	config mrd6_CUSTOM_VERSION
+		depends on mrd6_USE_CUSTOM_VERSION
+		string "mrd6 version as string (default version: 0.9.6)"
+		default "0.9.6"
+	endmenu
+   	menu "custom source directory"
+		depends on PACKAGE_mrd6
+	config mrd6_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_mrd6
+		bool "Use custom source directory"
+		default n
+	config mrd6_CUSTOM_SOURCE_DIR
+		depends on mrd6_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default ""
+	endmenu
+@@
+
+

@@ -1,0 +1,9 @@
+# UAPI Header export list
+header-y += gsw_types.h
+header-y += uapi_lantiq_ethsw.h
+header-y += uapi_lantiq_ethsw_api.h
+header-y += uapi_lantiq_ethsw_flow.h
+header-y += uapi_lantiq_gsw.h
+header-y += uapi_lantiq_gsw_api.h
+header-y += uapi_lantiq_gsw_flow.h
+header-y += ppa_api.h

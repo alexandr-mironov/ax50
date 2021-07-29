@@ -1,0 +1,38 @@
+From 3d2dfcbc8eddc8d39ca9c856c25d0b718aca1034 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 1 Jan 2017 10:26:56 +0200
+Subject: [PATCH 563/639] Align prv header
+
+---
+ include/linux/avalanche/puma7/puma7_cppi_prv.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/include/linux/avalanche/puma7/puma7_cppi_prv.h b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+index 919cefc..32b48ac 100755
+--- a/include/linux/avalanche/puma7/puma7_cppi_prv.h
++++ b/include/linux/avalanche/puma7/puma7_cppi_prv.h
+@@ -513,7 +513,7 @@ typedef enum PAL_CPPI_PP_DESC_REGIONs
+ #define PAL_CPPI_PP_SHARED_LOW_INFRA_HOST_FD_DESC_COUNT                                     512
+ #endif
+ 
+-#define PAL_CPPI_PP_DOCSIS_LOW_INFRA_HOST_FD_DESC_COUNT                                     128
++#define PAL_CPPI_PP_DOCSIS_LOW_INFRA_HOST_FD_DESC_COUNT                                     256
+ #define PAL_CPPI_PP_DOCSIS_HI_INFRA_HOST_FD_DESC_COUNT                                      64
+ #define PAL_CPPI_PP_DOCSIS_RX_MGMT_HOST_FD_DESC_COUNT                                       64
+ #define PAL_CPPI_PP_DOCSIS_TX_MGMT_HOST_FD_DESC_COUNT                                       64
+@@ -656,9 +656,9 @@ typedef enum PAL_CPPI_PP_DESC_REGIONs
+ #define PAL_CPPI_PP_NP2APP_HOST_FD_DESC_COUNT                                               256
+ #define PAL_CPPI_PP_NP2APP_INFRA_PPINFO_HOST_FD_DESC_COUNT                                  128
+ #define PAL_CPPI_PP_NP2APP_INFRA_DATA_HOST_FD_DESC_COUNT                                    128
+-#define PAL_CPPI_PP_APP2NP_HOST_FD_DESC_COUNT                                               256
+-#define PAL_CPPI_PP_APP2NP_INFRA_PPINFO_HOST_FD_DESC_COUNT                                  128
+-#define PAL_CPPI_PP_APP2NP_INFRA_DATA_HOST_FD_DESC_COUNT                                    128
++#define PAL_CPPI_PP_APP2NP_HOST_FD_DESC_COUNT                                               512
++#define PAL_CPPI_PP_APP2NP_INFRA_PPINFO_HOST_FD_DESC_COUNT                                  256
++#define PAL_CPPI_PP_APP2NP_INFRA_DATA_HOST_FD_DESC_COUNT                                    256
+ #define PAL_CPPI_PP_APP2NP_INFRA_HIGH_PPINFO_HOST_FD_DESC_COUNT                             64
+ #define PAL_CPPI_PP_APP2NP_INFRA_HIGH_DATA_HOST_FD_DESC_COUNT                               64
+ #define PAL_CPPI_PP_NP2APP_INFRA_HIGH_PPINFO_HOST_FD_DESC_COUNT                             64
+-- 
+2.10.1
+

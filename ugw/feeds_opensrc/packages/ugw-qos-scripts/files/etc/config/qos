@@ -1,0 +1,30 @@
+#Interfaces
+
+config interface qos
+	option classgroup "ETH_WAN"
+	option device "pppoe-qos"
+	option enabled 1
+	option direction "in"
+	
+config classgroup "ETH_WAN"
+	option classes "Priority Express"
+
+#wan_def_queue
+config class "Priority"
+	option policy "sp"
+	option packetsize  102400
+	option priority 8
+
+#wan_mgmt_queue
+config class "Express"
+	option policy "sp"
+	option packetsize  102400
+	option priority 1
+
+
+
+
+
+
+
+

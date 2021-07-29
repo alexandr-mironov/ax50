@@ -1,0 +1,25 @@
+Source-Makefile: feeds/ltq_packages/boot/uboot-envtools/Makefile
+Package: uboot-envtools
+Version: 2014.10-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: +fstools
+Section: utils
+Category: Utilities
+Title: read/modify U-Boot bootloader environment
+Maintainer: 
+Source: u-boot-2014.10.tar.bz2
+License: GPL-2.0 GPL-2.0+
+LicenseFiles: Licenses/README
+Type: ipkg
+Description:  This package includes tools to read and modify U-Boot bootloader environment.
+http://www.denx.de/wiki/U-Boot
+
+@@
+Config:
+	source "package/boot/uboot-envtools/Config.in"
+@@
+
+

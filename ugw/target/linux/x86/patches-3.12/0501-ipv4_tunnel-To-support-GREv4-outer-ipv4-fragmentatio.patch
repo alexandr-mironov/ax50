@@ -1,0 +1,39 @@
+From 37b28097dc844be3f831fda590b77fd822eae6e8 Mon Sep 17 00:00:00 2001
+From: Vinod Loganathan Ramesh Kumar <vinod.loganathan.ramesh.kumar@intel.com>
+Date: Mon, 17 Oct 2016 18:27:57 -0700
+Subject: [PATCH 501/639] ipv4_tunnel: To support GREv4 outer ipv4
+ fragmentation.
+
+GREv4 outer packet ipv4 fragmentation isn't supported by host. Whenever
+the inner packet is greater than the GRE MTU size and the inner packet df bit is
+1, the packet gets dropped. This is due to outer ipv4 packets copies the df bit
+of inner packets which is set to 1.
+
+The df bit of outer ipv4 packet is always set to 0 to support GREv4 outer ipv4
+framentation based on the white paper recommendations
+http://www.cisco.com/c/en/us/support/docs/ip/generic-routing-encapsulation-gre/25885-pmtud-ipfrag.html
+
+Signed-off-by: Vinod Loganathan Ramesh Kumar <vinod.loganathan.ramesh.kumar@intel.com>
+---
+ net/ipv4/ip_tunnel.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/net/ipv4/ip_tunnel.c b/net/ipv4/ip_tunnel.c
+index d47c7ea..98b2912 100644
+--- a/net/ipv4/ip_tunnel.c
++++ b/net/ipv4/ip_tunnel.c
+@@ -645,7 +645,10 @@ void ip_tunnel_xmit(struct sk_buff *skb, struct net_device *dev,
+ 
+ 	df = tnl_params->frag_off;
+ 	if (skb->protocol == htons(ETH_P_IP))
+-		df |= (inner_iph->frag_off&htons(IP_DF));
++        /* change from '|' to '&' to support GREv4 outer packet ipv4
++         fragmentation based on the white paper recommendations
++         http://www.cisco.com/c/en/us/support/docs/ip/generic-routing-encapsulation-gre/25885-pmtud-ipfrag.html */
++		df &= (inner_iph->frag_off&htons(IP_DF));
+ 
+ 	max_headroom = LL_RESERVED_SPACE(rt->dst.dev) + sizeof(struct iphdr)
+ 			+ rt->dst.header_len;
+-- 
+2.10.1
+

@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ltq_packages/network/utils/iperf3/Makefile
+Package: iperf3
+Version: 3.0.11-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Internet Protocol bandwidth measuring tool
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: iperf-3.0.11.tar.gz
+License: BSD-3-Clause
+Type: ipkg
+Description:  Iperf is a modern alternative for measuring TCP and UDP bandwidth
+ performance, allowing the tuning of various parameters and
+ characteristics.
+http://sourceforge.net/projects/iperf/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

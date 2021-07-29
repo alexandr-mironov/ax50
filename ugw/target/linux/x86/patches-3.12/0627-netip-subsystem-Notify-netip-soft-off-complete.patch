@@ -1,0 +1,65 @@
+From d0bd47e671f67fd4ac505fcdb08c5bd212b06d59 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Mon, 3 Apr 2017 16:56:27 -0700
+Subject: [PATCH 627/639] netip-subsystem: Notify netip soft off complete
+
+NetIP subsystem sends netip soft off message to turn off gracefully the
+NetIP services, when userspaces writes 1 to netip_soft_off sysfs attribu
+te. User space will be polling on the attribute to know when the netip
+soft off message is completed i.e when the NetIP processed and acknowled
+ged the message. To make the polling efficient and let the userspace use
+linux standard functions like poll and select, adding the sysfs_notify
+call when the NetIP susbsystem driver receives the acknowledgement for
+the netip soft off message and clears the netip_soft_off sysfs attribute
+indicating that the message processing completed successfully.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ arch/x86/NetIP_SubSystem/netip_subsystem_pm.c    | 3 +++
+ arch/x86/NetIP_SubSystem/netip_subsystem_sysfs.c | 2 +-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+index 59d6f0a..f2fe9de 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_pm.c
+@@ -40,6 +40,7 @@
+ #include "netip_subsystem_defs.h"
+ #include "netip_subsystem_pm.h"
+ #include "netip_subsystem_sysfs.h"
++#include <linux/netdevice.h>
+ 
+ #define NETIP_CRU0_MOD_STATE_OFFSET (0)
+ #define NETIP_CRU0_MOD_STATUS_OFFSET (4)
+@@ -63,6 +64,7 @@ int __netss_set_service_level(uint32_t level);
+ int netss_notify_netip_power_state_to_child_drivers(netss_power_state_t state);
+ /*External variables */
+ extern struct net_subsystem_drv_data *pnetss_drv_data;
++extern struct net_device *g_netss_netdev;
+ 
+ #define NETSS_PM_PRINT(fmt, args...) \
+ do { \
+@@ -809,6 +811,7 @@ static void netss_update_sysfs_attributes(netss_sysfs_attributes_info_t *sysfs_i
+             netss_notify_netip_power_state_to_child_drivers(NETSS_NETIP_POWER_STATE_OFF);
+ 	    /**Indicate that netip_soft_off exectution is complete, as we got reply for all service requests */
+             sysfs_info->netip_soft_off = 0;
++            sysfs_notify(&g_netss_netdev->dev.kobj, NULL, "netip_soft_off");
+             /**Indicate that netip is in soft off state */
+             g_is_netip_in_soft_off_state = true;
+ 	 }
+diff --git a/arch/x86/NetIP_SubSystem/netip_subsystem_sysfs.c b/arch/x86/NetIP_SubSystem/netip_subsystem_sysfs.c
+index 79eb191..b428536 100644
+--- a/arch/x86/NetIP_SubSystem/netip_subsystem_sysfs.c
++++ b/arch/x86/NetIP_SubSystem/netip_subsystem_sysfs.c
+@@ -56,7 +56,7 @@ static void dummy_setup(struct net_device *dev)
+ 	dev->destructor = free_netdev;
+ }
+ 
+-static struct net_device *g_netss_netdev;
++struct net_device *g_netss_netdev = NULL;
+ 
+ static ssize_t service_show(struct device *dev,
+ 			struct device_attribute *attr,
+-- 
+2.10.1
+

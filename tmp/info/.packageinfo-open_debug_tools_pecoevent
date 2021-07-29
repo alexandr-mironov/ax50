@@ -1,0 +1,21 @@
+Source-Makefile: package/feeds/open_debug_tools/pecoevent/Makefile
+Package: ltq-pecoevent
+Submenu: UGW Software
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @PACKAGE_pecostat_interaptiv||@PACKAGE_pecostat +system_fapi
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: PACKAGE_pecostat_interaptiv:pecostat_interaptiv PACKAGE_pecostat:pecostat +system_fapi
+Section: ltq-pecoevent
+Category: Lantiq
+Title: pecoevent is used get counter of performance counters from pecostat
+Maintainer: Lantiq Deutschland GmbH == www.lantiq.com
+Source: 
+Type: ipkg
+Description:  This package contains an utility to get counter values from pecostat
+http://www.lantiq.com
+Lantiq Deutschland GmbH == www.lantiq.com
+@@
+
+

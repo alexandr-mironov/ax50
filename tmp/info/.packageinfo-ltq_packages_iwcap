@@ -1,0 +1,23 @@
+Source-Makefile: package/feeds/ltq_packages/iwcap/Makefile
+Package: iwcap
+Version: 1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Simple radiotap capture utility
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: 
+License: Apache-2.0
+Type: ipkg
+Description:   The iwcap utility receives radiotap packet data from wifi monitor interfaces
+  and outputs it to pcap format. It gathers recived packets in a fixed ring
+  buffer to dump them on demand which is useful for background monitoring.
+  Alternatively the utility can stream the data to stdout to act as remote
+  capture drone for Wireshark or similar programs.
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

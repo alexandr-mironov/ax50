@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/ltq_packages/fconfig/Makefile
+Package: fconfig
+Version: 20080329-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: RedBoot configuration editor
+Maintainer: 
+Source: fconfig-20080329.tar.gz
+Type: ipkg
+Description: 	displays and (if writable) also edits the RedBoot configuration.
+http://andrzejekiert.ovh.org/software.html.en
+
+@@
+
+

@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/open_applications/pciutils/Makefile
+Package: pciutils
+Version: 3.1.10-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +zlib
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Linux PCI Utilities
+Maintainer: 
+Source: pciutils-3.1.10.tar.bz2
+Type: ipkg
+Description:  contains collection of programs for inspecting and manipulating configuration
+ of PCI devices
+http://mj.ucw.cz/pciutils.shtml
+
+@@
+
+

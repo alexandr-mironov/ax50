@@ -1,0 +1,24 @@
+From a5f2dde814f73c6816e545ab004e390cfcc37b83 Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 12 Mar 2017 11:18:27 +0200
+Subject: [PATCH 621/639] Add TCP no Ack flag
+
+---
+ include/linux/avalanche/generic/avalanche_pp_api.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/linux/avalanche/generic/avalanche_pp_api.h b/include/linux/avalanche/generic/avalanche_pp_api.h
+index 6a1f3c9..c97690a 100755
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -1101,6 +1101,7 @@ typedef struct
+                                 #define AVALANCHE_PP_EGRESS_MULTICAST                           0x100
+                                 #define AVALANCHE_PP_EGRESS_ICMP                                0x200
+                                 #define AVALANCHE_PP_EGRESS_ENABLE_FRAG_BP                      0x400
++                                #define AVALANCHE_PP_EGRESS_FIELD_ENABLE_TCP_NO_ACK             0x800
+     Uint8                       reserved;
+ 
+     __Avalanche_PP_LUTs_Data_t  lookup;
+-- 
+2.10.1
+

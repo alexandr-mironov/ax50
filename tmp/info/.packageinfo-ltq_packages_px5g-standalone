@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/px5g-standalone/Makefile
+Package: px5g-standalone
+Version: 2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Standalone X.509 certificate generator (standalone version)
+Maintainer: Jo-Philipp Wich <xm@subsignal.org>
+Source: 
+Type: ipkg
+Description:  Px5g is a tiny standalone X.509 certificate generator.
+ It suitable to create key files and certificates in DER
+ and PEM format for use with stunnel, uhttpd and others.
+Jo-Philipp Wich <xm@subsignal.org>
+@@
+
+

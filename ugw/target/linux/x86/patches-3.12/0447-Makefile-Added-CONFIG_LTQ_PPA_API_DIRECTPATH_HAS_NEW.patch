@@ -1,0 +1,29 @@
+From 78a9e1ac778d500dd38fb27f67251ab88dbf5396 Mon Sep 17 00:00:00 2001
+From: "Sukerkar, Amol N" <amol.n.sukerkar@intel.com>
+Date: Tue, 26 Jul 2016 14:16:32 -0700
+Subject: [PATCH 447/639] Makefile: Added
+ CONFIG_LTQ_PPA_API_DIRECTPATH_HAS_NEW_API
+
+The config option drivers/net/lpal_api depends on has changed
+from CONFIG_LPAL_DIRECTPATH to
+CONFIG_LTQ_PPA_API_DIRECTPATH_HAS_NEW_API. Updating Makefile with
+that change.
+
+Signed-off-by: Sukerkar, Amol N <amol.n.sukerkar@intel.com>
+---
+ drivers/net/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/Makefile b/drivers/net/Makefile
+index b1714cd..9aa77dd 100644
+--- a/drivers/net/Makefile
++++ b/drivers/net/Makefile
+@@ -74,4 +74,4 @@ obj-$(CONFIG_USB_CDC_PHONET)   += usb/
+ 
+ obj-$(CONFIG_HYPERV_NET) += hyperv/
+ obj-$(CONFIG_NTB_NETDEV) += ntb_netdev.o
+-obj-$(CONFIG_LPAL_DIRECTPATH) += lpal_api/
++obj-$(CONFIG_LPAL_DIRECTPATH) += lpal_api/
+-- 
+2.10.1
+

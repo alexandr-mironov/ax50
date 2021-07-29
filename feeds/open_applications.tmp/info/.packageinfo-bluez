@@ -1,0 +1,62 @@
+Source-Makefile: feeds/open_applications/bluez/Makefile
+Package: bluez-examples
+Version: 5.30-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +python
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl
+Section: utils
+Category: Utilities
+Title: Bluetooth python example apps
+Maintainer: Nicolas Thill <nico@openwrt.org>
+Source: bluez-5.30.tar.xz
+License: GPL-2.0+
+LicenseFiles: COPYING
+Type: ipkg
+Description:   contains many examples apps for bluetooth, requiring python
+http://www.bluez.org/
+Nicolas Thill <nico@openwrt.org>
+@@
+
+Package: bluez-libs
+Version: 5.30-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl
+Section: libs
+Category: Libraries
+Title: Bluetooth library
+Maintainer: Nicolas Thill <nico@openwrt.org>
+Source: bluez-5.30.tar.xz
+License: GPL-2.0+
+LicenseFiles: COPYING
+Type: ipkg
+Description: Bluetooth library
+http://www.bluez.org/
+Nicolas Thill <nico@openwrt.org>
+@@
+
+Package: bluez-utils
+Version: 5.30-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +bluez-libs +libpthread +librt +dbus +glib2 +libical +libncurses +libreadline +BUILD_NLS:libintl-full +BUILD_NLS:libiconv-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: !BUILD_NLS:libiconv !BUILD_NLS:libintl
+Section: utils
+Category: Utilities
+Title: Bluetooth utilities
+Maintainer: Nicolas Thill <nico@openwrt.org>
+Source: bluez-5.30.tar.xz
+License: GPL-2.0+
+LicenseFiles: COPYING
+Type: ipkg
+Description: Bluetooth utilities
+http://www.bluez.org/
+Nicolas Thill <nico@openwrt.org>
+@@
+
+

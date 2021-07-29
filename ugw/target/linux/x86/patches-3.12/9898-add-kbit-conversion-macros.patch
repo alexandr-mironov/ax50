@@ -1,0 +1,15 @@
+# HG changeset patch
+# Parent de7306a10b4f1b6f4ef8d04fa2e545b1d69bcbe8
+
+diff --git a/include/linux/avalanche/generic/pp_qos_p7.h b/include/linux/avalanche/generic/pp_qos_p7.h
+--- a/include/linux/avalanche/generic/pp_qos_p7.h
++++ b/include/linux/avalanche/generic/pp_qos_p7.h
+@@ -109,6 +109,8 @@
+ 
+ /* Rate(in Mbps) * 1M) / iteration per second / 8(bits in byte) */
+ #define PP_QOS_MEGA_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)    ((Uint32)(((Uint64)(x * 1000 * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
++#define PP_QOS_KILO_BIT_PER_SEC_TO_IT_CREDIT_BYTES(x)    ((Uint32)(((Uint64)(x * 1000)) / PP_QOS_ITERATION_PER_SECOND / 8 ))
++#define PP_QOS_MBIT_TO_KBIT(x)  ((Uint32)(x*1000))
+ #define PP_QOS_PPS_TO_IT_CREDIT_PACKETS(x)               ((Uint16)(x / PP_QOS_ITERATION_PER_SECOND))
+ 
+ /************************************************/

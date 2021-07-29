@@ -1,0 +1,43 @@
+From af25c43fe50aea632b221528f2607bed9ea4cbf9 Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Wed, 13 Jul 2016 10:49:26 -0700
+Subject: [PATCH 442/639] DWC_ETH_QOS: update MSS in only ctxt descriptor
+
+The current synopsis GBE driver updates the MSS value in the context
+descriptor and also in the DMA control register. Because of that when
+two sessions are running with different MSS sizes, the writing of MSS
+into DMA control register is effecting the packets of other session
+whose MSS value is less causing the DMA and MTL hang waiting for more
+bits and never generating the transmit complete interrupt. To fix this
+hang now GBE driver only updates the MSS in context descriptor which
+will effect only the packet represented by those set of descriptors.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c
+index c713857..cfbb592 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_dev.c
+@@ -2424,9 +2424,13 @@ static void pre_transmit(struct DWC_ETH_QOS_prv_data *pdata, uint32_t qInx)
+       VAR32_SET_BIT(tx_desc->TDES3, CONTEXT_TDES3_TYPE, 1);
+       VAR32_SET_BIT(tx_desc->TDES3, CONTEXT_TDES3_OWN, 1);
+ 
+-      /* DMA uses the MSS value programed in DMA_CR if driver
+-       * doesn't provided the CONTEXT descriptor */
+-      DWC_REG_WR_FIELD(DMA_CR(qInx), DMA_CR_MSS, tx_pkt_features->mss);
++      /* Deleting the writing of MSS into DMA_CR as the
++       * spec says it should be written into either the
++       * CONTEXT descriptor or DMA_CR register. The
++       * context descriptor is updated with MSS in the
++       * above code. Refer to the
++       * DWC_ether_qos_databook_4.00a.pdf section 11.12
++       */
+ 
+       tx_desc_data->default_mss = tx_pkt_features->mss;
+ 
+-- 
+2.10.1
+

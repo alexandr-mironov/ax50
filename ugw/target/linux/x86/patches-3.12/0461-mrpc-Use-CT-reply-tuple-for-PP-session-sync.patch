@@ -1,0 +1,53 @@
+From 3e080769f2ab5e9ec0b8ce2e5279228be16c9159 Mon Sep 17 00:00:00 2001
+From: avelayux <arunkumar.velayutham@intel.com>
+Date: Mon, 8 Aug 2016 16:33:14 -0700
+Subject: [PATCH 461/639] mrpc: Use CT reply tuple for PP session sync
+
+UDP NAT'd traffic between LAN to WAN related connection tracking entry on
+ATOM was always getting removed up on timeout though there is a active PP
+session available of these connections. This was due to the connection
+tracking entry differences between ARM and ATOM for NAT'd traffic. ATOM
+will have the entry between CPE to NSI, ARM will have the connection
+entry between CPE to NSI and EROUTER to NSI. PP session is always linked
+to the EROUTER to NSI entry in the ARM side. When ATOM CPE to NSI entry is
+timed out, it will try to lookup for a PP session related to CPE->NSI which
+will always fail. This issue is specific to UDP traffic only as we don't
+have the reversion path learnt in PP for UDP traffic. (TCP reverse path will
+have a PP session linked to NSI to CPE entry of CT. So for TCP CT entry from
+ATOM lookup on ARM will always succeed) - HSD-247666
+
+Use ATOM conntrack REPLY tuple information to lookup for PP session in ARM to
+solve the above mentioned issue.reply tuple information matches for all kind
+of traffic between ARM and ATOM.(LAN to LAN, LAN to WAN, Bridge mode).
+
+NOTE: This behavior is very specific to Puma7 datapipe based slow path. This
+module will be disabled once we get PP on ATOM working.
+
+Signed-off-by: avelayux <arunkumar.velayutham@intel.com>
+---
+ drivers/mrpc/core/conntrack_client.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mrpc/core/conntrack_client.c b/drivers/mrpc/core/conntrack_client.c
+index 51e1e32..ac9c940 100644
+--- a/drivers/mrpc/core/conntrack_client.c
++++ b/drivers/mrpc/core/conntrack_client.c
+@@ -78,7 +78,14 @@
+ #define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
+ #endif
+ 
+-#define IP_CT_DIR_ORIGINAL 0
++/* HACK - redefine IP_CT_DIR_ORIGINAL from 0 to 1 just in minimize the changes.
++LAN to WAN UDP NAT'd traffic related connection tracking entry on ATOM was not match
++with the Packet Processor Session in ARM due to conflicts in learning the connection
++tracking entry at ARM and ATOM. (mainly due to Puma7 slow path packet flow).
++By choosing CT reply tuple information, we could match all the possible packet flow
++scenarios. LAN to LAN, LAN to WAN, bridge mode.*/
++/*NOTE: This module will be disabled once we get the PP on ATOM working!*/
++#define IP_CT_DIR_ORIGINAL 1
+ #define IP_CT_DIR_REPLY 1
+ #define CT_MRPC_FALIURE -1
+ #define IN_PROGRESS 1
+-- 
+2.10.1
+

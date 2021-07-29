@@ -1,0 +1,49 @@
+From 279cbf0e4ea8c66be9c2c59d2f3bb170e3dab839 Mon Sep 17 00:00:00 2001
+From: gazriel <gadi.azriel@intel.com>
+Date: Tue, 4 Apr 2017 20:29:22 +0300
+Subject: [PATCH 628/639]  bugfix/PUMARTSYS-1496: Fix wrong mapping of docsis
+ priority to PCP of DS traffic to external switch
+
+---
+ net/8021q/vlan_dev.c | 23 ++++-------------------
+ 1 file changed, 4 insertions(+), 19 deletions(-)
+
+diff --git a/net/8021q/vlan_dev.c b/net/8021q/vlan_dev.c
+index 71ff10d..2f17b93 100644
+--- a/net/8021q/vlan_dev.c
++++ b/net/8021q/vlan_dev.c
+@@ -72,27 +72,12 @@ static inline u16
+ vlan_dev_get_egress_qos_mask(struct net_device *dev, struct sk_buff *skb)
+ {
+ #if defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL)
+-	if (skb->ti_ds_traffic_prio)
++	if ((skb->ti_ds_traffic_prio < 2) && (dev->priv_flags & IFF_BONDING))
+ 	{
+-	    return ((VLAN_PRIO_MASK & (7)) << VLAN_PRIO_SHIFT);
++		/* Increase VLAN priority for traffic directed to the LAG */
++		return (VLAN_PRIO_MASK & ((2) << VLAN_PRIO_SHIFT));
+ 	}
+-	else if (dev->priv_flags & IFF_BONDING)
+-	{
+-		return ((VLAN_PRIO_MASK & (2)) << VLAN_PRIO_SHIFT);
+-	}
+-	return ((VLAN_PRIO_MASK & (0)) << VLAN_PRIO_SHIFT);
+-/* TODO: replace the above mapping with the following priority mapping:
+-    if (IS_LACP(skb)) {
+-
+-	}
+-	else if (skb->ti_ds_traffic_prio) {
+-	    return ((VLAN_PRIO_MASK & (4)) << VLAN_PRIO_SHIFT);
+-	}
+-	else if (dev->priv_flags & IFF_BONDING) {
+-		return ((VLAN_PRIO_MASK & (2)) << VLAN_PRIO_SHIFT);
+-	}
+-	return ((VLAN_PRIO_MASK & (0)) << VLAN_PRIO_SHIFT);
+-*/
++	return (VLAN_PRIO_MASK & (((u16)(skb->ti_ds_traffic_prio)) << VLAN_PRIO_SHIFT));
+ #else
+ 	struct vlan_priority_tci_mapping *mp;
+ 
+-- 
+2.10.1
+

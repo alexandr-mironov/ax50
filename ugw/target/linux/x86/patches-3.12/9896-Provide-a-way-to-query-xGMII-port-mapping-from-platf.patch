@@ -1,0 +1,66 @@
+From b960ddac2499f42edcfbba7998b4dbd86438071e Mon Sep 17 00:00:00 2001
+From: Larry Wu <larry.wu@intel.com>
+Date: Thu, 22 Feb 2018 22:36:37 -0700
+Subject: [PATCH] Provide a way to query xGMII port mapping from platform
+ driver
+
+---
+ drivers/platform/x86/puma_acpi.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/platform/x86/puma_acpi.c b/drivers/platform/x86/puma_acpi.c
+index da987afd1ff9..c2d5ba8a7465 100755
+--- a/drivers/platform/x86/puma_acpi.c
++++ b/drivers/platform/x86/puma_acpi.c
+@@ -1,7 +1,7 @@
+ /*
+  * PUMA platform ACPI driver
+  *
+- * Copyright (C) 2015 - 2016 Intel Corp
++ * Copyright (C) 2015 - 2018 Intel Corp
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+@@ -835,6 +835,23 @@ static ssize_t show_power_test_mode(struct device *dev, struct device_attribute
+    return sprintf(buf, "%d\n", data->power_test_mode);
+ }
+ 
++static ssize_t show_xgmii_port_mapping(struct device *dev, struct device_attribute *attr, char *buf)
++{
++   struct acpi_device *acpi = to_acpi_device(dev);
++   struct puma_acpi_data *data = (NULL == acpi) ? NULL : acpi_driver_data(acpi);
++   unsigned int port_mapping = 0;
++
++   if (NULL == data) {
++      return -ENXIO;
++   }
++
++   if (puma_acpi_get_data(data, "GMPM", &port_mapping)) {
++      pr_err("puma_acpi_get_data GMPM failed!\n");
++   }
++
++   return sprintf(buf, "0x%08x\n", port_mapping);
++}
++
+ static ssize_t store_dsb_device_mask(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+ {
+    unsigned int dsb_device_mask;
+@@ -942,6 +959,7 @@ static DEVICE_ATTR(bbu_device_mask, S_IRUGO | S_IWUSR, show_bbu_device_mask, sto
+ static DEVICE_ATTR(sb_device_mask, S_IRUGO | S_IWUSR, show_sb_device_mask, store_sb_device_mask);
+ static DEVICE_ATTR(dsb_device_mask, S_IRUGO | S_IWUSR, show_dsb_device_mask, store_dsb_device_mask);
+ static DEVICE_ATTR(power_test_mode, S_IRUGO | S_IWUSR, show_power_test_mode, store_power_test_mode);
++static DEVICE_ATTR(xgmii_port_mapping, S_IRUGO, show_xgmii_port_mapping, NULL);
+ 
+ static struct attribute_group *puma_acpi_sysfs_entries[] = {
+    &dev_attr_system_state.attr,
+@@ -963,6 +981,7 @@ static struct attribute_group *puma_acpi_sysfs_entries[] = {
+    &dev_attr_sb_device_mask.attr,
+    &dev_attr_dsb_device_mask.attr,
+    &dev_attr_power_test_mode.attr,
++   &dev_attr_xgmii_port_mapping.attr,
+    NULL,
+ };
+ 
+-- 
+2.11.0
+

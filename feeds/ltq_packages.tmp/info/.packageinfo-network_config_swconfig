@@ -1,0 +1,19 @@
+Source-Makefile: feeds/ltq_packages/network/config/swconfig/Makefile
+Package: swconfig
+Version: 10
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libuci +libnl-tiny
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: Switch configuration utility
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: 
+License: GPL-2.0
+Type: ipkg
+Description: Switch configuration utility
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

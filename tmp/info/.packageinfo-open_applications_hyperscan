@@ -1,0 +1,22 @@
+Source-Makefile: package/feeds/open_applications/hyperscan/Makefile
+Package: hyperscan
+Version: 4.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +boost +ragel +python-subprocess +libpcap +libstdc++
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: IntelBaseComponents
+Category: Network
+Title: Hyperscan high-performance regex matching library
+Maintainer: Intel Corporation
+Source: hyperscan-4.0.0.tar.bz2
+License: BSD
+Type: ipkg
+Description: 	Hyperscan is a software regular expression matching engine designed 
+	with high performance and flexibility in mind.  It is implemented as 
+	a library that exposes a straightforward C API.
+https://01.org/hyperscan
+Intel Corporation
+@@
+
+

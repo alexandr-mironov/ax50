@@ -1,0 +1,104 @@
+#!/bin/sh
+###############################################################################
+#  
+# Copyright (c) 2017, Broadband Forum
+# Copyright (c) 2017, MaxLinear, Inc. and its affiliates
+# 
+# Redistribution and use in source and binary forms, with or
+# without modification, are permitted provided that the following
+# conditions are met:
+# 
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 
+# 2. Redistributions in binary form must reproduce the above
+#    copyright notice, this list of conditions and the following
+#    disclaimer in the documentation and/or other materials
+#    provided with the distribution.
+# 
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products
+#    derived from this software without specific prior written
+#    permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+# CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# 
+# The above license is used as a license under copyright only.
+# Please reference the Forum IPR Policy for patent licensing terms
+# <https://www.broadband-forum.org/ipr-policy>.
+# 
+# Any moral rights which are necessary to exercise under the above
+# license grant are also deemed granted under this license.
+
+##############################################################################
+#
+# Description: This script is in charge of modifying the default behavior of
+#              the WPS hardware button in a Linksys 1900 AC device, running
+#              OpenWRT.
+#
+#              This script must be copied in the /etc/rc.button directory.
+#
+#              The WPS button will be reconfigured to execute two actions:
+#
+#                1) If the button is pressed less than 1 second, it will
+#                   toggle the WIFI 'radio 1' to ON or OFF, depending of its
+#                   previous state.
+#                   This is useful to switch ON or OFF the WIFI without
+#                   entering in the Web configuration page.
+#
+#                2) If the button is pressed more than 3 seconds, it will
+#                   start the 1905 Push Button procedure.
+#                   Depending on the configuration, this procedure will secure
+#                   all device interfaces, and clone the WIFI configuration 
+#                   from another device.
+#                   For more information about the Push Button procedure,
+#                   please read the README file provided with the 1905 stack
+#                   implementation.
+#
+###############################################################################
+
+[ "${ACTION}" = "released" ] || exit 0
+
+. /lib/functions.sh
+
+logger "$BUTTON pressed for $SEEN seconds..."
+
+if [ "$SEEN" -lt 1 ]
+then
+  device="radio1"
+  case $(uci get wireless.$device.txpower) in
+   10)
+        #wifi down $device
+        #uci set wireless.$device.disabled=1
+        uci set wireless.$device.txpower=0
+        wifi
+        logger "Wifi $device disabled"
+    ;;
+    0)
+       # uci set wireless.$device.disabled=0
+       # wifi up $device
+        uci set wireless.$device.txpower=10 
+        wifi 
+        logger "Wifi $device enabled"
+    ;;
+  esac
+elif [ "$SEEN" -gt 3 ]
+then
+    touch /tmp/virtual_push_button
+    logger "Starting 1905 PUSH BUTTON procedure"
+fi
+
+return 0
+

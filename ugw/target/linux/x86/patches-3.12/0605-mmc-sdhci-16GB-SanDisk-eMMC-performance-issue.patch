@@ -1,0 +1,40 @@
+From 1ec2e1c48c00ac04f69f565864484555448a0431 Mon Sep 17 00:00:00 2001
+From: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+Date: Wed, 1 Mar 2017 14:24:16 -0800
+Subject: [PATCH 605/639] mmc: sdhci: [16GB]SanDisk eMMC performance issue
+
+Remove CMDQ feature from eMMC driver which is not supported for host
+controller 4.5v.
+
+Change-Id: Ie7a03379ac61b0ebeaba352b51e291807897d073
+Signed-off-by: Nagaraj S <sivasankaranx.nagaraj@intel.com>
+---
+ drivers/mmc/host/sdhci-acpi.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/mmc/host/sdhci-acpi.c b/drivers/mmc/host/sdhci-acpi.c
+index dc1830b..6b3bd96 100644
+--- a/drivers/mmc/host/sdhci-acpi.c
++++ b/drivers/mmc/host/sdhci-acpi.c
+@@ -217,7 +217,7 @@ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_puma7_emmc1 = {
+ 		| MMC_CAP_1_8V_DDR,
+ 	.caps2   = MMC_CAP2_HC_ERASE_SZ | MMC_CAP2_POLL_R1B_BUSY |
+ 		MMC_CAP2_CACHE_CTRL | MMC_CAP2_HS200_1_8V_SDR |
+-		MMC_CAP2_CAN_DO_CMDQ | MMC_CAP2_NO_SHUTDOWN_BUS,
++		MMC_CAP2_NO_SHUTDOWN_BUS,
+ 	.flags   = SDHCI_ACPI_RUNTIME_PM,
+ 	.quirks2 = SDHCI_QUIRK2_TUNING_POLL | SDHCI_QUIRK2_PRESET_VALUE_BROKEN
+ 		| SDHCI_QUIRK2_HW_MUTEX,
+@@ -231,8 +231,7 @@ static const struct sdhci_acpi_slot sdhci_acpi_slot_int_puma7_emmc2 = {
+ 	.caps    = MMC_CAP_8_BIT_DATA | MMC_CAP_NONREMOVABLE | MMC_CAP_HW_RESET
+ 		| MMC_CAP_1_8V_DDR,
+ 	.caps2   = MMC_CAP2_HC_ERASE_SZ | MMC_CAP2_POLL_R1B_BUSY |
+-		MMC_CAP2_CACHE_CTRL | MMC_CAP2_HS200_1_8V_SDR |
+-		MMC_CAP2_CAN_DO_CMDQ,
++		MMC_CAP2_CACHE_CTRL | MMC_CAP2_HS200_1_8V_SDR,
+ 	.flags   = SDHCI_ACPI_RUNTIME_PM,
+ 	.quirks2 = SDHCI_QUIRK2_TUNING_POLL | SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
+ 	.pm_caps = MMC_PM_TUNING_AFTER_RTRESUME,
+-- 
+2.10.1
+

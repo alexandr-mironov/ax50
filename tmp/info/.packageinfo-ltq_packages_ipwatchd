@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/ltq_packages/ipwatchd/Makefile
+Package: ipwatchd
+Version: 1.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnet1
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: IP conflict detection tool for Linux
+Maintainer: 
+Source: ipwatchd-1.2.tar.gz
+Type: ipkg
+Description:   IP conflict detection tool for Linux
+http://ipwatchd.sourceforge.net
+
+@@
+
+

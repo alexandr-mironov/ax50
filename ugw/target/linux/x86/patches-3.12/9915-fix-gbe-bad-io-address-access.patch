@@ -1,0 +1,29 @@
+# HG changeset patch
+# Parent 4e9ae082552ec31f90daaed9fae4e843d76b8164
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_pci.c
+@@ -176,18 +176,20 @@ static int gbe_init_top_registers(void _
+    unsigned int *mux_cfg)
+ {
+    int ret = 1;
+-   netss_dev_info_t gbe_mmio;
++   netss_dev_info_t gbe_mmio, bootcfg_mmio;
+    void __iomem *reg_base = NULL;
+    CFG_PRINT("[GBE] Initializing General registers\n");
+    if (!netss_driver_ready()) {
+       printk(KERN_ALERT "[GBE] NetSS not ready!\n");
+    } else if (netss_device_get_info(NETSS_DEV_GBE, &gbe_mmio)) {
+       printk(KERN_ALERT "[GBE] Error getting GbE MMIO info!\n");
++   } else if (netss_device_get_info(NETSS_DEV_BOOTCFG, &bootcfg_mmio)) {
++      printk(KERN_ALERT "[GBE] Error getting Boot Config MMIO info!\n");
+    } else {
+       uint32_t reg_val, reg_cfg;
+       CFG_PRINT("[GBE] mem_iobase = 0x%08x, mem_iosize = 0x%08x\n",
+          (unsigned int)gbe_mmio.base,(unsigned int)gbe_mmio.size);
+-      reg_base = (void __iomem *)ioremap_nocache(BOOT_CONFIG_BASE_ADDR, BOOT_CONFIG_SIZE);
++      reg_base = (void __iomem *)ioremap_nocache(bootcfg_mmio.base, bootcfg_mmio.size);
+       reg_val = GBE_REG_RD(BCFG2SSX_GBEM_CFG);
+       iounmap(reg_base);
+       CFG_PRINT("[GBE] bcfg2ssx_gbem_cfg = 0x%08x\n", reg_val);

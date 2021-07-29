@@ -1,0 +1,46 @@
+From 436eb8f06a173e68670dbbfb8fcf844e7b30bd5d Mon Sep 17 00:00:00 2001
+From: ofirbitt <ofir1.bitton@intel.com>
+Date: Sun, 1 Jan 2017 18:19:13 +0200
+Subject: [PATCH 567/639] TOE export ip local driver finish
+
+---
+ include/net/ip.h    | 1 +
+ net/ipv4/ip_input.c | 3 ++-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/include/net/ip.h b/include/net/ip.h
+index 4dfa6ea..92f1282 100644
+--- a/include/net/ip.h
++++ b/include/net/ip.h
+@@ -102,6 +102,7 @@ extern int		ip_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
+ extern int		ip_rcv(struct sk_buff *skb, struct net_device *dev,
+ 			       struct packet_type *pt, struct net_device *orig_dev);
+ extern int		ip_local_deliver(struct sk_buff *skb);
++extern int      ip_local_deliver_finish(struct sk_buff *skb);
+ extern int		ip_mr_input(struct sk_buff *skb);
+ extern int		ip_output(struct sk_buff *skb);
+ extern int		ip_mc_output(struct sk_buff *skb);
+diff --git a/net/ipv4/ip_input.c b/net/ipv4/ip_input.c
+index b96beab..0f60655 100644
+--- a/net/ipv4/ip_input.c
++++ b/net/ipv4/ip_input.c
+@@ -190,7 +190,7 @@ bool ip_call_ra_chain(struct sk_buff *skb)
+ 	return false;
+ }
+ 
+-static int ip_local_deliver_finish(struct sk_buff *skb)
++int ip_local_deliver_finish(struct sk_buff *skb)
+ {
+ 	struct net *net = dev_net(skb->dev);
+ 
+@@ -241,6 +241,7 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL(ip_local_deliver_finish);
+ 
+ /*
+  * 	Deliver IP Packets to the higher protocol layers.
+-- 
+2.10.1
+

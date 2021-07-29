@@ -1,0 +1,19 @@
+Source-Makefile: package/feeds/ltq_packages/libnl-tiny/Makefile
+Package: libnl-tiny
+Version: 0.1-4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: netlink socket library
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: 
+License: LGPL-2.1
+Type: ipkg
+Description:  This package contains a stripped down version of libnl
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

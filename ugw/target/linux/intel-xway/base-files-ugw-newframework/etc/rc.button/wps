@@ -1,0 +1,41 @@
+#!/bin/sh
+
+[ "${ACTION}" = "released" ] || exit 0
+
+. /etc/ugw_notify_defs.sh;
+. /lib/functions.sh
+
+beerocks_is_enabled() {
+    grep '<Enable .*>true</Enable>' $1 &>/dev/null
+}
+
+beerocks_is_master() {
+	grep '<Master .*>true</Master>' $1 &>/dev/null
+}
+
+ire_in_operational() {
+    grep '<Operational .*>1</Operational>' $1 &>/dev/null
+}
+
+
+logger "$BUTTON pressed for $SEEN seconds"
+
+if [ "$SEEN" -lt 5 ]
+then
+	echo "WPS Button pressed for less than 5 seconds..treating as spurious" > /dev/console
+elif [ "$SEEN" -gt 5 ]
+then
+	# WPS PBC code to be added by developer
+	echo "WPS Button pressed for $SEEN seconds..Activating PBC functionality" > /dev/console
+	csdutil dump "Device.X_INTEL_COM_BEEROCKS" file /tmp/beerocks_csd
+	if beerocks_is_enabled /tmp/beerocks_csd && ! beerocks_is_master /tmp/beerocks_csd && ! ire_in_operational /tmp/beerocks_csd; then
+		echo "Triggering WPS PBC Enrolee (Extender onboarding)" > /dev/console
+		ubus call servd notify '{"nid" : '$NOTIFY_WIFI_WPS_ACTION', "pn1" : "ifname", "pv1" : "wlan1","pn2" : "wps_type", "pv2" : "pbc" }'
+	else
+		echo "Triggering WPS PBC Registrar" > /dev/console
+		ubus call servd notify '{"nid" : '$NOTIFY_WIFI_WPS_ACTION', "type" : false, "pn1" : "Action" , "pv1" : "PBC"}' 
+	fi
+	rm /tmp/beerocks_csd
+fi
+
+return 0

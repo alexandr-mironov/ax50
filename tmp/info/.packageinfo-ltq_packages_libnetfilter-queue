@@ -1,0 +1,22 @@
+Source-Makefile: package/feeds/ltq_packages/libnetfilter-queue/Makefile
+Package: libnetfilter-queue
+Version: 1.0.2-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libmnl +libnfnetlink
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: API to the in-kernel connection tracking queue infrastructure
+Maintainer: 
+Source: libnetfilter_queue-1.0.2.tar.bz2
+License: GPL-2.0+
+Type: ipkg
+Description:  libnetfilter_queue is a userspace library providing a programming
+ interface (API) to the in-kernel connection tracking state table.
+ This library is currently used by conntrack-tools.
+http://www.netfilter.org/projects/libnetfilter_queue/
+
+@@
+
+

@@ -1,0 +1,30 @@
+From 44f58ff4ef90afc0fb4aa4fd0d51df95379e826d Mon Sep 17 00:00:00 2001
+From: Emmanuel Jillela <emmanuel.jillela@intel.com>
+Date: Fri, 15 Jul 2016 15:47:46 -0700
+Subject: [PATCH 443/639] DWC_ETH_QOS: Enable vlan tag instertion via regs
+
+vlan tags were not insterted by default because of which the tcp through
+put through vlan interface is greatly reduced. Enabling vlan tag insert
+ions improves the throughput.
+
+Signed-off-by: Emmanuel Jillela <emmanuel.jillela@intel.com>
+---
+ drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
+index 3ee8651..c47490e 100644
+--- a/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
++++ b/drivers/net/ethernet/synopsys/DWC_ETH_QOS_drv.c
+@@ -1343,7 +1343,7 @@ static void DWC_ETH_QOS_default_tx_confs_single_q(
+    desc_data->tsf_on = DWC_ETH_QOS_TSF_ENABLE;
+    desc_data->osf_on = DWC_ETH_QOS_OSF_ENABLE;
+    desc_data->tx_pbl = DWC_ETH_QOS_PBL_16;
+-   desc_data->tx_vlan_tag_via_reg = Y_FALSE;
++   desc_data->tx_vlan_tag_via_reg = Y_TRUE;
+    desc_data->tx_vlan_tag_ctrl = DWC_ETH_QOS_TX_VLAN_TAG_INSERT;
+    desc_data->vlan_tag_present = 0;
+    desc_data->context_setup = 0;
+-- 
+2.10.1
+

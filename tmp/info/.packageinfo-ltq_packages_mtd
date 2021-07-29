@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/ltq_packages/mtd/Makefile
+Package: mtd
+Version: 21
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libubox
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Base system
+Title: Update utility for trx firmware images
+Maintainer: 
+Source: 
+License: GPL-2.0+
+Type: ipkg
+Description:  This package contains an utility useful to upgrade from other firmware or 
+ older OpenWrt releases.
+
+@@
+
+

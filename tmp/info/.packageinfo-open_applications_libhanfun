@@ -1,0 +1,20 @@
+Source-Makefile: package/feeds/open_applications/libhanfun/Makefile
+Package: libhanfun
+Menu: 1
+Version: 1.5.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libstdcpp +libc +libgcc
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Home Area Network FUNctional protocol
+Maintainer: Bithium
+Source: hanfun-1.5.0-e33cd401fb193b4cbd51f150cf813053f5dcaa7e.tar.xz
+Type: ipkg
+Description:   Implementation of the HAN-FUN application specification.
+http://www.ulealliance.org
+Bithium
+@@
+
+

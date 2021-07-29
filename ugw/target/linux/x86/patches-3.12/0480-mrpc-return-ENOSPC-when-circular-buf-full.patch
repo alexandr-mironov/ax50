@@ -1,0 +1,86 @@
+From eb5d1965a109a903dbc1891efe9fe65490761768 Mon Sep 17 00:00:00 2001
+From: avelayux <arunkumar.velayutham@intel.com>
+Date: Thu, 15 Sep 2016 08:33:52 -0700
+Subject: [PATCH 480/639] mrpc: return -ENOSPC when circular buf full
+
+When mrpc client workQueue circular buffer full scenario occurs for a
+prolonged period, linux connecion tracking module started to misbehave
+as it tries to log the timeout entry to mrpc client workQueue in an infinite
+loop. Ideally, it should have extended the temporary timeout and delete the
+entry eventually when it times out again in couple of seconds.
+
+MRPC conntrack client will return -ENOSPC if the workQueue's circular
+buffer is full for any reason. Go ahead and delete the connection tracking
+record at ATOM side without checking for the PP session availability on ARM.
+Ideally, this should never happen in a normal scenario.
+
+Signed-off-by: avelayux <arunkumar.velayutham@intel.com>
+---
+ drivers/mrpc/core/conntrack_client.c |  6 +++---
+ net/netfilter/nf_conntrack_core.c    | 26 +++++++++++++++++++-------
+ 2 files changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/mrpc/core/conntrack_client.c b/drivers/mrpc/core/conntrack_client.c
+index ac9c940..25e90b0 100644
+--- a/drivers/mrpc/core/conntrack_client.c
++++ b/drivers/mrpc/core/conntrack_client.c
+@@ -351,9 +351,9 @@ static int ct_tuple_info_worker(struct notifier_block *self, unsigned long event
+ 
+    if(!CIRC_SPACE(cb->head, cb->tail, CB_MAX))
+    {
+-     pr_info("MRPC conntrack circular buffer is FULL.");
+-     priv->cb_alloc_failure_count++;
+-     return NOTIFY_DONE;
++     pr_err("Error: MRPC Buffer FULL:Success: %d Failure: %d CB Failure: %d\n",            
++            priv->call_success_count,priv->call_failure_count,++priv->cb_alloc_failure_count);
++     return notifier_from_errno(-ENOSPC);
+    }
+    /*get the CB location to store the connection tracking ptr and event information */
+    ct_work_info = &((struct ct_worker_info *)cb->buf)[cb->head];
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+index ca4edaa..8b14811 100644
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -303,6 +303,7 @@ bool nf_ct_delete(struct nf_conn *ct, u32 portid, int report)
+ #if defined(CONFIG_APPCPU_GW_PP_HANDLE) && defined(CONFIG_MRPC_CONNTRACK_CLIENT) && !defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL)
+         unsigned long extend_ct_tmp_time;
+         unsigned long extend_ct_time;
++        int ret;
+         /* this is to differentiate conntrack_flush from regular timeout scenario.
+            we don't need to check for ARM PP session status if the application requested
+            to flush the connection.But, we need to be cautious about the CT records
+@@ -351,13 +352,24 @@ delete_record:
+ 	}
+ 	else
+ 	{
+-	  /* Generate an event indicating the connection tracking entry is being deleted. */
+-	  nf_conn_info_event(TI_CT_DEATH_BY_TIMEOUT, (void *)ct);
+-	  /* conntrack mrpc client is still working on to sync pp info from ARM */
+-	  extend_ct_tmp_time = (3 * HZ) + jiffies;
+-	  mod_timer(&ct->timeout,extend_ct_tmp_time);
+-	  ct->ct_tuple_arm_sync_wait=1;
+-	  return;
++          ret = nf_conn_info_event(TI_CT_DEATH_BY_TIMEOUT, (void *)ct);
++          ret = notifier_to_errno(ret);
++          if (ret)
++          {
++             /*MRPC conntrack client will return -ENOSPC if the workQueue's circular
++               buffer is full for any reason. Go ahead and delete the connection tracking
++               record at ATOM side without checking for the PP session availability on ARM.
++               NOTE: This should never happen in a normal scenario. */
++             goto delete_record;
++          }
++          else
++          {
++            /* conntrack mrpc client is still working on to sync pp info from ARM */
++            extend_ct_tmp_time = (3 * HZ) + jiffies;
++            mod_timer(&ct->timeout,extend_ct_tmp_time);
++            ct->ct_tuple_arm_sync_wait=1;
++            return;
++          }
+ 	}
+ #else /*PP on ATOM specific conntrack ti_hil_pp_event has to go in here */
+ 	/*go ahead and clear the ct record */
+-- 
+2.10.1
+
