@@ -1,0 +1,4805 @@
+# HG changeset patch
+# Parent 152ed4e003230098f3327fee6c3a17de5ed71aa0
+
+diff --git a/drivers/net/ethernet/intel/Kconfig b/drivers/net/ethernet/intel/Kconfig
+--- a/drivers/net/ethernet/intel/Kconfig
++++ b/drivers/net/ethernet/intel/Kconfig
+@@ -258,5 +258,22 @@ config I40E
+ 
+ 	  To compile this driver as a module, choose M here. The module
+ 	  will be called i40e.
++config VRX518
++	tristate "Intel(R) VRX518 SmartPHY DSL PCIe Endpoint support"
++	depends on PCI_MSI
++	---help---
++	  This driver supports Intel(R) VRX518 DSL PCIe Endpoint/ACA functions. 
+ 
++	  To compile this driver as a module, choose M here. The module
++	  will be called vrx518.  MSI interrupt support is required for
++	  this driver to work correctly.
++
++config VRX518_PCIE_SWITCH_BONDING
++	bool "Intel(R) VRX518 SmartPHY DSL bonding with PCIe Switch"
++	depends on VRX518
++	default n
++	---help---
++	Supported VRX518 SmartPHY PCIe DSL Bonding with PCIe switch
++
++source "drivers/net/ethernet/intel/vrx518/Kconfig"
+ endif # NET_VENDOR_INTEL
+diff --git a/drivers/net/ethernet/intel/Makefile b/drivers/net/ethernet/intel/Makefile
+--- a/drivers/net/ethernet/intel/Makefile
++++ b/drivers/net/ethernet/intel/Makefile
+@@ -11,3 +11,4 @@ obj-$(CONFIG_IXGBE) += ixgbe/
+ obj-$(CONFIG_IXGBEVF) += ixgbevf/
+ obj-$(CONFIG_I40E) += i40e/
+ obj-$(CONFIG_IXGB) += ixgb/
++obj-$(CONFIG_VRX518) += vrx518/
+diff --git a/drivers/net/ethernet/intel/vrx518/Kconfig b/drivers/net/ethernet/intel/vrx518/Kconfig
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/Kconfig
+@@ -0,0 +1,23 @@
++#
++# Intel VRX518 device configuration
++#
++
++config VRX518_TC
++    tristate "Intel(R) VRX518 DSL TC support"
++    depends on VRX518
++    ---help---
++      This driver supports Intel(R) VRX518 DSL TC functions.
++      it support ATM mode, PTM mode and PTM bonding mode.
++
++      Bonding packet's scatter-gathering requires SoC HW support.
++
++config TEST
++	tristate "Intel(R) VRX518 SmartPHY DSL Test Driver"
++	depends on VRX518
++	---help---
++	  This driver supports Intel(R) VRX518 DSL interrupt and ACA test. 
++
++	  To compile this driver as a module, choose M here. The module
++	  will be called vrx518.  MSI interrupt support is required for
++	  this driver to work correctly.
++
+diff --git a/drivers/net/ethernet/intel/vrx518/Makefile b/drivers/net/ethernet/intel/vrx518/Makefile
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/Makefile
+@@ -0,0 +1,32 @@
++################################################################################
++#
++# Intel SmartPHY DSL PCIe EP/ACA Linux driver
++# Copyright(c) 2016 Intel Corporation.
++#
++# This program is free software; you can redistribute it and/or modify it
++# under the terms and conditions of the GNU General Public License,
++# version 2, as published by the Free Software Foundation.
++#
++# This program is distributed in the hope it will be useful, but WITHOUT
++# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++# more details.
++#
++# You should have received a copy of the GNU General Public License along with
++# this program; if not, write to the Free Software Foundation, Inc.,
++# 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++#
++# The full GNU General Public License is included in this distribution in
++# the file called "COPYING".
++#
++################################################################################
++
++#
++# Makefile for the Intel(R) SmartPHY PCIe/ACA driver
++#
++
++obj-$(CONFIG_VRX518) += vrx518.o
++
++vrx518-objs := ep.o aca.o misc.o
++
++obj-$(CONFIG_TEST) += test/
+diff --git a/drivers/net/ethernet/intel/vrx518/aca.c b/drivers/net/ethernet/intel/vrx518/aca.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/aca.c
+@@ -0,0 +1,1193 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++#define DEBUG
++#include <linux/init.h>
++#include <linux/types.h>
++#include <linux/delay.h>
++#include <linux/firmware.h>
++
++#include <net/dc_ep.h>
++
++#include "regs.h"
++#include "ep.h"
++#include "misc.h"
++#include "aca.h"
++
++#define ACA_FW_FILE		"aca_fw.bin"
++
++#define set_mask_bit(val, set, mask, bits)		\
++	(val = (((val) & (~((mask) << (bits))))	\
++	| (((set) & (mask)) << (bits))))
++
++static char soc_str[128];
++
++static const char *const aca_img_type_str[ACA_IMG_MAX] = {
++	"vrx518",
++	"vrx618",
++	"falcon-mx",
++	"pmua",
++};
++
++static void soc_type_to_str(u32 soc)
++{
++	memset(soc_str, 0, sizeof(soc_str));
++
++	if ((soc & ACA_SOC_XRX300))
++		strcat(soc_str, "xrx300 ");
++
++	if ((soc & ACA_SOC_XRX500))
++		strcat(soc_str, "xrx500 ");
++
++	if ((soc & ACA_SOC_PUMA))
++		strcat(soc_str, "puma ");
++
++	if ((soc & ACA_SOC_3RD_PARTY))
++		strcat(soc_str, "third party SoC ");
++}
++
++static const char *fw_id_to_str(u32 fw_id)
++{
++	switch (fw_id) {
++	case ACA_FW_TXIN:
++		return "txin";
++
++	case ACA_FW_TXOUT:
++		return "txout";
++
++	case ACA_FW_RXIN:
++		return "rxin";
++
++	case ACA_FW_RXOUT:
++		return "rxout";
++
++	case ACA_FW_GNRC:
++		return "Genrisc";
++
++	default:
++		return "unknow";
++	}
++}
++
++static const char *sec_id_str[] = {
++	"Unknown", "HIF", "GenRisc", "MAC_HT", "TXIN", "TXIN_PDRING", "TXOUT",
++	"TXOUT_PDRING", "RXIN", "RXIN_PDRING", "RXOUT", "RXOUT_PDRING", "DMA",
++	"FW_INIT",
++};
++static const char *sec_id_to_str(u32 sec_id)
++{
++	switch (sec_id) {
++	case ACA_SEC_HIF:
++	case ACA_SEC_GNR:
++	case ACA_SEC_MAC_HT:
++	case ACA_SEC_MEM_TXIN:
++	case ACA_SEC_MEM_TXIN_PDRING:
++	case ACA_SEC_MEM_TXOUT:
++	case ACA_SEC_MEM_TXOUT_PDRING:
++	case ACA_SEC_MEM_RXIN:
++	case ACA_SEC_MEM_RXIN_PDRING:
++	case ACA_SEC_MEM_RXOUT:
++	case ACA_SEC_MEM_RXOUT_PDRING:
++	case ACA_SEC_DMA:
++	case ACA_SEC_FW_INIT:
++		return sec_id_str[sec_id];
++	case ACA_SEC_FW:
++		return "ACA FW";
++
++	default:
++		return "unknown";
++	}
++}
++
++static inline struct aca_fw_info *to_fw_info(struct dc_ep_priv *priv)
++{
++	return &priv->aca.fw_info;
++}
++
++static inline struct aca_fw_dl_addr *to_fw_addr(struct dc_ep_priv *priv)
++{
++	return &priv->aca.fw_info.fw_dl;
++}
++
++static inline struct aca_mem_layout *to_mem_layout(struct dc_ep_priv *priv)
++{
++	return &priv->aca.fw_info.mem_layout;
++}
++
++static inline struct aca_pdmem_layout *to_pdmem_layout(struct dc_ep_priv *priv)
++{
++	return &priv->aca.fw_info.pdmem_layout;
++}
++
++static inline struct aca_fw_param *to_aca_fw_param(struct dc_ep_priv *priv)
++{
++	return &priv->aca.fw_info.fw_param;
++}
++
++static inline struct aca_hif_params *to_hif_params(struct dc_ep_priv *priv)
++{
++	return priv->aca.hif_params;
++}
++
++static const struct firmware *aca_fetch_fw_file(struct dc_ep_priv *priv,
++	char *dir, const char *file)
++{
++	int ret;
++	char filename[100] = {0};
++	const struct firmware *fw;
++
++	if (file == NULL)
++		return ERR_PTR(-ENOENT);
++
++	if (dir == NULL)
++		dir = ".";
++
++	snprintf(filename, sizeof(filename), "%s/%s", dir, file);
++	ret = request_firmware(&fw, filename, priv->dev);
++	if (ret)
++		return ERR_PTR(ret);
++
++	return fw;
++}
++
++void dc_aca_free_fw_file(struct dc_ep_priv *priv)
++{
++	struct aca_fw_info *fw_info = to_fw_info(priv);
++
++	if (fw_info->fw && !IS_ERR(fw_info->fw))
++		release_firmware(fw_info->fw);
++
++	fw_info->fw = NULL;
++	fw_info->fw_data = NULL;
++	fw_info->fw_len = 0;
++}
++
++static void aca_dma_parse(struct dc_ep_priv *priv, const char *data, int chn)
++{
++	int i;
++	u32 cid, dbase;
++	struct aca_fw_dma *fw_dma;
++	struct aca_fw_info *fw_info = to_fw_info(priv);
++
++	fw_info->chan_num = chn;
++
++	for (i = 0; i < fw_info->chan_num; i++) {
++		fw_dma = (struct aca_fw_dma *)(data + i * sizeof(*fw_dma));
++		cid = be32_to_cpu(fw_dma->cid);
++		dbase = be32_to_cpu(fw_dma->base);
++		fw_info->adma_desc_base[cid] = dbase;
++		ep_dev_dbg(priv->dev, "dma channel %d desc base 0x%08x\n",
++			cid, dbase);
++	}
++}
++
++static void aca_sram_desc_parse(struct dc_ep_priv *priv, const char *data,
++	u32 sid)
++{
++	u32 dbase, dnum;
++	struct aca_sram_desc *desc_base;
++	struct aca_mem_layout *mem_layout = to_mem_layout(priv);
++	struct aca_pdmem_layout *pdmem = to_pdmem_layout(priv);
++
++	desc_base = (struct aca_sram_desc *)data;
++	dbase = be32_to_cpu(desc_base->dbase);
++	dnum = be32_to_cpu(desc_base->dnum);
++
++	ep_dev_dbg(priv->dev, "Sec %s desc base 0x%08x, des_num: %d\n",
++		sec_id_to_str(sid), dbase, dnum);
++
++	switch (sid) {
++	case ACA_SEC_MEM_TXIN:
++		mem_layout->txin_host_desc_base = dbase;
++		mem_layout->txin_host_dnum = dnum;
++		break;
++
++	case ACA_SEC_MEM_TXOUT:
++		mem_layout->txout_host_desc_base = dbase;
++		mem_layout->txout_host_dnum = dnum;
++		break;
++
++	case ACA_SEC_MEM_RXIN:
++		mem_layout->rxin_host_desc_base = dbase;
++		mem_layout->rxin_host_dnum = dnum;
++		break;
++
++	case ACA_SEC_MEM_RXOUT:
++		mem_layout->rxout_host_desc_base = dbase;
++		mem_layout->rxout_host_dnum = dnum;
++		break;
++	case ACA_SEC_MEM_TXIN_PDRING:
++		pdmem->txin_pd_desc_base = dbase;
++		pdmem->txin_pd_dnum = dnum;
++		break;
++	case ACA_SEC_MEM_TXOUT_PDRING:
++		pdmem->txout_pd_desc_base = dbase;
++		pdmem->txout_pd_dnum = dnum;
++		break;
++	case ACA_SEC_MEM_RXIN_PDRING:
++		pdmem->rxin_pd_desc_base = dbase;
++		pdmem->rxin_pd_dnum = dnum;
++		break;
++	case ACA_SEC_MEM_RXOUT_PDRING:
++		pdmem->rxin_pd_desc_base = dbase;
++		pdmem->rxin_pd_dnum = dnum;
++		break;
++	default:
++		ep_dev_err(priv->dev, "Unknow aca sram section %d\n", sid);
++		break;
++	}
++}
++
++static void aca_init_parse(struct dc_ep_priv *priv, const char *data,
++	u32 sid)
++{
++	struct aca_fw_param *fw_param = to_aca_fw_param(priv);
++	struct aca_fw_param *param;
++	u32 hdr_sz, hdr_addr;
++
++	param = (struct aca_fw_param *)data;
++	hdr_sz = be32_to_cpu(param->st_sz);
++	hdr_addr = be32_to_cpu(param->init_addr);
++
++	fw_param->init_addr = hdr_addr;
++	fw_param->st_sz = hdr_sz;
++	ep_dev_dbg(priv->dev, "init st size: %d, addr: 0x%x\n",
++		hdr_sz, hdr_addr);
++}
++
++static void aca_fw_parse(struct dc_ep_priv *priv, const char *data,
++	const char *fw_base, int fw_num)
++{
++	int i;
++	size_t size;
++	u32 id, offset, addr;
++	struct aca_int_hdr *hdr;
++	struct aca_fw_dl_addr *fw_dl = to_fw_addr(priv);
++
++	fw_dl->fw_num = fw_num;
++
++	for (i = 0; i < fw_dl->fw_num; i++) {
++		hdr = (struct aca_int_hdr *)(data + i * sizeof(*hdr));
++		id = be32_to_cpu(hdr->id);
++		offset = be32_to_cpu(hdr->offset);
++		size = be32_to_cpu(hdr->size);
++		addr = be32_to_cpu(hdr->load_addr);
++
++		fw_dl->fw_addr[i].fw_id = id;
++		fw_dl->fw_addr[i].fw_load_addr = addr;
++		fw_dl->fw_addr[i].fw_size = size;
++		fw_dl->fw_addr[i].fw_base = fw_base + offset;
++		ep_dev_dbg(priv->dev,
++			"aca %s fw offset 0x%x size %zd loc 0x%x fw base %p\n",
++			fw_id_to_str(id), offset, size, addr, fw_base + offset);
++	}
++}
++
++/* --------------------------------------------------------
++  |              Fixed header (20Bytes)                   |
++  ---------------------------------------------------------
++  |              Variable header                          |
++  |                ie / payload                           |
++  |-------------------------------------------------------|
++  |               Actual ACA FW                           |
++  ---------------------------------------------------------
++*/
++static int aca_section_parse(struct dc_ep_priv *priv, const char *fw_data)
++{
++	int ret = 0;
++	u32 fixed_hlen;
++	u32 var_hlen;
++	u32 ie_id;
++	size_t ie_len, ie_hlen, ie_dlen;
++	u32 fw_hlen;
++	struct aca_fw_f_hdr *fw_f_hdr;
++	struct aca_fw_ie *ie_hdr;
++	struct aca_int_hdr *aca_hdr;
++	const char *data = fw_data;
++	const char *aca_fw_data;
++	struct device *dev = priv->dev;
++
++	fw_f_hdr = (struct aca_fw_f_hdr *)data;
++
++	fw_hlen = be32_to_cpu(fw_f_hdr->hdr_size);
++	fixed_hlen = sizeof(*fw_f_hdr);
++	var_hlen = fw_hlen - fixed_hlen;
++	ie_hlen = sizeof(*ie_hdr);
++
++	/* Record actual ACA fw data pointer */
++	aca_fw_data = data + fw_hlen;
++
++	/* Point to variable header and parse them */
++	data += fixed_hlen;
++
++	while (var_hlen > ie_hlen) {
++		/* Variable header information element */
++		ie_hdr = (struct aca_fw_ie *)data;
++		ie_id = be32_to_cpu(ie_hdr->id);
++		ie_len = be32_to_cpu(ie_hdr->len);
++		ep_dev_dbg(dev, "Section %s ie_len %zd\n", sec_id_to_str(ie_id),
++			ie_len);
++
++		/* Variable header data conents */
++		data += ie_hlen;
++		var_hlen -= ie_hlen;
++
++		switch (ie_id) {
++		case ACA_SEC_HIF:
++		case ACA_SEC_GNR:
++		case ACA_SEC_MAC_HT:
++			ie_dlen = ie_len * sizeof(struct aca_fw_reg);
++			data += ie_dlen;
++			var_hlen -= ie_dlen;
++			break;
++
++		case ACA_SEC_MEM_TXIN:
++		case ACA_SEC_MEM_TXOUT:
++		case ACA_SEC_MEM_RXIN:
++		case ACA_SEC_MEM_RXOUT:
++		case ACA_SEC_MEM_TXIN_PDRING:
++		case ACA_SEC_MEM_TXOUT_PDRING:
++		case ACA_SEC_MEM_RXIN_PDRING:
++		case ACA_SEC_MEM_RXOUT_PDRING:
++			aca_sram_desc_parse(priv, data, ie_id);
++			ie_dlen = ie_len * sizeof(struct aca_sram_desc);
++			data += ie_dlen;
++			var_hlen -= ie_dlen;
++			break;
++
++		case ACA_SEC_DMA:
++			if (ie_len > ACA_DMA_CHAN_MAX) {
++				dev_err(dev, "invalid dma channel %d\n",
++					ie_len);
++				ret = -EINVAL;
++				goto done;
++			}
++			aca_dma_parse(priv, data, ie_len);
++			ie_dlen = ie_len * sizeof(struct aca_fw_dma);
++			data += ie_dlen;
++			var_hlen -= ie_dlen;
++			break;
++
++		case ACA_SEC_FW_INIT:
++			aca_init_parse(priv, data, ie_id);
++			ie_dlen = ie_len * sizeof(struct aca_fw_param);
++			data += ie_dlen;
++			var_hlen -= ie_dlen;
++			
++			break;
++
++		case ACA_SEC_FW:
++			if (ie_len > ACA_FW_MAX) {
++				dev_err(dev, "Too many aca fws %d\n", ie_len);
++				ret = -EINVAL;
++				goto done;
++			}
++			aca_fw_parse(priv, data, aca_fw_data, ie_len);
++			ie_dlen = ie_len * sizeof(*aca_hdr);
++			data += ie_dlen;
++			var_hlen -= ie_dlen;
++			break;
++
++		default:
++			ep_dev_warn(dev, "Unknown Sec id: %u\n", ie_id);
++			break;
++		}
++	}
++done:
++	return ret;
++}
++
++static int aca_fetch_fw_api(struct dc_ep_priv *priv, const char *name)
++{
++	int ret;
++	size_t hdr_len;
++	const u8 *fw_data;
++	size_t fw_len;
++	char dir[8] = {0};
++	union fw_ver ver;
++	union img_soc_type type;
++	struct device *dev = priv->dev;
++	struct aca_fw_f_hdr *fw_f_hdr;
++	struct aca_fw_info *fw_info = to_fw_info(priv);
++
++	sprintf(dir, "%04x", priv->pdev->device);
++	fw_info->fw = aca_fetch_fw_file(priv, dir, name);
++	if (IS_ERR(fw_info->fw)) {
++		ep_dev_err(dev, "Could not fetch firmware file '%s': %ld\n",
++			name, PTR_ERR(fw_info->fw));
++		return PTR_ERR(fw_info->fw);
++	}
++
++	fw_data = fw_info->fw->data;
++	fw_len = fw_info->fw->size;
++
++	/* Parse the fixed header part */
++	fw_f_hdr = (struct aca_fw_f_hdr *)fw_data;
++	ver.all = be32_to_cpu(fw_f_hdr->ver);
++
++	ep_dev_info(dev, "ACA fw build %d branch %d major 0x%2x minor 0x%04x\n",
++		ver.field.build, ver.field.branch,
++		ver.field.major, ver.field.minor);
++
++	type.all = be32_to_cpu(fw_f_hdr->type);
++
++	if (type.field.img_type > (ACA_IMG_MAX - 1)
++		|| ((type.field.soc_type & ACA_SOC_MASK) == 0)) {
++		ep_dev_err(dev, "Invalid aca fw img %d soc %d\n",
++			type.field.img_type, type.field.soc_type);
++		ret = -EINVAL;
++		goto err;
++	}
++
++	soc_type_to_str(type.field.soc_type);
++
++	ep_dev_info(priv->dev, "ACA fw for %s supported SoC type %s\n",
++		aca_img_type_str[type.field.img_type], soc_str);
++
++	hdr_len = be32_to_cpu(fw_f_hdr->hdr_size);
++	/* Sanity Check */
++	if (fw_len < hdr_len) {
++		ep_dev_err(dev, "Invalid aca fw hdr len %zd fw len %zd\n",
++			hdr_len, fw_len);
++		ret = -EINVAL;
++		goto err;
++	}
++	ep_dev_dbg(dev, "Header size 0x%08x fw size 0x%08x\n",
++		hdr_len, be32_to_cpu(fw_f_hdr->fw_size));
++	ep_dev_dbg(dev, "section number %d\n",
++		be32_to_cpu(fw_f_hdr->num_section));
++
++	aca_section_parse(priv, fw_data);
++	return 0;
++err:
++	dc_aca_free_fw_file(priv);
++	return ret;
++}
++
++static int aca_fetch_fw(struct dc_ep_priv *priv)
++{
++	return aca_fetch_fw_api(priv, ACA_FW_FILE);
++}
++
++static int aca_fw_download(struct dc_ep_priv *priv)
++{
++	int i, j;
++	u32 val;
++	size_t size;
++	u32 id, load_addr;
++	const char *fw_base;
++	struct aca_fw_dl_addr *fw_dl = to_fw_addr(priv);
++
++	for (i = 0; i < fw_dl->fw_num; i++) {
++		id = fw_dl->fw_addr[i].fw_id;
++		load_addr = fw_dl->fw_addr[i].fw_load_addr;
++		size = fw_dl->fw_addr[i].fw_size;
++		fw_base = fw_dl->fw_addr[i].fw_base;
++
++		if (size % 4) {
++			ep_dev_err(priv->dev,
++				"aca %s fw size is not a multiple of 4\n",
++				fw_id_to_str(id));
++			return -EINVAL;
++		}
++
++		for (j = 0; j < size; j += 4) {
++			val = *((u32 *)(fw_base + j));
++			wr32(cpu_to_be32(val), load_addr + j);
++		}
++		/* Write flush */
++		rd32(load_addr);
++	#ifdef DEBUG
++		{
++		u32 src, dst;
++
++		for (j = 0; j < size; j += 4) {
++			dst = rd32(load_addr + j);
++			src = *((u32 *)(fw_base + j));
++			if (dst != cpu_to_be32(src)) {
++				ep_dev_info(priv->dev,
++					"dst 0x%08x != src 0x%08x\n", dst, src);
++				return -EIO;
++			}
++		}
++		}
++	#endif /* DEBUG */
++	}
++	return 0;
++}
++
++static void aca_dma_ctrl_init(struct dc_ep_priv *priv)
++{
++	u32 val;
++	struct dc_aca *aca = to_aca(priv);
++
++	/* Global software reset CDMA */
++	wr32_mask(0, BIT(CTRL_RST), ADMA_CTRL);
++	while ((rd32(ADMA_CTRL) & BIT(CTRL_RST)))
++		;
++
++	val = rd32(ADMA_ID);
++	/* Record max dma channels for later usage */
++	aca->adma_chans = MS(val, ADMA_ID_CHNR);
++	val = rd32(ADMA_CTRL);
++	/*
++	 * Enable Packet Arbitration
++	 * Enable Meta data copy
++	 * Enable Dedicated Descriptor port
++	 */
++	val |= BIT(CTRL_PKTARB) | BIT(CTRL_MDC) | BIT(CTRL_DSRAM);
++	set_mask_bit(val, 1, 1, CTRL_ENBE); /* Enable byte enable */
++	set_mask_bit(val, 1, 1, CTRL_DCNF); /* 2DW descriptor format */
++	set_mask_bit(val, 1, 1, CTRL_DDBR); /* Descriptor read back */
++	set_mask_bit(val, 1, 1, CTRL_DRB); /* Dynamic burst read */
++	wr32(val, ADMA_CTRL);
++
++	/* Polling cnt cfg */
++	wr32(ADMA_CPOLL_EN | SM(ADMA_DEFAULT_POLL, ADMA_CPOLL_CNT),
++		ADMA_CPOLL);
++}
++
++static void aca_dma_port_init(struct dc_ep_priv *priv)
++{
++	u32 val;
++
++	/* Only one port /port 0 */
++	wr32(0, ADMA_PS);
++	val = rd32(ADMA_PCTRL);
++	set_mask_bit(val, 1, 1, PCTRL_RXBL16);
++	set_mask_bit(val, 1, 1, PCTRL_TXBL16);
++	set_mask_bit(val, 0, 3, PCTRL_RXBL);
++	set_mask_bit(val, 0, 3, PCTRL_TXBL);
++
++	set_mask_bit(val, 0, 3, PCTRL_TXENDI);
++	set_mask_bit(val, 0, 3, PCTRL_RXENDI);
++	wr32(val, ADMA_PCTRL);
++}
++
++static void aca_dma_ch_init(struct dc_ep_priv *priv, u32 cid,
++	u32 dbase, u32 dlen)
++{
++	/* Select channel */
++	wr32(cid, ADMA_CS);
++
++	/* Reset Channel */
++	wr32_mask(0, BIT(CCTRL_RST), ADMA_CCTRL);
++	while ((rd32(ADMA_CCTRL) & BIT(CCTRL_RST)))
++		;
++
++	/* Set descriptor list base and length */
++	wr32(dbase, ADMA_CDBA);
++	wr32(dlen, ADMA_CDLEN);
++
++	/*Clear Intr */
++	wr32(ADMA_CI_ALL, ADMA_CIS);
++	/* Enable Intr */
++	wr32(ADMA_CI_ALL, ADMA_CIE);
++
++	/* Enable Channel */
++	wr32_mask(0, BIT(CCTRL_ONOFF), ADMA_CCTRL);
++	mb();
++}
++
++static void aca_dma_ch_off(struct dc_ep_priv *priv)
++{
++	int i;
++	struct dc_aca *aca = to_aca(priv);
++
++	/* Shared between OS and ACA FW. Stop ACA first */
++	for (i = 0; i < aca->adma_chans; i++) {
++		wr32(i, ADMA_CS);
++		wr32_mask(BIT(CCTRL_ONOFF), 0, ADMA_CCTRL);
++		while (rd32(ADMA_CCTRL) & BIT(CCTRL_ONOFF))
++			;
++	}
++	ep_dev_dbg(priv->dev, "aca dma channel done\n");
++}
++
++static void aca_xbar_ia_reject_set(struct dc_ep_priv *priv, int ia_id)
++{
++	u32 val;
++	int timeout = 1000;
++	struct device *dev = priv->dev;
++
++	/* Set reject bit */
++	wr32(XBAR_CTRL_REJECT, ACA_AGENT_CTRL(ia_id));
++
++	/* Poll burst, readex, resp_waiting, req_active */
++	val = XBAR_STAT_REQ_ACTIVE | XBAR_STAT_RESP_WAITING
++		| XBAR_STAT_BURST | XBAR_STAT_READEX;
++	while (--timeout && !!(rd32(ACA_AGENT_STATUS(ia_id)) & val))
++		udelay(1);
++
++	if (timeout <= 0) {
++		ep_dev_dbg(dev,
++			"ACA XBAR IA: %d reset timeout, pending on 0x%x\n",
++			ia_id, rd32(ACA_AGENT_STATUS(ia_id)));
++		return;
++	}
++}
++
++static void aca_xbar_ia_reject_clr(struct dc_ep_priv *priv, int ia_id)
++{
++	u32 val;
++
++	/* Check reject bit */
++	val = rd32(ACA_AGENT_CTRL(ia_id));
++	if ((val & XBAR_CTRL_REJECT) == 0)
++		return;
++
++	/* Clear reject bit */
++	val &= ~XBAR_CTRL_REJECT;
++	wr32(val, ACA_AGENT_CTRL(ia_id));
++	rd32(ACA_AGENT_CTRL(ia_id));
++}
++
++static void aca_xbar_ia_reset(struct dc_ep_priv *priv, int ia_id)
++{
++	/* ACA IA reset */
++	wr32(XBAR_CTRL_CORE_RESET, ACA_AGENT_CTRL(ia_id));
++
++	/* Read till status become 1 */
++	while ((rd32(ACA_AGENT_STATUS(ia_id)) & XBAR_STAT_CORE_RESET) == 0)
++		;
++
++	/* Clear the IA Reset signal */
++	wr32(0, ACA_AGENT_CTRL(ia_id));
++
++	/* Read till status become 0 */
++	while ((rd32(ACA_AGENT_STATUS(ia_id)) & XBAR_STAT_CORE_RESET) == 1)
++		;
++
++	ep_dev_dbg(priv->dev, "ACA XBAR IA(%d) reset done\n", ia_id);
++}
++
++void dc_aca_shutdown(struct dc_ep_priv *priv)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (aca->initialized) {
++		aca_xbar_ia_reset(priv, ACA_ACC_IA04);
++		aca_xbar_ia_reset(priv, ACA_M_IA06);
++	}
++}
++
++static void aca_dma_init(struct dc_ep_priv *priv)
++{
++	int i;
++	struct aca_fw_info *fw_info = to_fw_info(priv);
++
++	aca_dma_ctrl_init(priv);
++	aca_dma_port_init(priv);
++
++	for (i = 0; i < fw_info->chan_num; i++) {
++		aca_dma_ch_init(priv, i,
++			fw_info->adma_desc_base[i] | priv->phymem,
++			DESC_NUM_PER_CH);
++	}
++
++	ep_dev_dbg(priv->dev, "aca dma init done\n");
++}
++
++static void aca_basic_init(struct dc_ep_priv *priv)
++{
++	u32 addr, mask;
++
++	/* Low 32 is RX, High 32 is TX */
++	wr32(0x1, UMT_ORDER_CFG);
++	/* TXIN/TXOUT/RXIN/RXOUT All Controlled by Genrisc */
++	wr32(0xF, HOST_TYPE);
++	/* Enable Host Gate CLK */
++	wr32(0x4000, HT_GCLK_ENABLE);
++	/* Host Page/MASK */
++	mask = ~priv->memsize + 1;
++	addr = mask | ((priv->phymem & mask) >> 16);
++	wr32(addr, AHB_ARB_HP_REG);
++	wr32(addr, OCP_ARB_ACC_PAGE_REG);
++	/* Stop all functions first */
++	wr32(0, GNRC_EN_TASK_BITMAP);
++
++	/* Enable XBAR */
++	aca_xbar_ia_reject_clr(priv, ACA_ACC_IA04);
++	aca_xbar_ia_reject_clr(priv, ACA_M_IA06);
++
++	ep_dev_dbg(priv->dev, "aca basic config done\n");
++}
++
++static int aca_hif_param_init(struct dc_ep_priv *priv)
++{
++	struct dc_aca *aca  = to_aca(priv);
++
++	aca->hif_params = kzalloc(sizeof(struct aca_hif_params), GFP_KERNEL);
++	if (!aca->hif_params)
++		return -ENOMEM;
++	aca->hif_params->task_mask = 0x0000000F;
++	ep_dev_dbg(priv->dev, "%s\n", __func__);
++	return 0;
++}
++
++static void aca_hif_param_init_done(struct dc_ep_priv *priv)
++{
++	u32 addr;
++	struct aca_hif_params *hif_params = to_hif_params(priv);
++	struct aca_fw_param *fw_param = to_aca_fw_param(priv);
++
++	/* wr32(ACA_HIF_PARAM_ADDR, ACA_HIF_LOC_POS);*/
++	/* addr = rd32(ACA_HIF_LOC_POS);*/
++
++	addr = fw_param->init_addr;
++	memcpy_toio(priv->mem + addr, hif_params, sizeof(*hif_params));
++	kfree(hif_params);
++	ep_dev_dbg(priv->dev, "%s\n", __func__);
++}
++
++static bool aca_hif_param_init_check(struct dc_ep_priv *priv)
++{
++	u32 addr;
++	int timeout = ACA_LOOP_CNT;
++	u32 offset = offsetof(struct aca_hif_params, magic);
++	struct aca_fw_param *fw_param = to_aca_fw_param(priv);
++
++	/* addr = rd32(ACA_HIF_LOC_POS);*/
++	addr = fw_param->init_addr;
++	while (--timeout && (rd32(addr + offset) != ACA_MAGIC))
++		udelay(1);
++
++	if (timeout <= 0) {
++		ep_dev_err(priv->dev, "aca hif params init failed\n");
++		return false;
++	}
++
++	return true;
++}
++
++static void aca_txin_init(struct dc_ep_priv *priv,
++	struct aca_cfg_param *aca_txin)
++{
++	u32 val = 0;
++	struct aca_mem_layout *mem_layout = to_mem_layout(priv);
++	struct aca_hif_params *hif_params = to_hif_params(priv);
++	struct aca_hif_param *txin_param = &hif_params->txin;
++
++	if (aca_txin->byteswap)
++		val = BYTE_SWAP_EN;
++
++	val |= (aca_txin->hd_size_in_dw - 1)
++		| SM((aca_txin->pd_size_in_dw - 1), PD_DESC_IN_DW);
++	wr32(val, TXIN_CONV_CFG);
++
++	/* SoC cumulative counter address */
++	wr32(aca_txin->soc_cmlt_cnt_addr, GNRC_TXIN_CMLT_CNT_ADDR);
++	/* SoC descriptors */
++	txin_param->soc_desc_base = aca_txin->soc_desc_base;
++	txin_param->soc_desc_num = aca_txin->soc_desc_num;
++
++	/* Ping/pong buffer */
++	txin_param->pp_buf_base = priv->phymem
++		+ mem_layout->txin_host_desc_base;
++
++	txin_param->pp_buf_num = mem_layout->txin_host_dnum;
++
++	/* PD ring */
++	txin_param->pd_desc_base = priv->phymem
++		+ aca_txin->pd_desc_base;
++	txin_param->pd_desc_num = aca_txin->pd_desc_num;
++
++	dev_dbg(priv->dev, "aca txin init done\n");
++}
++
++static void aca_txout_init(struct dc_ep_priv *priv,
++	struct aca_cfg_param *aca_txout)
++{
++	u32 val = 0;
++	struct aca_mem_layout *mem_layout = to_mem_layout(priv);
++	struct aca_hif_params *hif_params = to_hif_params(priv);
++	struct aca_hif_param *txout_param = &hif_params->txout;
++
++	if (aca_txout->byteswap)
++		val = BYTE_SWAP_EN;
++
++	val |= (aca_txout->hd_size_in_dw - 1)
++		| SM((aca_txout->pd_size_in_dw - 1), PD_DESC_IN_DW);
++	wr32(val, TXOUT_CONV_CFG);
++
++	/* SoC Ring size */
++	val = aca_txout->soc_desc_num;
++	wr32(val, TXOUT_RING_CFG);
++
++	/* SoC cumulative counter address */
++	wr32(aca_txout->soc_cmlt_cnt_addr, GNRC_TXOUT_CMLT_CNT_ADDR);
++	/* SoC descriptors */
++	txout_param->soc_desc_base = aca_txout->soc_desc_base;
++	txout_param->soc_desc_num = aca_txout->soc_desc_num;
++
++	/* Ping/pong buffer */
++	txout_param->pp_buf_base = priv->phymem
++		+mem_layout->txout_host_desc_base;
++
++	txout_param->pp_buf_num = mem_layout->txout_host_dnum;
++
++	/* PD ring */
++	txout_param->pd_desc_base = priv->phymem
++		+ aca_txout->pd_desc_base;
++	txout_param->pd_desc_num = aca_txout->pd_desc_num;
++
++	txout_param->pd_desc_threshold = aca_txout->pp_buf_desc_num;
++
++	ep_dev_dbg(priv->dev, "aca txout init done\n");
++}
++
++static void aca_rxin_init(struct dc_ep_priv *priv,
++	struct aca_cfg_param *aca_rxin)
++{
++	u32 val = 0;
++	struct aca_mem_layout *mem_layout = to_mem_layout(priv);
++	struct aca_hif_params *hif_params = to_hif_params(priv);
++	struct aca_hif_param *rxin_param = &hif_params->rxin;
++
++	if (aca_rxin->byteswap)
++		val = BYTE_SWAP_EN;
++
++	val |= (aca_rxin->hd_size_in_dw - 1)
++		| SM((aca_rxin->pd_size_in_dw - 1), PD_DESC_IN_DW);
++	wr32(val, RXIN_CONV_CFG);
++
++	/* SoC cumulative counter address */
++	wr32(aca_rxin->soc_cmlt_cnt_addr, GNRC_RXIN_CMLT_CNT_ADDR);
++	/* SoC descriptors */
++	rxin_param->soc_desc_base = aca_rxin->soc_desc_base;
++	rxin_param->soc_desc_num = aca_rxin->soc_desc_num;
++
++	/* Ping/pong buffer */
++	rxin_param->pp_buf_base = (u32)priv->phymem
++		+ mem_layout->rxin_host_desc_base;
++
++	rxin_param->pp_buf_num = mem_layout->rxin_host_dnum;
++
++	/* PD ring */
++	rxin_param->pd_desc_base = (u32)priv->phymem
++		+ aca_rxin->pd_desc_base;
++	rxin_param->pd_desc_num = aca_rxin->pd_desc_num;
++
++	rxin_param->pd_desc_threshold = aca_rxin->pp_buf_desc_num;
++	ep_dev_dbg(priv->dev, "aca rxin init done\n");
++}
++
++static void aca_rxout_init(struct dc_ep_priv *priv,
++	struct aca_cfg_param *aca_rxout)
++{
++	u32 val = 0;
++	struct aca_mem_layout *mem_layout = to_mem_layout(priv);
++	struct aca_hif_params *hif_params = to_hif_params(priv);
++	struct aca_hif_param *rxout_param = &hif_params->rxout;
++
++	if (aca_rxout->byteswap)
++		val = BYTE_SWAP_EN;
++
++	val |= (aca_rxout->hd_size_in_dw - 1)
++		| SM((aca_rxout->pd_size_in_dw - 1), PD_DESC_IN_DW);
++	wr32(val, RXOUT_CONV_CFG);
++
++	/* SoC Ring size */
++	val = aca_rxout->soc_desc_num;
++	wr32(val, RXOUT_RING_CFG);
++
++	/* SoC cumulative counter address */
++	wr32(aca_rxout->soc_cmlt_cnt_addr, GNRC_RXOUT_CMLT_CNT_ADDR);
++	/* SoC descriptors */
++	rxout_param->soc_desc_base = aca_rxout->soc_desc_base;
++	rxout_param->soc_desc_num = aca_rxout->soc_desc_num;
++
++	/* Ping/pong buffer */
++	rxout_param->pp_buf_base = (u32)priv->phymem
++		+ mem_layout->rxout_host_desc_base;
++
++	rxout_param->pp_buf_num = mem_layout->rxout_host_dnum;
++
++	/* PD ring */
++	rxout_param->pd_desc_base = (u32)priv->phymem
++		+ aca_rxout->pd_desc_base;
++	rxout_param->pd_desc_num = aca_rxout->pd_desc_num;
++
++	rxout_param->pd_desc_threshold = aca_rxout->pp_buf_desc_num;
++	ep_dev_dbg(priv->dev, "aca rxout init done\n");
++}
++
++static void aca_mdm_init(struct dc_ep_priv *priv, struct aca_modem_param *mdm)
++{
++	struct aca_proj_param *param;
++
++	if (!mdm)
++		return;
++
++	param = &mdm->mdm_txout;
++	wr32(param->stat | priv->phymem, GNRC_TXOUT_TGT_STAT);
++	wr32(param->pd | priv->phymem, GNRC_TXOUT_TGT_PD_OFF);
++	wr32(param->acc_cnt | priv->phymem, GNRC_TXOUT_TGT_ACCM_CNT);
++
++	param = &mdm->mdm_rxin;
++	wr32(param->stat | priv->phymem, GNRC_RXIN_TGT_STAT);
++	wr32(param->pd | priv->phymem, GNRC_RXIN_TGT_PD_OFF);
++	wr32(param->acc_cnt | priv->phymem, GNRC_RXIN_TGT_ACCM_CNT);
++
++	param = &mdm->mdm_rxout;
++	wr32(param->stat | priv->phymem, GNRC_RXOUT_TGT_STAT);
++	wr32(param->pd | priv->phymem, GNRC_RXOUT_TGT_PD_OFF);
++	wr32(param->acc_cnt | priv->phymem, GNRC_RXOUT_TGT_ACCM_CNT);
++	ep_dev_dbg(priv->dev, "aca mdm init done\n");
++}
++
++static void dc_aca_clk_on(struct dc_ep_priv *priv)
++{
++	dc_ep_clk_on(priv, PMU_ADMA);
++}
++
++static void dc_aca_clk_off(struct dc_ep_priv *priv)
++{
++	dc_ep_clk_off(priv, PMU_ADMA);
++}
++
++static void dc_aca_reset(struct dc_ep_priv *priv)
++{
++	dc_ep_reset_device(priv, RST_ACA_DMA | RST_ACA_HOSTIF);
++}
++
++static void aca_mem_clear(struct dc_ep_priv *priv)
++{
++	struct aca_fw_dl_addr *fw_dl = to_fw_addr(priv);
++
++	memset_io(priv->mem + fw_dl->fw_addr[0].fw_load_addr,
++		0, ACA_ACC_FW_SIZE);
++	memset_io(priv->mem + ACA_SRAM_BASE, 0, ACA_SRAM_SIZE);
++}
++
++int dc_aca_start(struct dc_ep_priv *priv, u32 func, int start)
++{
++	if (!func)
++		return -EINVAL;
++
++	wr32_mask(0, func, GNRC_EN_TASK_BITMAP);
++
++	/* Only do if requested by caller */
++	if (start) {
++		wr32(0x1, GNRC_START_OP); /* Any write will trigger */
++		rd32(GNRC_START_OP);
++		if (!aca_hif_param_init_check(priv))
++			return -EIO;
++	}
++	return 0;
++}
++
++static void aca_sw_reset(struct dc_ep_priv *priv)
++{
++	u32 val = SW_RST_GENRISC | SW_RST_HOSTIF_REG | SW_RST_RXIN
++		| SW_RST_RXOUT | SW_RST_TXIN | SW_RST_TXOUT;
++
++	wr32(val, HT_SW_RST_ASSRT);
++	udelay(1);
++	wr32(val, HT_SW_RST_RELEASE);
++	wmb();
++}
++
++int dc_aca_stop(struct dc_ep_priv *priv, u32 *func, int reset)
++{
++	u32 val = *func;
++	u32 reg;
++
++	if (!val)
++		return 0;
++
++	*func = 0;
++
++	/* Only do it if reset is required. Otherwise, pending is fine */
++	if (reset) {
++		if (val & ACA_TXIN_EN) {
++			reg = rd32(TXIN_COUNTERS);
++			if (MS(reg, ACA_PENDING_JOB)
++				|| (MS(reg, ACA_AVAIL_BUF) != ACA_PP_BUFS)) {
++				*func = ACA_TXIN_EN;
++				return -EBUSY;
++			}
++		}
++
++		if (val & ACA_TXOUT_EN) {
++			reg = rd32(TXOUT_COUNTERS);
++			if (MS(reg, ACA_PENDING_JOB)
++				|| (MS(reg, ACA_AVAIL_BUF) != ACA_PP_BUFS)) {
++				*func = ACA_TXOUT_EN;
++				return -EBUSY;
++			}
++		}
++
++		if (val & ACA_RXIN_EN) {
++			reg = rd32(RXIN_COUNTERS);
++			if (MS(reg, ACA_PENDING_JOB)
++				|| (MS(reg, ACA_AVAIL_BUF) != ACA_PP_BUFS)) {
++				*func = ACA_RXIN_EN;
++				return -EBUSY;
++			}
++		}
++
++		if (val & ACA_RXOUT_EN) {
++			reg = rd32(RXOUT_COUNTERS);
++			if (MS(reg, ACA_PENDING_JOB)
++				|| (MS(reg, ACA_AVAIL_BUF) != ACA_PP_BUFS)) {
++				*func = ACA_RXOUT_EN;
++				return -EBUSY;
++			}
++		}
++	}
++
++	wr32_mask(val, 0, GNRC_EN_TASK_BITMAP);
++
++	if (reset) {
++		aca_dma_ch_off(priv);
++		aca_xbar_ia_reject_set(priv, ACA_ACC_IA04);
++		aca_xbar_ia_reject_set(priv, ACA_M_IA06);
++		aca_sw_reset(priv);
++	}
++	return 0;
++}
++static void aca_platform_init(struct dc_ep_priv *priv, struct aca_param *param)
++{
++	wr32(0x1, TXIN_DST_OWWBIT_CFG4);
++	wr32(0x1, TXOUT_DST_OWWBIT_CFG4);
++	wr32(0x1, RXOUT_SRC_OWNBIT_CFG3);
++	wr32(0x1, RXIN_SRC_OWNBIT_CFG3);
++	pr_info("%s-%d: [%x][%x][%x][%x]\n", __func__, __LINE__,
++		param->aca_txin.prefill_cnt,
++		param->aca_txout.prefill_cnt,
++		param->aca_rxout.prefill_cnt,
++		param->aca_rxin.prefill_cnt
++	);
++#ifdef CONFIG_SOC_TYPE_XWAY
++	wr32(0x3E020000, GNRC_TXIN_BUF_PREFILL);
++	wr32(0x0, GNRC_TXIN_BUF_PREFILL + 0x4);
++	wr32(0x0, GNRC_TXIN_BUF_PREFILL + 0x8);
++	wr32(0xff000000, GNRC_TXIN_BUF_PREFILL + 0xc);
++#else
++	wr32(ntohl(param->aca_txin.prefill_cnt), GNRC_TXIN_BUF_PREFILL);
++	wr32(ntohl(param->aca_txout.prefill_cnt), GNRC_TXIN_BUF_PREFILL + 0x4);
++	wr32(ntohl(param->aca_rxout.prefill_cnt), GNRC_TXIN_BUF_PREFILL + 0x8);
++	wr32(ntohl(param->aca_rxin.prefill_cnt), GNRC_TXIN_BUF_PREFILL + 0xc);
++#endif
++	wr32(0x0, GNRC_TXIN_BUF_PREFILL + 0x10);
++	wr32(0x0, GNRC_TXIN_BUF_PREFILL + 0x14);
++	wr32(0x0, GNRC_TXIN_BUF_PREFILL + 0x18);
++	wr32(0x0, GNRC_TXIN_BUF_PREFILL + 0x1c);
++}
++
++int dc_aca_init(struct dc_ep_priv *priv, struct aca_param *param,
++	struct aca_modem_param *mdm)
++{
++	int ret;
++	struct dc_aca *aca = to_aca(priv);
++
++	dc_aca_clk_on(priv);
++	dc_aca_reset(priv);
++
++	ret = aca_fetch_fw(priv);
++	if (ret) {
++		ep_dev_err(priv->dev,
++			"could not fetch firmware files %d\n", ret);
++		dc_aca_clk_off(priv);
++		return ret;
++	}
++
++	aca_mem_clear(priv);
++	aca_dma_init(priv);
++	aca_basic_init(priv);
++	aca_fw_download(priv);
++	aca_hif_param_init(priv);
++	aca_txin_init(priv, &param->aca_txin);
++	aca_txout_init(priv, &param->aca_txout);
++	aca_rxout_init(priv, &param->aca_rxout);
++	aca_rxin_init(priv, &param->aca_rxin);
++	aca_hif_param_init_done(priv);
++
++	aca_mdm_init(priv, mdm);
++
++	aca_platform_init(priv, param);
++
++	aca->initialized = true;
++	ep_dev_info(priv->dev, "aca init done\n");
++	return 0;
++}
++
++static int aca_max_gpio(struct dc_ep_priv *priv)
++{
++	return fls(rd32(PADC_AVAIL));
++}
++
++void dc_aca_info_init(struct dc_ep_priv *priv)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	aca->initialized = false;
++	spin_lock_init(&aca->clk_lock);
++	spin_lock_init(&aca->rcu_lock);
++	mutex_init(&aca->pin_lock);
++	aca->max_gpio = aca_max_gpio(priv);
++}
++
++#define ACA_ENDIAN_ADDR(addr, endian)		\
++{						\
++	if (endian == ACA_BIG_ENDIAN)		\
++		return addr##_BE;		\
++	else					\
++		return addr;			\
++}
++
++u32 aca_umt_msg_addr(struct dc_ep_priv *priv, u32 endian, u32 type)
++{
++	switch(type) {
++	case ACA_TXIN:
++		ACA_ENDIAN_ADDR(TXIN_HD_ACCUM_ADD, endian);
++	case ACA_RXIN:
++		ACA_ENDIAN_ADDR(RXIN_HD_ACCUM_ADD, endian);
++	case ACA_TXOUT:
++		ACA_ENDIAN_ADDR(TXOUT_HD_ACCUM_SUB, endian);
++	case ACA_RXOUT:
++		ACA_ENDIAN_ADDR(RXOUT_HD_ACCUM_SUB, endian);
++	default:
++		ACA_ENDIAN_ADDR(RXIN_HD_ACCUM_ADD, endian);
++	};
++}
++
++void dc_aca_event_addr_get(struct dc_ep_priv *priv,
++	struct aca_event_reg_addr *regs)
++{
++	regs->txin_acc_sub = TXIN_ACA_ACCUM_SUB;
++	regs->txout_acc_add = TXOUT_ACA_ACCUM_ADD;
++	regs->rxin_acc_sub = RXIN_ACA_ACCUM_SUB;
++	regs->rxout_acc_add = RXOUT_ACA_ACCUM_ADD;
++}
++
++void dc_aca_txin_sub_ack(struct dc_ep_priv *priv, u32 val)
++{
++	wr32(val, TXIN_ACA_ACCUM_SUB);
++}
++
++u32 dc_aca_txin_hd_cnt(struct dc_ep_priv *priv)
++{
++	return rd32(TXIN_ACA_HD_ACC_CNT);
++}
++
+diff --git a/drivers/net/ethernet/intel/vrx518/aca.h b/drivers/net/ethernet/intel/vrx518/aca.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/aca.h
+@@ -0,0 +1,481 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#ifndef ACA_H
++#define ACA_H
++
++#define HOST_IF_BASE		0x50000
++#define ACA_CORE_BASE		0x50800
++#define GENRISC_IRAM_BASE	0x58000
++#define GENRISC_SPRAM_BASE	0x5C000
++#define GENRISC_BASE		0x5D000
++#define MAC_HT_EXT_BASE		0x5D400
++#define ACA_SRAM_BASE		0x100000
++#define ACA_SRAM_SIZE		0x2000 /* Project specific */
++#define ACA_HOSTIF_ADDR_SHIFT	2
++
++#define ACA_HOSTIF_ADDR(addr)	((addr) >> ACA_HOSTIF_ADDR_SHIFT)
++
++#define ACA_HIF_LOC_POS		0x100060
++#define ACA_HIF_PARAM_ADDR	0x100064
++#define ACA_ACC_FW_SIZE		0x400
++#define ACA_LOOP_CNT		1000
++
++/* TODO: change name after karthik explained */
++#define TXIN_DST_OWNBIT		0xC4
++#define TXOUT_DST_OWNBIT	0x1C4
++#define RXOUT_SRC_OWNBIT	0x3C4
++#define RXIN_DST_OWNBIT		0x2C4
++
++/* Genrisc Internal Host Descriptor(Ping/Pong) decided by ACA fw header */
++/* ACA Core */
++#define ACA_CORE_REG(X)	(ACA_CORE_BASE + (X))
++#define TXIN_CFG1	ACA_CORE_REG(0x0)
++#define TXIN_CFG2	ACA_CORE_REG(0x4)
++#define TXIN_CFG3	ACA_CORE_REG(0x8)
++#define TXIN_DST_OWWBIT_CFG4	ACA_CORE_REG(TXIN_DST_OWNBIT)
++
++#define TXOUT_CFG1	ACA_CORE_REG(0x100)
++#define TXOUT_CFG2	ACA_CORE_REG(0x104)
++#define TXOUT_CFG3	ACA_CORE_REG(0x108)
++#define TXOUT_DST_OWWBIT_CFG4	ACA_CORE_REG(TXOUT_DST_OWNBIT)
++
++#define RXOUT_CFG1	ACA_CORE_REG(0x300)
++#define RXOUT_CFG2	ACA_CORE_REG(0x304)
++#define RXOUT_CFG3	ACA_CORE_REG(0x308)
++#define RXOUT_SRC_OWNBIT_CFG3	ACA_CORE_REG(RXOUT_SRC_OWNBIT)
++
++#define RXIN_CFG1	ACA_CORE_REG(0x200)
++#define RXIN_CFG2	ACA_CORE_REG(0x204)
++#define RXIN_CFG3	ACA_CORE_REG(0x208)
++#define RXIN_SRC_OWNBIT_CFG3	ACA_CORE_REG(RXIN_DST_OWNBIT)
++
++/* Genrisc */
++#define GNRC_REG(X)		(GENRISC_BASE + (X))
++#define GNRC_STOP_OP		GNRC_REG(0x60)
++#define GNRC_CONTINUE_OP	GNRC_REG(0x64)
++#define GNRC_START_OP		GNRC_REG(0x90)
++
++/* HOST Interface Register */
++#define HOST_IF_REG(X)		(HOST_IF_BASE + (X))
++#define HD_DESC_IN_DW		0x7u
++#define HD_DESC_IN_DW_S		0
++#define PD_DESC_IN_DW		0x70u
++#define PD_DESC_IN_DW_S		4
++#define BYTE_SWAP_EN		BIT(28)
++
++#define TXIN_CONV_CFG		HOST_IF_REG(0x14)
++#define TXOUT_CONV_CFG		HOST_IF_REG(0x18)
++#define RXIN_CONV_CFG		HOST_IF_REG(0x1C)
++#define RXOUT_CONV_CFG		HOST_IF_REG(0x20)
++
++#define TXIN_COUNTERS		HOST_IF_REG(0x44)
++#define TXOUT_COUNTERS		HOST_IF_REG(0x48)
++#define RXIN_COUNTERS		HOST_IF_REG(0x4c)
++#define RXOUT_COUNTERS		HOST_IF_REG(0x50)
++
++#define TXOUT_RING_CFG		HOST_IF_REG(0x98)
++#define RXOUT_RING_CFG		HOST_IF_REG(0x9C)
++
++#define ACA_PENDING_JOB		0x00000300
++#define ACA_PENDING_JOB_S	8
++#define ACA_AVAIL_BUF		0x00030000
++#define ACA_AVAIL_BUF_S		16
++#define ACA_PP_BUFS		2
++
++#define HOST_TYPE		HOST_IF_REG(0xA0)
++#define TXOUT_COUNTERS_UPDATE	HOST_IF_REG(0xAC)
++#define RXOUT_COUNTERS_UPDATE	HOST_IF_REG(0xB4)
++#define RXIN_HD_ACCUM_ADD	HOST_IF_REG(0xC8) /* UMT Message trigger */
++#define TXIN_HD_ACCUM_ADD	HOST_IF_REG(0xCC) /* UMT Message trigger */
++#define RXOUT_HD_ACCUM_ADD	HOST_IF_REG(0xD0)
++#define TXOUT_HD_ACCUM_ADD	HOST_IF_REG(0xD4)
++#define RXOUT_ACA_ACCUM_ADD	HOST_IF_REG(0xE0) /* PPE FW tigger */
++#define TXOUT_ACA_ACCUM_ADD	HOST_IF_REG(0xE4) /* PPE FW tigger */
++#define RXOUT_HD_ACCUM_SUB	HOST_IF_REG(0xF8)
++#define TXOUT_HD_ACCUM_SUB	HOST_IF_REG(0xFC)
++#define RXIN_ACA_ACCUM_SUB	HOST_IF_REG(0x100)
++#define TXIN_ACA_ACCUM_SUB	HOST_IF_REG(0x104)
++#define TXIN_ACA_HD_ACC_CNT	HOST_IF_REG(0x11C)
++#define UMT_ORDER_CFG		HOST_IF_REG(0x234)
++#define RXIN_HD_ACCUM_ADD_BE	HOST_IF_REG(0x250)
++#define TXIN_HD_ACCUM_ADD_BE	HOST_IF_REG(0x254)
++#define RXOUT_HD_ACCUM_SUB_BE	HOST_IF_REG(0x268)
++#define TXOUT_HD_ACCUM_SUB_BE	HOST_IF_REG(0x26c)
++
++/* MAC_HT_EXTENSION Register */
++#define MAC_HT_EXT_REG(X)	(MAC_HT_EXT_BASE + (X))
++
++#define HT_GCLK_ENABLE		MAC_HT_EXT_REG(0)
++#define HT_SW_RST_RELEASE	MAC_HT_EXT_REG(0x4)
++#define HT_SW_RST_ASSRT		MAC_HT_EXT_REG(0x1C)
++#define SW_RST_GENRISC		BIT(14)
++#define SW_RST_RXOUT		BIT(26)
++#define SW_RST_RXIN		BIT(27)
++#define SW_RST_TXOUT		BIT(28)
++#define SW_RST_TXIN		BIT(29)
++#define SW_RST_HOSTIF_REG	BIT(30)
++#define OCP_ARB_ACC_PAGE_REG	MAC_HT_EXT_REG(0x1C4)
++#define AHB_ARB_HP_REG		MAC_HT_EXT_REG(0x1C8)
++
++/* Genrisc FW Configuration */
++#define GNRC_SPRAM_REG(X)	(GENRISC_SPRAM_BASE + (X))
++
++/* TX IN */
++#define GNRC_TXIN_TGT_STAT		GNRC_SPRAM_REG(0x04)
++#define GNRC_TXIN_TGT_PD_OFF		GNRC_SPRAM_REG(0x08)
++#define GNRC_TXIN_TGT_ACCM_CNT		GNRC_SPRAM_REG(0x0C)
++
++/* TX OUT */
++#define GNRC_TXOUT_TGT_STAT		GNRC_SPRAM_REG(0x10)
++#define GNRC_TXOUT_TGT_PD_OFF		GNRC_SPRAM_REG(0x14)
++#define GNRC_TXOUT_TGT_ACCM_CNT		GNRC_SPRAM_REG(0x18)
++
++/* RX IN */
++#define GNRC_RXIN_TGT_STAT		GNRC_SPRAM_REG(0x1C)
++#define GNRC_RXIN_TGT_PD_OFF		GNRC_SPRAM_REG(0x20)
++#define GNRC_RXIN_TGT_ACCM_CNT		GNRC_SPRAM_REG(0x24)
++
++/* RX OUT XXX not consistent */
++#define GNRC_RXOUT_TGT_STAT		GNRC_SPRAM_REG(0x28)
++#define GNRC_RXOUT_TGT_PD_OFF		GNRC_SPRAM_REG(0x2C)
++#define GNRC_RXOUT_TGT_ACCM_CNT		GNRC_SPRAM_REG(0x30)
++
++/* 4 Ring 8 UMT case SoC cumulative counter address configuration */
++#define GNRC_TXIN_CMLT_CNT_ADDR		GNRC_SPRAM_REG(0x34)
++#define GNRC_TXOUT_CMLT_CNT_ADDR	GNRC_SPRAM_REG(0x38)
++#define GNRC_RXOUT_CMLT_CNT_ADDR	GNRC_SPRAM_REG(0x3C)
++#define GNRC_RXIN_CMLT_CNT_ADDR		GNRC_SPRAM_REG(0x40)
++
++
++#define GNRC_SOURCE_TXIN_CMLT_CNT_ADDR	GNRC_SPRAM_REG(0x54)
++#define GNRC_SOURCE_TXOUT_CMLT_CNT_ADDR	GNRC_SPRAM_REG(0x58)
++#define GNRC_SOURCE_RXOUT_CMLT_CNT_ADDR	GNRC_SPRAM_REG(0x5c)
++#define GNRC_SOURCE_RXIN_CMLT_CNT_ADDR	GNRC_SPRAM_REG(0x60)
++
++/* Txin index prefill */
++#define GNRC_TXIN_BUF_PREFILL		GNRC_SPRAM_REG(0x44)
++/* Task enable bitmap */
++#define GNRC_EN_TASK_BITMAP		GNRC_SPRAM_REG(0x64)
++
++#define ACA_SRAM_REG(X)	(ACA_SRAM_BASE + (X))
++#define ACA_TXOUT_PING_BUFFER_START ACA_SRAM_REG(0x1528)
++
++
++/* XBAR SSX0 */
++#define ACA_SSX0_BASE			0x180000
++#define ACA_SSX0_IA_BASE(id)		(ACA_SSX0_BASE + (((id) - 1) << 10))
++#define ACA_AGENT_CTRL(id)		(ACA_SSX0_IA_BASE(id) + 0x20)
++#define ACA_AGENT_STATUS(id)		(ACA_SSX0_IA_BASE(id) + 0x28)
++
++#define XBAR_CTRL_CORE_RESET		BIT(0)
++#define XBAR_CTRL_REJECT		BIT(4)
++
++#define XBAR_STAT_CORE_RESET		BIT(0)
++#define XBAR_STAT_REQ_ACTIVE		BIT(4)
++#define XBAR_STAT_RESP_WAITING		BIT(5)
++#define XBAR_STAT_BURST			BIT(6)
++#define XBAR_STAT_READEX		BIT(7)
++
++enum {
++	ACA_ACC_IA04 = 4,
++	ACA_M_IA06 = 6,
++};
++
++/* Should be passed from ACA FW header */
++#define DESC_NUM_PER_CH		1
++
++/* ACA DMA REG */
++#define ACA_DMA_BASE		0x60000
++
++#define ACA_DMA_REG(X)		(ACA_DMA_BASE + (X))
++#define ADMA_CLC		ACA_DMA_REG(0x0)
++#define ADMA_ID			ACA_DMA_REG(0x8)
++#define ADMA_CTRL		ACA_DMA_REG(0x10)
++#define ADMA_CPOLL		ACA_DMA_REG(0x14)
++
++#define ADMA_ID_REV		0x1Fu
++#define ADMA_ID_REV_S		0
++#define ADMA_ID_ID		0xFF00u
++#define ADMA_ID_ID_S		8
++#define ADMA_ID_PRTNR		0xF0000u
++#define ADMA_ID_PRTNR_S		16
++#define ADMA_ID_CHNR		0x7F00000u
++#define ADMA_ID_CHNR_S		20
++
++#define ADMA_CPOLL_EN		BIT(31)
++
++#define ADMA_CPOLL_CNT		0xFFF0u
++#define ADMA_CPOLL_CNT_S	4
++#define ADMA_DEFAULT_POLL	24
++#define ADMA_CS			ACA_DMA_REG(0x18)
++#define ADMA_CCTRL		ACA_DMA_REG(0x1C)
++#define ADMA_CDBA		ACA_DMA_REG(0x20)
++#define ADMA_CDLEN		ACA_DMA_REG(0x24)
++#define ADMA_CIS		ACA_DMA_REG(0x28)
++#define ADMA_CIE		ACA_DMA_REG(0x2C)
++
++#define ADMA_CI_EOP		BIT(1)
++#define ADMA_CI_DUR		BIT(2)
++#define ADMA_CI_DESCPT		BIT(3)
++#define ADMA_CI_CHOFF		BIT(4)
++#define ADMA_CI_RDERR		BIT(5)
++#define ADMA_CI_ALL		(ADMA_CI_EOP | ADMA_CI_DUR | ADMA_CI_DESCPT\
++				| ADMA_CI_CHOFF | ADMA_CI_RDERR)
++
++#define ADMA_CDPTNRD		ACA_DMA_REG(0x34)
++#define ADMA_PS			ACA_DMA_REG(0x40)
++#define ADMA_PCTRL		ACA_DMA_REG(0x44)
++
++/* DMA CCTRL BIT */
++#define CCTRL_RST		1 /* Channel Reset */
++#define CCTRL_ONOFF		0 /* Channel On/Off */
++
++/* DMA CTRL BIT */
++#define CTRL_PKTARB		31 /* Packet Arbitration */
++#define CTRL_MDC		15 /* Meta data copy */
++#define CTRL_DDBR		14 /* Dynamic Burst */
++#define CTRL_DCNF		13 /* Descriptor Length CFG*/
++#define CTRL_ENBE		9 /* Byte Enable */
++#define CTRL_DRB		8 /* Descriptor read back */
++#define CTRL_DSRAM		1 /* Dedicated Descriptor Access port Enable */
++#define CTRL_RST		0 /* Global Reset */
++
++/* DMA PORT BIT */
++#define PCTRL_FLUSH		16
++#define PCTRL_TXENDI		10 /* TX DIR Endianess */
++#define PCTRL_RXENDI		8 /* RX DIR Endianess */
++#define PCTRL_TXBL		4 /* TX burst 2/4/8 */
++#define PCTRL_RXBL		2 /* RX burst 2/4/8 */
++#define PCTRL_TXBL16		1 /* TX burst of 16 */
++#define PCTRL_RXBL16		0 /* RX burst of 16 */
++
++/*DMA ID BIT */
++#define ID_CHNR			20 /* Channel Number */
++
++/*DMA POLLING BIT */
++#define POLL_EN			31 /* Polling Enable */
++#define POLL_CNT		4 /* Polling Counter */
++
++#define ACA_DMA_CHAN_MAX	12
++
++enum aca_sec_id {
++	ACA_SEC_HIF = 0x1,
++	ACA_SEC_GNR = 0x2,
++	ACA_SEC_MAC_HT = 0x3,
++	ACA_SEC_MEM_TXIN = 0x4,
++	ACA_SEC_MEM_TXIN_PDRING = 0x5,
++	ACA_SEC_MEM_TXOUT = 0x6,
++	ACA_SEC_MEM_TXOUT_PDRING = 0x7,
++	ACA_SEC_MEM_RXOUT = 0x8,
++	ACA_SEC_MEM_RXOUT_PDRING = 0x9,
++	ACA_SEC_MEM_RXIN = 0xa,
++	ACA_SEC_MEM_RXIN_PDRING = 0xb,
++	ACA_SEC_DMA = 0xc,
++	ACA_SEC_FW_INIT = 0xd,
++	ACA_SEC_FW = 0x88,
++};
++
++enum aca_fw_id {
++	ACA_FW_TXIN = 1,
++	ACA_FW_TXOUT = 2,
++	ACA_FW_RXIN = 3,
++	ACA_FW_RXOUT = 4,
++	ACA_FW_GNRC = 5,
++	ACA_FW_MAX = 5,
++};
++
++enum aca_img_type {
++	ACA_VRX518_IMG,
++	ACA_VRX618_IMG,
++	ACA_FALCON_IMG,
++	ACA_PUMA_IMG,
++	ACA_IMG_MAX,
++};
++
++enum aca_soc_type {
++	ACA_SOC_XRX300 = 1,
++	ACA_SOC_XRX500 = 2,
++	ACA_SOC_PUMA   = 4,
++	ACA_SOC_3RD_PARTY = 8,
++};
++
++#define ACA_SOC_MASK	0xf
++
++/* Common information element, len has different variants */
++struct aca_fw_ie {
++	__be32 id;
++	__be32 len;
++} __packed;
++
++struct aca_fw_reg {
++	__be32 offset;
++	__be32 value;
++} __packed;
++
++struct aca_sram_desc {
++	__be32 dnum;
++	__be32 dbase;
++} __packed;
++
++struct aca_fw_dma {
++	__be32 cid;
++	__be32 base;
++} __packed;
++
++/* ACA internal header part */
++struct aca_int_hdr {
++	__be32 id;
++	__be32 offset;
++	__be32 size;
++	__be32 load_addr;
++} __packed;
++
++struct aca_fw_param {
++	__be32 st_sz;
++	__be32 init_addr;
++} __packed;
++
++struct aca_mem_layout {
++	u32 txin_host_desc_base;
++	u32 txin_host_dnum;
++	u32 txout_host_desc_base;
++	u32 txout_host_dnum;
++	u32 rxin_host_desc_base;
++	u32 rxin_host_dnum;
++	u32 rxout_host_desc_base;
++	u32 rxout_host_dnum;
++};
++
++struct aca_pdmem_layout {
++	u32 txin_pd_desc_base;
++	u32 txin_pd_dnum;
++	u32 txout_pd_desc_base;
++	u32 txout_pd_dnum;
++	u32 rxin_pd_desc_base;
++	u32 rxin_pd_dnum;
++	u32 rxout_pd_desc_base;
++	u32 rxout_pd_dnum;
++};
++
++struct aca_fw_addr_tuple {
++	u32 fw_id;
++	u32 fw_load_addr;
++	size_t fw_size;
++	const char *fw_base;
++};
++
++struct aca_fw_dl_addr {
++	u32 fw_num;
++	struct aca_fw_addr_tuple fw_addr[ACA_FW_MAX];
++};
++
++struct aca_fw_info {
++	const struct firmware *fw;
++	const void *fw_data;
++	size_t fw_len;
++	struct aca_mem_layout mem_layout;
++	struct aca_pdmem_layout pdmem_layout;
++	struct aca_fw_param fw_param;
++	struct aca_fw_dl_addr fw_dl;
++	u32 chan_num;
++	u32 adma_desc_base[ACA_DMA_CHAN_MAX];
++};
++
++union fw_ver {
++#ifdef CONFIG_CPU_BIG_ENDIAN
++	struct {
++		u32 build:4;
++		u32 branch:4;
++		u32 major:8;
++		u32 minor:16;
++	} __packed field;
++#else
++	struct {
++		u32 minor:16;
++		u32 major:8;
++		u32 branch:4;
++		u32 build:4;
++	} __packed field;
++#endif /* CONFIG_CPU_BIG_ENDIAN */
++	u32 all;
++} __packed;
++
++union img_soc_type {
++#ifdef CONFIG_CPU_BIG_ENDIAN
++	struct {
++		u32 img_type:16;
++		u32 soc_type:16;
++	} __packed field;
++#else
++	struct {
++		u32 soc_type:16;
++		u32 img_type:16;
++	} __packed field;
++#endif /* CONFIG_CPU_BIG_ENDIAN */
++	u32 all;
++} __packed;
++
++/* Fixed header part */
++struct aca_fw_f_hdr {
++	__be32 ver;
++	__be32 type;
++	__be32 hdr_size;
++	__be32 fw_size;
++	__be32 num_section;
++} __packed;
++
++struct aca_hif_param {
++	u32 soc_desc_base;
++	u32 soc_desc_num;
++	u32 pp_buf_base;
++	u32 pp_buf_num;
++	u32 pd_desc_base;
++	u32 pd_desc_num;
++	u32 pd_desc_threshold;
++};
++
++struct aca_hif_params {
++	u32 task_mask;
++	struct aca_hif_param txin;
++	struct aca_hif_param txout;
++	struct aca_hif_param rxin;
++	struct aca_hif_param rxout;
++	u32 dbg_base;
++	u32 dbg_size;
++	u32 magic;
++};
++
++#define ACA_MAGIC	0x25062016
++
++struct dc_aca {
++	bool initialized;
++	spinlock_t	clk_lock;
++	spinlock_t	rcu_lock;
++	struct mutex	pin_lock;
++	struct aca_fw_info fw_info;
++	struct aca_hif_params *hif_params;
++	u32 max_gpio;
++	u32 adma_chans;
++};
++#endif /* ACA_H */
+diff --git a/drivers/net/ethernet/intel/vrx518/ep.c b/drivers/net/ethernet/intel/vrx518/ep.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/ep.c
+@@ -0,0 +1,716 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/types.h>
++#include <linux/atomic.h>
++#include <linux/log2.h>
++#include <linux/uaccess.h>
++#include <linux/bitops.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/pci.h>
++#include <linux/pci_regs.h>
++#include <linux/platform_device.h>
++
++#include "ep.h"
++#include "aca.h"
++#include "misc.h"
++
++#define MAJ	1
++#define MIN	1
++#define BUILD	0
++#define DRV_VERSION __stringify(MAJ) "." __stringify(MIN) "." \
++	__stringify(BUILD) "-k"
++
++static bool pcie_switch_exist;
++module_param(pcie_switch_exist, bool, 0644);
++MODULE_PARM_DESC(pcie_switch_exist, "pcie switch existed or not");
++
++static const char dc_ep_driver_name[] = "vrx518";
++static const char dc_ep_driver_version[] = DRV_VERSION;
++static const char dc_ep_driver_string[] =
++			"Intel(R) SmartPHY DSL(VRX518) PCIe EP/ACA Driver";
++static const char dc_ep_copyright[] =
++				"Copyright (c) 2016 Intel Corporation.";
++
++static struct dc_ep_info g_dc_ep_info;
++static DEFINE_SPINLOCK(dc_ep_lock);
++
++static inline void reset_assert_device(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	dc_ep_assert_device(dev->priv, bits);
++}
++
++static inline void reset_deassert_device(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	dc_ep_deassert_device(dev->priv, bits);
++}
++
++static inline void icu_disable_intr(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	dc_ep_icu_dis_intr(dev->priv, bits);
++}
++
++static inline void icu_enable_intr(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	dc_ep_icu_en_intr(dev->priv, bits);
++}
++
++static inline int reset_device(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_reset_device(dev->priv, bits);
++}
++
++static inline int clk_on(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_clk_on(dev->priv, bits);
++}
++
++static inline int clk_off(struct dc_ep_dev *dev, u32 bits)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_clk_off(dev->priv, bits);
++}
++
++static inline int clk_set(struct dc_ep_dev *dev, u32 sysclk, u32 ppeclk)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_clk_set(dev->priv, sysclk, ppeclk);
++}
++
++static inline int clk_get(struct dc_ep_dev *dev, u32 *sysclk, u32 *ppeclk)
++{
++	BUG_ON(!dev || !sysclk || !ppeclk);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_clk_get(dev->priv, sysclk, ppeclk);
++}
++
++static inline int gpio_dir(struct dc_ep_dev *dev, u32 gpio, int dir)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_dir(dev->priv, gpio, dir);
++}
++
++static inline int gpio_set(struct dc_ep_dev *dev, u32 gpio, int val)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_set(dev->priv, gpio, val);
++}
++
++static inline int gpio_get(struct dc_ep_dev *dev, u32 gpio, int *val)
++{
++	BUG_ON(!dev || !val);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_get(dev->priv, gpio, val);
++}
++
++static inline int pinmux_set(struct dc_ep_dev *dev, u32 gpio, int func)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_pinmux_set(dev->priv, gpio, func);
++}
++
++static inline int pinmux_get(struct dc_ep_dev *dev, u32 gpio, int *func)
++{
++	BUG_ON(!dev || !func);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_pinmux_get(dev->priv, gpio, func);
++}
++
++static inline int gpio_pupd_set(struct dc_ep_dev *dev, u32 gpio, u32 val)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_pupd_set(dev->priv, gpio, val);
++}
++
++static inline int gpio_od_set(struct dc_ep_dev *dev, u32 gpio, int val)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_od_set(dev->priv, gpio, val);
++}
++
++static inline int gpio_src_set(struct dc_ep_dev *dev, u32 gpio, int val)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_src_set(dev->priv, gpio, val);
++}
++
++static inline int gpio_dcc_set(struct dc_ep_dev *dev, u32 gpio, u32 val)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_ep_gpio_dcc_set(dev->priv, gpio, val);
++}
++
++static inline int aca_start(struct dc_ep_dev *dev, u32 func, int start)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return dc_aca_start(dev->priv, func, start);
++}
++
++static inline int aca_stop(struct dc_ep_dev *dev, u32 *func, int reset)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv || !func);
++
++	return dc_aca_stop(dev->priv, func, reset);
++}
++
++static inline int aca_init(struct dc_ep_dev *dev, struct aca_param *aca,
++	struct aca_modem_param *mdm)
++{
++	BUG_ON(!dev || !aca);
++	BUG_ON(!dev->priv);
++
++	return dc_aca_init(dev->priv, aca, mdm);
++}
++
++static inline void aca_event_addr_get(struct dc_ep_dev *dev,
++	struct aca_event_reg_addr *regs)
++{
++	BUG_ON(!dev || !regs);
++	BUG_ON(!dev->priv);
++
++	dc_aca_event_addr_get(dev->priv, regs);
++}
++
++static inline u32 umt_msg_addr(struct dc_ep_dev *dev, u32 endian, u32 type)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	return aca_umt_msg_addr(dev->priv, endian, type);
++}
++
++static inline void aca_txin_sub_ack(struct dc_ep_dev *dev, u32 val)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++
++	dc_aca_txin_sub_ack(dev->priv, val);
++}
++
++static inline u32 aca_txin_hd_cnt(struct dc_ep_dev *dev)
++{
++	BUG_ON(!dev);
++	BUG_ON(!dev->priv);
++	return dc_aca_txin_hd_cnt(dev->priv);
++}
++
++static const struct aca_hw_ops dc_ep_hw_ops = {
++	.reset_assert = reset_assert_device,
++	.reset_deassert = reset_deassert_device,
++	.reset_device = reset_device,
++	.icu_en = icu_enable_intr,
++	.icu_mask = icu_disable_intr,
++	.clk_on = clk_on,
++	.clk_off = clk_off,
++	.clk_set = clk_set,
++	.clk_get = clk_get,
++	.gpio_dir = gpio_dir,
++	.gpio_set = gpio_set,
++	.gpio_get = gpio_get,
++	.pinmux_set = pinmux_set,
++	.pinmux_get = pinmux_get,
++	.gpio_pupd_set = gpio_pupd_set,
++	.gpio_od_set = gpio_od_set,
++	.gpio_src_set = gpio_src_set,
++	.gpio_dcc_set = gpio_dcc_set,
++	.aca_start = aca_start,
++	.aca_stop = aca_stop,
++	.aca_init = aca_init,
++	.aca_event_addr_get = aca_event_addr_get,
++	.umt_msg_addr = umt_msg_addr,
++	.aca_txin_ack_sub = aca_txin_sub_ack,
++	.aca_txin_hd_cnt = aca_txin_hd_cnt,
++};
++
++int dc_ep_dev_num_get(int *dev_num)
++{
++	if ((g_dc_ep_info.dev_num <= 0)
++		|| (g_dc_ep_info.dev_num > DC_EP_MAX_NUM))
++		return -EIO;
++
++	*dev_num = g_dc_ep_info.dev_num;
++	return 0;
++}
++EXPORT_SYMBOL_GPL(dc_ep_dev_num_get);
++
++int dc_ep_dev_info_req(int dev_idx, enum dc_ep_int module,
++			struct dc_ep_dev *dev)
++{
++	int i;
++	struct dc_ep_priv *priv;
++
++	if ((dev_idx < 0) || (dev_idx >= DC_EP_MAX_NUM)) {
++		ep_dev_err(dev->dev, "%s invalid device index %d\n",
++			__func__, dev_idx);
++		return -EIO;
++	}
++
++	priv = &g_dc_ep_info.pcie_ep[dev_idx];
++	if (atomic_read(&priv->refcnt) >= DC_EP_MAX_REFCNT) {
++		ep_dev_err(dev->dev,
++			"%s mismatch request/release module usage\n", __func__);
++		return -EIO;
++	}
++
++	switch (module) {
++	case DC_EP_INT_PPE:
++		dev->irq = priv->irq_base;
++		if (priv->msi_mode == DC_EP_8_MSI_MODE) {
++			dev->aca_tx_irq = priv->irq_base + 7;
++			dev->aca_rx_irq = priv->irq_base + 6;
++		} else if (priv->msi_mode == DC_EP_4_MSI_MODE) {
++			dev->aca_tx_irq = priv->irq_base + 2;
++			dev->aca_rx_irq = priv->irq_base + 3;
++		} else {
++			ep_dev_err(dev->dev, "%s ACA should never occur\n",
++				__func__);
++		}
++		break;
++	case DC_EP_INT_MEI:
++		dev->irq = priv->irq_base + 1;
++		break;
++	default:
++		dev->irq = priv->irq_base;
++		break;
++	}
++
++	dev->dev = priv->dev;
++	dev->membase = priv->mem;
++	dev->phy_membase = priv->phymem;
++	dev->peer_num = priv->peer_num;
++	for (i = 0; i < dev->peer_num; i++) {
++		dev->peer_membase[i] = priv->peer_mem[i];
++		dev->peer_phy_membase[i] = priv->peer_phymem[i];
++	}
++	dev->switch_attached = priv->switch_attached;
++	dev->priv = priv;
++	dev->hw_ops = &dc_ep_hw_ops;
++	atomic_inc(&priv->refcnt);
++	return 0;
++}
++EXPORT_SYMBOL_GPL(dc_ep_dev_info_req);
++
++int dc_ep_dev_info_release(int dev_idx)
++{
++	struct dc_ep_priv *priv;
++
++	if ((dev_idx < 0) || (dev_idx >= DC_EP_MAX_NUM)) {
++		ep_pr_err("%s invalid device index %d\n",
++			__func__, dev_idx);
++		return -EIO;
++	}
++
++	priv = &g_dc_ep_info.pcie_ep[dev_idx];
++	if (atomic_read(&priv->refcnt) <= 0) {
++		ep_pr_err("%s mismatch request/release module usage\n",
++			__func__);
++		return -EIO;
++	}
++
++	atomic_dec(&priv->refcnt);
++	return 0;
++}
++EXPORT_SYMBOL_GPL(dc_ep_dev_info_release);
++
++static int pci_msi_vec_set(struct pci_dev *dev, int nvec)
++{
++	int pos;
++	u16 msgctl;
++
++	if (!is_power_of_2(nvec))
++		return -EINVAL;
++
++	pos = pci_find_capability(dev, PCI_CAP_ID_MSI);
++	if (!pos)
++		return -EINVAL;
++
++	pci_read_config_word(dev, pos + PCI_MSI_FLAGS, &msgctl);
++	msgctl &= ~PCI_MSI_FLAGS_QSIZE;
++	msgctl |= ((ffs(nvec) - 1) << 4);
++	pci_write_config_word(dev, pos + PCI_MSI_FLAGS, msgctl);
++	pci_read_config_word(dev, pos + PCI_MSI_FLAGS, &msgctl);
++	return 0;
++}
++
++static int dc_ep_msi_enable(struct pci_dev *pdev, int nvec)
++{
++	int err;
++	struct dc_ep_priv *priv = pci_get_drvdata(pdev);
++
++	/* NB, ICU initailize first */
++	dc_ep_icu_init(priv);
++
++	err = pci_msi_vec_set(pdev, nvec);
++	if (err) {
++		ep_dev_err(&pdev->dev, "%s: Failed to set maximum MSI vector\n",
++			__func__);
++		return -EIO;
++	}
++
++#if 0
++	err = pci_enable_msi_exact(pdev, nvec);
++#else
++	err = pci_enable_msi_block(pdev, nvec);
++	//pci_enable_msi(pdev);
++#endif
++	if (err) {
++		ep_dev_err(&pdev->dev,
++			"%s: Failed to enable MSI interrupts error code: %d\n",
++			__func__, err);
++		return -EIO;
++	}
++	return 0;
++}
++
++static void dc_ep_info_xchange(struct pci_dev *pdev, int card_num)
++{
++	/* More cards supported, exchange address information
++	 * For example, suppose three cards dected.
++	 * 0, <1, 2>
++	 * 1, <0, 2>
++	 * 2, <0, 1>
++	 * For four cards detected
++	 * 0, <1, 2, 3>
++	 * 1, <0, 2, 3>
++	 * 2, <0, 1, 3>
++	 * 3, <0, 1, 2>
++	 * and etc
++	 */
++	int i, j, k;
++	int peer_num;
++#ifdef DC_EP_DBG
++	struct dc_ep_priv *priv;
++#endif /* DC_EP_DBG */
++	spin_lock(&dc_ep_lock);
++	if (card_num > 1) {
++		peer_num = card_num - 1;
++		for (i = 0; i < card_num; i++) {
++			struct dc_ep_priv *ep = &g_dc_ep_info.pcie_ep[i];
++			j = 0;
++			k = 0;
++			ep->peer_num = peer_num;
++			do {
++				struct dc_ep_priv *partner;
++
++				if (j == i) {
++					j++;
++					continue;
++				}
++				partner = &g_dc_ep_info.pcie_ep[j];
++				ep->peer_mem[k] = partner->mem;
++				ep->peer_phymem[k] = partner->phymem;
++				ep->peer_memsize[k] = partner->memsize;
++				k++;
++				j++;
++			} while ((k < peer_num) && (j < card_num));
++		}
++	}
++	spin_unlock(&dc_ep_lock);
++
++#ifdef DC_EP_DBG
++	ep_dev_dbg(&pdev->dev, "Total cards found %d\n", card_num);
++	/* Dump detailed debug information */
++	for (i = 0; i < card_num; i++) {
++		priv = &g_dc_ep_info.pcie_ep[i];
++		ep_dev_dbg(&pdev->dev, "card %d attached\n", priv->ep_idx);
++		ep_dev_dbg(&pdev->dev, "irq base %d irq numbers %d\n",
++			priv->irq_base, priv->irq_num);
++		ep_dev_dbg(&pdev->dev,
++			"its own phymem 0x%08x mem 0x%p size 0x%08x\n",
++			priv->phymem, priv->mem, priv->memsize);
++		if (card_num > 1) {
++			for (j = 0; j < priv->peer_num; j++)
++				ep_dev_dbg(&pdev->dev,
++				"its peer phymem 0x%08x mem 0x%p size 0x%08x\n",
++				priv->peer_phymem[j],
++				priv->peer_mem[j], priv->peer_memsize[j]);
++		}
++	}
++#endif /* DC_EP_DBG */
++}
++
++static int dc_ep_probe(struct pci_dev *pdev, const struct pci_device_id *id)
++{
++	int ret;
++	int nvec;
++	bool switch_exist;
++	int current_ep;
++	unsigned long phymem;
++	void __iomem *mem;
++	size_t memsize;
++	int msi_mode;
++	static int cards_found;
++#ifndef CONFIG_OF
++	struct pcie_ep_adapter *adapter;
++#endif
++	struct dc_ep_priv *priv;
++
++	ret = pci_enable_device(pdev);
++	if (ret) {
++		ep_dev_err(&pdev->dev, "can't enable PCI device %d\n", ret);
++		goto err_pci;
++	}
++
++	/* Physical address */
++	ret = pci_request_region(pdev, DC_EP_BAR_NUM, dc_ep_driver_name);
++	if (ret) {
++		ep_dev_err(&pdev->dev, "PCI MMIO reservation error: %d\n", ret);
++		goto err_device;
++	}
++
++	/* Target structures have a limit of 32 bit DMA pointers.
++	 * DMA pointers can be wider than 32 bits by default on some systems.
++	 */
++	ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
++	if (ret) {
++		dev_err(&pdev->dev, "32-bit DMA not available: %d\n", ret);
++		goto err_region;
++	}
++
++	ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
++	if (ret) {
++		ep_dev_err(&pdev->dev, "cannot enable 32-bit consistent DMA\n");
++		goto err_region;
++	}
++
++	/* Set bus master bit in PCI_COMMAND to enable DMA */
++	pci_set_master(pdev);
++	/* NB, some delay may need due to BME reset */
++	udelay(1);
++
++	/* Arrange for access to Target SoC registers. */
++	mem = pci_iomap(pdev, DC_EP_BAR_NUM, 0);
++	if (!mem) {
++		ep_dev_err(&pdev->dev, "PCI iomap error\n");
++		ret = -EIO;
++		goto err_master;
++	}
++	phymem = pci_resource_start(pdev, DC_EP_BAR_NUM);
++	memsize = pci_resource_len(pdev, DC_EP_BAR_NUM);
++
++#if 0   /* always use 4 */
++	nvec = pci_msi_vec_count(pdev);
++#endif
++	/* Overwrite maximum vector number according to
++	 * the specific requirement
++	 */
++	if ((DC_PCIE_SWITCH_ATTACH > 0) || pcie_switch_exist)
++		switch_exist = true;
++	else
++		switch_exist = false;
++	/* Always use 4 vector mode */
++	nvec = DC_EP_DEFAULT_MSI_VECTOR;
++	msi_mode = DC_EP_4_MSI_MODE;
++
++	current_ep = cards_found++;
++	priv = &g_dc_ep_info.pcie_ep[current_ep];
++	memset(priv, 0, sizeof(*priv));
++	pci_set_drvdata(pdev, priv);
++
++	/* Collect basic info for further operations */
++	spin_lock(&dc_ep_lock);
++	g_dc_ep_info.dev_num = cards_found;
++	atomic_set(&priv->refcnt, 0);
++	priv->pdev = pdev;
++	priv->device_id = pdev->device;
++	priv->dev = &pdev->dev;
++	priv->ep_idx = current_ep;
++	priv->mem = mem;
++	priv->phymem = phymem;
++	priv->memsize = memsize;
++	priv->irq_num = nvec;
++	priv->switch_attached = switch_exist;
++	priv->msi_mode = msi_mode;
++	spin_unlock(&dc_ep_lock);
++
++	ret = dc_ep_msi_enable(pdev, nvec);
++	if (ret)
++		goto err_iomap;
++
++	spin_lock(&dc_ep_lock);
++	priv->irq_base = pdev->irq;
++	spin_unlock(&dc_ep_lock);
++
++	/* for device tree create a device there */
++#ifndef CONFIG_OF
++	adapter = kmalloc(sizeof(struct pcie_ep_adapter), GFP_KERNEL);
++	if (adapter == NULL) {
++		goto err_iomap;
++	}
++	pci_set_drvdata(pdev, adapter);
++	adapter->priv = priv;
++	adapter->mei_dev = platform_device_register_data(&pdev->dev, "mei_cpe",
++							 PLATFORM_DEVID_AUTO,
++							 NULL, 0);
++	if (IS_ERR(adapter->mei_dev)) {
++		dev_err(&pdev->dev, "can not register mei device, err: %li, ignore this\n",
++			PTR_ERR(adapter->mei_dev));
++		goto err_msi;
++	}
++#endif
++	
++	dc_ep_info_xchange(pdev, cards_found);
++	/* Disable output clock to save power */
++	dc_ep_clkod_disable(priv);
++	dc_aca_info_init(priv);
++	return 0;
++#ifndef CONFIG_OF
++err_msi:
++	kfree(adapter);
++#endif
++err_iomap:
++	pci_iounmap(pdev, mem);
++err_master:
++	pci_clear_master(pdev);
++err_region:
++	pci_release_region(pdev, DC_EP_BAR_NUM);
++err_device:
++	pci_disable_device(pdev);
++err_pci:
++	return ret;
++}
++
++static void dc_ep_remove(struct pci_dev *pdev)
++{
++	struct dc_ep_priv *priv = pci_get_drvdata(pdev);
++
++#ifndef CONFIG_OF
++	struct pcie_ep_adapter *adapter =
++		(struct pcie_ep_adapter *) pci_get_drvdata(pdev);
++
++	platform_device_unregister(adapter->mei_dev);
++	priv = adapter->priv;
++#endif
++	
++	
++	if (priv == NULL)
++		return;
++
++	if (atomic_read(&priv->refcnt) != 0) {
++		ep_dev_err(&pdev->dev, "%s still being used, can't remove\n",
++			__func__);
++		return;
++	}
++	dc_aca_free_fw_file(priv);
++	dc_aca_shutdown(priv);
++	dc_ep_icu_disable(priv);
++	pci_iounmap(pdev, priv->mem);
++	pci_release_region(pdev, DC_EP_BAR_NUM);
++	pci_disable_msi(pdev);
++	wmb();
++	pci_clear_master(pdev);
++	pci_disable_device(pdev);
++}
++
++static DEFINE_PCI_DEVICE_TABLE(dc_ep_id_table) = {
++	{0x8086, 0x09a9, PCI_ANY_ID, PCI_ANY_ID}, /* VRX518 */
++	{0},
++};
++
++MODULE_DEVICE_TABLE(pci, dc_ep_id_table);
++
++static struct pci_driver dc_ep_driver = {
++	.name = (char *)dc_ep_driver_name,
++	.id_table = dc_ep_id_table,
++	.probe = dc_ep_probe,
++	.remove = dc_ep_remove,
++	/* PM not supported */
++	/* AER is controlled by RC */
++};
++
++static int __init dc_ep_init(void)
++{
++	ep_pr_info("%s - version %s\n",
++		dc_ep_driver_string, dc_ep_driver_version);
++
++	ep_pr_info("%s\n", dc_ep_copyright);
++	memset(&g_dc_ep_info, 0, sizeof(struct dc_ep_info));
++
++	if (pci_register_driver(&dc_ep_driver) < 0) {
++		ep_pr_err("%s: No devices found, driver not installed.\n",
++			__func__);
++		return -ENODEV;
++	}
++	return 0;
++}
++module_init(dc_ep_init);
++
++static void __exit dc_ep_exit(void)
++{
++	pci_unregister_driver(&dc_ep_driver);
++
++	ep_pr_info("%s: %s driver unloaded\n", __func__,
++		dc_ep_driver_name);
++}
++module_exit(dc_ep_exit);
++
++MODULE_AUTHOR("Intel Corporation, <Chuanhua.lei@intel.com>");
++MODULE_DESCRIPTION("Intel(R) SmartPHY PCIe EP/ACA Driver");
++MODULE_LICENSE("GPL");
++MODULE_VERSION(DRV_VERSION);
+diff --git a/drivers/net/ethernet/intel/vrx518/ep.h b/drivers/net/ethernet/intel/vrx518/ep.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/ep.h
+@@ -0,0 +1,142 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#ifndef EP_H
++#define EP_H
++
++#include <net/dc_ep.h>
++
++#include "aca.h"
++
++#define DC_EP_MAX_NUM		(DC_EP_MAX_PEER + 1)
++#define DC_EP_BAR_NUM		0
++
++/* Maximum 8, if PCIe switch attached, 4 is used. 8 is also default one */
++#ifdef CONFIG_VRX518_PCIE_SWITCH_BONDING
++#define DC_PCIE_SWITCH_ATTACH		1
++#else
++#define DC_PCIE_SWITCH_ATTACH		0
++#endif /* CONFIG_VRX518_PCIE_SWITCH_BONDING */
++
++#ifdef CONFIG_X86
++#define DC_EP_DEFAULT_MSI_VECTOR	1
++#else
++#define DC_EP_DEFAULT_MSI_VECTOR	4
++#endif
++
++#define DC_EP_MAX_REFCNT	DC_EP_INT_MAX
++
++#define MS(_v, _f)  (((_v) & (_f)) >> _f##_S)
++#define SM(_v, _f)  (((_v) << _f##_S) & (_f))
++
++#define ep_dev_dbg		dev_dbg
++#define ep_dev_err		dev_err
++#define ep_dev_warn		dev_warn
++#define ep_dev_info		dev_info
++
++#define ep_pr_err		pr_err
++#define ep_pr_warn		pr_warn
++#define ep_pr_dbg		pr_dbg
++#define ep_pr_info		pr_info
++
++enum dc_ep_msi_mode {
++	DC_EP_8_MSI_MODE = 0,
++	DC_EP_4_MSI_MODE,
++	DC_EP_1_MSI_MODE,
++};
++
++/* Structure used to extract attached EP detailed information for
++ * PPE/DSL_MEI driver/Bonding
++ */
++struct dc_ep_priv {
++	struct pci_dev *pdev;
++	struct device *dev;
++	u32 ep_idx; /*!< EP logical index, the first found one will be 0
++			regardless of RC physical index
++			*/
++	u32 irq_base; /*!< The first MSI interrupt number */
++	u32 irq_num; /*!< How many MSI interrupt supported */
++	enum dc_ep_msi_mode msi_mode;
++	u8 __iomem *mem;  /*!< The EP inbound memory base address
++				derived from BAR0, SoC virtual address
++				for PPE/DSL_MEI driver
++				*/
++	u32 phymem; /*!< The EP inbound memory base address
++				derived from BAR0, physical address for
++				PPE FW
++				*/
++	size_t memsize; /*!< The EP inbound memory window size */
++	u32 peer_num;  /*!< Bonding peer number available */
++	/*!< The bonding peer EP inbound memory base address derived from
++	 * its BAR0, SoC virtual address for PPE/DSL_MEI driver
++	 */
++
++	u8 __iomem *peer_mem[DC_EP_MAX_PEER];
++
++	/*!< The bonding peer EP inbound memory base address derived from
++	 * its BAR0, physical address for PPE FW
++	 */
++	u32 peer_phymem[DC_EP_MAX_PEER];
++
++	/*!< The bonding peer inbound memory window size */
++	size_t peer_memsize[DC_EP_MAX_PEER];
++	atomic_t refcnt; /*!< The EP mapping driver referenced times
++				by other modules
++				*/
++	u16 device_id; /* Potential usage for different EP */
++	bool switch_attached;
++	struct dc_aca aca;
++};
++
++struct dc_ep_info {
++	int dev_num;
++	int msi_mode;
++	struct dc_ep_priv pcie_ep[DC_EP_MAX_NUM];
++};
++
++static inline struct dc_aca *to_aca(struct dc_ep_priv *priv)
++{
++	return &priv->aca;
++}
++
++void dc_aca_shutdown(struct dc_ep_priv *priv);
++void dc_aca_info_init(struct dc_ep_priv *priv);
++int dc_aca_start(struct dc_ep_priv *priv, u32 func, int start);
++int dc_aca_stop(struct dc_ep_priv *priv, u32 *func, int reset);
++int dc_aca_init(struct dc_ep_priv *priv, struct aca_param *aca,
++	struct aca_modem_param *mdm);
++void dc_aca_event_addr_get(struct dc_ep_priv *priv,
++	struct aca_event_reg_addr *regs);
++void dc_aca_txin_sub_ack(struct dc_ep_priv *priv, u32 val);
++u32 aca_umt_msg_addr(struct dc_ep_priv *priv, u32 endian, u32 type);
++u32 dc_aca_txin_hd_cnt(struct dc_ep_priv *priv);
++void dc_aca_free_fw_file(struct dc_ep_priv *priv);
++
++/* Card specific private data structure */
++struct pcie_ep_adapter {
++	struct dc_ep_priv *priv; /* priv data */
++	struct platform_device *mei_dev; /* the mei driver */
++};
++
++#endif /* EP_H */
++
+diff --git a/drivers/net/ethernet/intel/vrx518/misc.c b/drivers/net/ethernet/intel/vrx518/misc.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/misc.c
+@@ -0,0 +1,325 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#include <linux/delay.h>
++#include <linux/mutex.h>
++
++#include "regs.h"
++#include "ep.h"
++#include "misc.h"
++
++#define padc_getbit(p, r)	(!!(rd32(r) & (1 << p)))
++#define padc_setbit(p, r)	wr32_mask(0, BIT(p), r)
++#define padc_clearbit(p, r)	wr32_mask(BIT(p), 0, r)
++
++void dc_ep_clkod_disable(struct dc_ep_priv *priv)
++{
++	wr32_mask(0, IF_CLKOD_ALL, IF_CLK);
++}
++
++void dc_ep_icu_init(struct dc_ep_priv *priv)
++{
++	/* Enable all interrupts in ICU level */
++	wr32(ICU_DMA_TX_ALL, ICU_DMA_TX_IMER);
++	wr32(ICU_DMA_RX_ALL, ICU_DMA_RX_IMER);
++	wr32(ICU_TOP_ALL, ICU_IMER);
++
++	if (priv->msi_mode == DC_EP_4_MSI_MODE)
++		wr32(PCI_MSI_4_MODE, RCU_MSI);
++	else
++		wr32(PCI_MSI_8_MODE, RCU_MSI);
++
++	/* PCIe app has to enable all MSI interrupts regardless of MSI mode */
++	wr32(PCIE_MSI_EN_ALL, PCIE_APPL_MSI_EN);
++}
++
++void dc_ep_icu_disable(struct dc_ep_priv *priv)
++{
++	/* Disable all PCIe related interrupts */
++	wr32(0, PCIE_APPL_MSI_EN);
++
++	wr32(PCI_MSI_8_MODE, RCU_MSI);
++
++	/* Disable all interrupts in ICU level */
++	wr32(0, ICU_DMA_TX_IMER);
++	wr32(0, ICU_DMA_RX_IMER);
++	wr32(0, ICU_IMER);
++}
++
++void dc_ep_icu_dis_intr(struct dc_ep_priv *priv, u32 bits)
++{
++	wr32_mask(~bits, 0, ICU_IMER);
++}
++
++void dc_ep_icu_en_intr(struct dc_ep_priv *priv, u32 bits)
++{
++	wr32_mask(0, bits, ICU_IMER);
++}
++
++void dc_ep_assert_device(struct dc_ep_priv *priv, u32 bits)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	spin_lock(&aca->rcu_lock);
++	wr32_mask(0, bits, RCU_REQ);
++	spin_unlock(&aca->rcu_lock);
++}
++
++void dc_ep_deassert_device(struct dc_ep_priv *priv, u32 bits)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	spin_lock(&aca->rcu_lock);
++	wr32_mask(bits, 0, RCU_REQ);
++	spin_unlock(&aca->rcu_lock);
++}
++
++int dc_ep_reset_device(struct dc_ep_priv *priv, u32 bits)
++{
++	int retry = EP_TIMEOUT;
++
++	wr32(bits, RCU_REQ);
++	do { } while (retry-- && (!(rd32(RCU_STAT) & bits)));
++
++	if (retry == 0) {
++		ep_dev_err(priv->dev, "%s failed to reset\n", __func__);
++		return -ETIME;
++	}
++	return 0;
++}
++
++int dc_ep_clk_on(struct dc_ep_priv *priv, u32 bits)
++{
++	int retry = EP_TIMEOUT;
++	struct dc_aca *aca = to_aca(priv);
++
++	spin_lock(&aca->clk_lock);
++	wr32_mask(bits, 0, PMU_PWDCR);
++	spin_unlock(&aca->clk_lock);
++
++	do { } while (--retry && (rd32(PMU_SR) & bits));
++
++	if (!retry) {
++		ep_dev_err(priv->dev, "%s failed\n", __func__);
++		return -ETIME;
++	}
++	return 0;
++}
++
++int dc_ep_clk_off(struct dc_ep_priv *priv, u32 bits)
++{
++	int retry = EP_TIMEOUT;
++	struct dc_aca *aca = to_aca(priv);
++
++	spin_lock(&aca->clk_lock);
++	wr32_mask(0, bits, PMU_PWDCR);
++	spin_unlock(&aca->clk_lock);
++
++	do {} while (--retry
++		&& (!(rd32(PMU_SR) & bits)));
++	if (!retry) {
++		ep_dev_err(priv->dev, "%s failed\n", __func__);
++		return -ETIME;
++	}
++	return 0;
++}
++
++int dc_ep_clk_set(struct dc_ep_priv *priv, u32 sysclk, u32 ppeclk)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (sysclk > SYS_CLK_MAX || ppeclk > PPE_CLK_MAX)
++		return -EINVAL;
++
++	spin_lock(&aca->clk_lock);
++	wr32_mask(PPE_CLK | SYS_CLK,
++		SM(sysclk, SYS_CLK) | SM(ppeclk, PPE_CLK), PLL_OMCFG);
++	spin_unlock(&aca->clk_lock);
++	return 0;
++}
++
++int dc_ep_clk_get(struct dc_ep_priv *priv, u32 *sysclk, u32 *ppeclk)
++{
++	u32 val;
++
++	val = rd32(PLL_OMCFG);
++	*sysclk = MS(val, SYS_CLK);
++	*ppeclk = MS(val, PPE_CLK);
++	return 0;
++}
++
++int dc_ep_gpio_dir(struct dc_ep_priv *priv, u32 gpio, int dir)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	if ((dir != GPIO_DIR_IN) && (dir != GPIO_DIR_OUT))
++		return -EINVAL;
++
++	if (dir == GPIO_DIR_IN)
++		wr32(BIT(gpio), GPIO_DIRCLR);
++	else
++		wr32(BIT(gpio), GPIO_DIRSET);
++	return 0;
++}
++
++int dc_ep_gpio_set(struct dc_ep_priv *priv, u32 gpio, int val)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	dc_ep_gpio_dir(priv, gpio, GPIO_DIR_OUT);
++
++	if (val)
++		wr32(BIT(gpio), GPIO_OUTSET);
++	else
++		wr32(BIT(gpio), GPIO_OUTCLR);
++	return 0;
++}
++
++int dc_ep_gpio_get(struct dc_ep_priv *priv, u32 gpio, int *val)
++{
++	u32 dir;
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	dir = rd32(GPIO_DIR);
++	if ((dir >> gpio) & 0x1)
++		*val = (rd32(GPIO_OUT) >> gpio) & 0x1;
++	else
++		*val = (rd32(GPIO_IN) >> gpio) & 0x1;
++	return 0;
++}
++
++int dc_ep_pinmux_set(struct dc_ep_priv *priv, u32 gpio, int func)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	if (func >= MUX_FUNC_RES)
++		return -EINVAL;
++
++	mutex_lock(&aca->pin_lock);
++	wr32_mask(PADC_MUX_M, func, PADC_MUX(gpio));
++	mutex_unlock(&aca->pin_lock);
++	return 0;
++}
++
++int dc_ep_pinmux_get(struct dc_ep_priv *priv, u32 gpio, int *func)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	*func = rd32(PADC_MUX(gpio));
++	return 0;
++}
++
++int dc_ep_gpio_pupd_set(struct dc_ep_priv *priv, u32 gpio, u32 val)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	/* Not support for both enabled */
++	if (val >= GPIO_PUPD_BOTH)
++		return -EINVAL;
++
++	mutex_lock(&aca->pin_lock);
++	switch (val) {
++	case GPIO_PUPD_DISABLE:
++		padc_clearbit(gpio, PADC_PUEN);
++		padc_clearbit(gpio, PADC_PDEN);
++		break;
++	case GPIO_PULL_UP:
++		padc_setbit(gpio, PADC_PUEN);
++		padc_clearbit(gpio, PADC_PDEN);
++		break;
++	case GPIO_PULL_DOWN:
++		padc_setbit(gpio, PADC_PDEN);
++		padc_clearbit(gpio, PADC_PUEN);
++		break;
++	default:
++		break;
++	}
++	mutex_unlock(&aca->pin_lock);
++	return 0;
++}
++
++int dc_ep_gpio_od_set(struct dc_ep_priv *priv, u32 gpio, int val)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	mutex_lock(&aca->pin_lock);
++	if (!!val)
++		padc_setbit(gpio, PADC_OD);
++	else
++		padc_clearbit(gpio, PADC_OD);
++	mutex_unlock(&aca->pin_lock);
++	return 0;
++}
++
++int dc_ep_gpio_src_set(struct dc_ep_priv *priv, u32 gpio, int val)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	mutex_lock(&aca->pin_lock);
++	if (!!val)
++		padc_setbit(gpio, PADC_SRC);
++	else
++		padc_clearbit(gpio, PADC_SRC);
++	mutex_unlock(&aca->pin_lock);
++	return 0;
++}
++
++int dc_ep_gpio_dcc_set(struct dc_ep_priv *priv, u32 gpio, u32 val)
++{
++	struct dc_aca *aca = to_aca(priv);
++
++	if (gpio > aca->max_gpio)
++		return -EINVAL;
++
++	if (val >= GPIO_DRV_CUR_MAX)
++		return -EINVAL;
++
++	mutex_lock(&aca->pin_lock);
++	wr32_mask((0x3 << (gpio * 2)), (val << (gpio * 2)), PADC_DCC);
++	mutex_unlock(&aca->pin_lock);
++	return 0;
++}
+diff --git a/drivers/net/ethernet/intel/vrx518/misc.h b/drivers/net/ethernet/intel/vrx518/misc.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/misc.h
+@@ -0,0 +1,51 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#ifndef MISC_H
++#define MISC_H
++
++#define EP_TIMEOUT	10000
++
++void dc_ep_clkod_disable(struct dc_ep_priv *priv);
++void dc_ep_icu_init(struct dc_ep_priv *priv);
++void dc_ep_icu_disable(struct dc_ep_priv *priv);
++void dc_ep_assert_device(struct dc_ep_priv *priv, u32 bits);
++void dc_ep_deassert_device(struct dc_ep_priv *priv, u32 bits);
++int dc_ep_reset_device(struct dc_ep_priv *priv, u32 bits);
++int dc_ep_clk_on(struct dc_ep_priv *priv, u32 bits);
++int dc_ep_clk_off(struct dc_ep_priv *priv, u32 bits);
++int dc_ep_clk_set(struct dc_ep_priv *priv, u32 sysclk, u32 ppeclk);
++int dc_ep_clk_get(struct dc_ep_priv *priv, u32 *sysclk, u32 *ppeclk);
++int dc_ep_gpio_dir(struct dc_ep_priv *priv, u32 gpio, int dir);
++int dc_ep_gpio_set(struct dc_ep_priv *priv, u32 gpio, int val);
++int dc_ep_gpio_get(struct dc_ep_priv *priv, u32 gpio, int *val);
++int dc_ep_pinmux_set(struct dc_ep_priv *priv, u32 gpio, int func);
++int dc_ep_pinmux_get(struct dc_ep_priv *priv, u32 gpio, int *func);
++int dc_ep_gpio_pupd_set(struct dc_ep_priv *priv, u32 gpio, u32 val);
++int dc_ep_gpio_od_set(struct dc_ep_priv *priv, u32 gpio, int val);
++int dc_ep_gpio_src_set(struct dc_ep_priv *priv, u32 gpio, int val);
++int dc_ep_gpio_dcc_set(struct dc_ep_priv *priv, u32 gpio, u32 val);
++void dc_ep_icu_dis_intr(struct dc_ep_priv *priv, u32 bits);
++void dc_ep_icu_en_intr(struct dc_ep_priv *priv, u32 bits);
++
++#endif /* MISC_H */
+diff --git a/drivers/net/ethernet/intel/vrx518/regs.h b/drivers/net/ethernet/intel/vrx518/regs.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/regs.h
+@@ -0,0 +1,122 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#ifndef REGS_H
++#define REGS_H
++
++#include <linux/bitops.h>
++
++/* APPL defined */
++#define PCIE_APPL_BASE		0x00048000
++#define PCIE_APPL_REG(X)	(PCIE_APPL_BASE + (X))
++
++#define PCIE_APPL_PHY_CFG1	PCIE_APPL_REG(0x3C)
++#define PCIE_APPL_PHY_CFG2	PCIE_APPL_REG(0x40)
++#define PCIE_APPL_PHY_CFG3	PCIE_APPL_REG(0x58)
++#define PCIE_APPL_PHY_CFG4	PCIE_APPL_REG(0x28)
++#define PCIE_APPL_INTR_VEC	PCIE_APPL_REG(0x48)
++#define PCIE_APPL_MSI_EN	PCIE_APPL_REG(0x4C)
++
++#define PCIE_MSI_EN_ALL		0xFF
++
++/* RCU defined */
++#define RCU_BASE		0x00008000
++#define RCU_REG(X)		(RCU_BASE + (X))
++#define RCU_STAT		RCU_REG(0x00)
++#define RCU_REQ			RCU_REG(0x10)
++
++#define RCU_MSI			RCU_REG(0x80)
++#define PCI_MSI_4_MODE		1
++#define PCI_MSI_8_MODE		0
++
++/* CGU */
++#define CGU_BASE		0x00000000
++#define CGU_REG(X)		(CGU_BASE + (X))
++#define PMU_PWDCR		CGU_REG(0x011C)
++#define PMU_SR			CGU_REG(0x0120)
++#define PMU_ALL			0x20ec0305
++
++#define PLL_OMCFG		CGU_REG(0x0064)
++
++#define SYS_CLK			0x3
++#define SYS_CLK_S		0
++#define PPE_CLK			0x700
++#define PPE_CLK_S		8
++
++#define IF_CLK			CGU_REG(0x0024)
++
++#define CLK_PD			BIT(10)
++#define CLK_OD			BIT(11)
++#define PCIE_CLKOD		(BIT(12) | BIT(13))
++#define AFE_CLKOD		BIT(14)
++
++#define IF_CLKOD_ALL		(CLK_PD | CLK_OD | PCIE_CLKOD | AFE_CLKOD)
++
++/* GPIO */
++#define GPIO_BASE		0x00020000
++#define GPIO_REG(X)		(GPIO_BASE + (X))
++#define GPIO_OUT		GPIO_REG(0x00)
++#define GPIO_IN			GPIO_REG(0x04)
++#define GPIO_DIR		GPIO_REG(0x08)
++#define GPIO_OUTSET		GPIO_REG(0x40)
++#define GPIO_OUTCLR		GPIO_REG(0x44)
++#define GPIO_DIRSET		GPIO_REG(0x48)
++#define GPIO_DIRCLR		GPIO_REG(0x4c)
++
++/* PADC */
++#define PADC_BASE		0x00024000
++#define PADC_REG(X)		(PADC_BASE + (X))
++#define PADC_MUX(pin)		PADC_REG(((pin) << 2))
++#define PADC_PUEN		PADC_REG(0x80)
++#define PADC_PDEN		PADC_REG(0x84)
++#define PADC_SRC		PADC_REG(0x88)
++#define PADC_DCC		PADC_REG(0x8c)
++#define PADC_OD			PADC_REG(0x94)
++#define PADC_AVAIL		PADC_REG(0x98)
++#define PADC_MUX_M		0x7
++
++/* ICU defined */
++#define ICU_BASE		0x00010000
++#define ICU_REG(X)		(ICU_BASE + (X))
++#define ICU_IMSR		ICU_REG(0x40)
++#define ICU_IMER		ICU_REG(0x44)
++#define ICU_IMOSR		ICU_REG(0x48)
++#define ICU_DMA_TX_STATUS	ICU_REG(0x50)
++#define ICU_DMA_RX_STATUS	ICU_REG(0x54)
++#define ICU_DMA_TX_IMER		ICU_REG(0x58)
++#define ICU_DMA_RX_IMER		ICU_REG(0x5C)
++#define ICU_DMA_TX_IMOSR	ICU_REG(0x60)
++#define ICU_DMA_RX_IMOSR	ICU_REG(0x64)
++
++#define ICU_TOP_ALL		0x0003f30B /* Except ACA related */
++#define ICU_DMA_TX_ALL		0x003f03FF
++#define ICU_DMA_RX_ALL		0x003F03FF
++
++#define wr32(value, reg)	(writel(value, (priv->mem + (reg))))
++#define rd32(reg)		(readl(priv->mem + (reg)))
++#define wrfl()			((void)rd32(RCU_STAT))
++
++#define wr32_mask(clr, set, reg)		\
++	wr32(((rd32(reg) & ~(clr)) | (set)), (reg))
++
++#endif /* REGS_H */
+diff --git a/drivers/net/ethernet/intel/vrx518/test/Makefile b/drivers/net/ethernet/intel/vrx518/test/Makefile
+new file mode 100755
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/test/Makefile
+@@ -0,0 +1,2 @@
++
++obj-$(CONFIG_TEST) += ep_test.o
+\ No newline at end of file
+diff --git a/drivers/net/ethernet/intel/vrx518/test/ep_test.c b/drivers/net/ethernet/intel/vrx518/test/ep_test.c
+new file mode 100755
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/test/ep_test.c
+@@ -0,0 +1,989 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux Test driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/version.h>
++#include <linux/init.h>
++#include <linux/types.h>
++#include <linux/interrupt.h>
++#include <linux/delay.h>
++
++#include <net/dc_ep.h>
++
++#include "ep_test.h"
++
++#define DRV_VERSION "1.0.0"
++static const char ep_test_driver_version[] = DRV_VERSION;
++static struct dc_ep_dev pcie_dev[DC_EP_MAX_PEER + 1];
++static int ppe_irq_num;
++
++#define ep_wr32(value, reg)	(writel(value, dev->membase + reg))
++#define ep_rd32(reg)		(readl(dev->membase + reg))
++
++#define ep_wr32_mask(clr, set, reg)		\
++	ep_wr32(((ep_rd32(reg) & ~(clr)) | (set)), (reg))
++
++struct aca_hd_desc {
++	void *base;
++	dma_addr_t phy_base;
++	size_t size;/* in bytes */
++};
++
++struct aca_hd_desc_cfg {
++	struct aca_hd_desc txin;
++	struct aca_hd_desc txout;
++	struct aca_hd_desc rxout;
++};
++
++static struct aca_hd_desc_cfg aca_soc_hd_desc[DC_EP_MAX_PEER + 1];
++
++static void ep_mem_write(u8 __iomem *dst, const void *src, size_t len)
++{
++	int i;
++	const u32 *src_addr = src;
++
++	if (len % 4)
++		pr_info("Warning!!: Copy len is not multiple of 4\n");
++
++	len = len >> 2;
++
++	for (i = 0; i < len; i++)
++		writel(src_addr[i], (dst + (i << 2)));
++}
++
++static irqreturn_t dc_ep_ppe_intr(int irq, void *dev_id)
++{
++	struct dc_ep_dev *dev = dev_id;
++
++	ppe_irq_num++;
++	if (ep_rd32(MBOX_IGU0_ISR) == 0) {
++		pr_err("Fatal error, dummy interrupt\n");
++		return IRQ_NONE;
++	}
++
++	ep_wr32(PPE_MBOX_TEST_BIT, MBOX_IGU0_ISRC);
++	ep_rd32(MBOX_IGU0_ISR);
++	return IRQ_HANDLED;
++}
++
++static void dc_ep_ppe_mbox_reg_dump(struct dc_ep_dev *dev)
++{
++	pr_info("MBOX_IGU0_ISRS addr %p data 0x%08x\n",
++		dev->membase + MBOX_IGU0_ISRS,
++		ep_rd32(MBOX_IGU0_ISRS));
++	pr_info("MBOX_IGU0_ISRC addr %p data 0x%08x\n",
++		dev->membase + MBOX_IGU0_ISRC,
++		ep_rd32(MBOX_IGU0_ISRC));
++	pr_info("MBOX_IGU0_ISR  addr %p data 0x%08x\n",
++		dev->membase + MBOX_IGU0_ISR,
++		ep_rd32(MBOX_IGU0_ISR));
++	pr_info("MBOX_IGU0_IER  addr %p data 0x%08x\n",
++		dev->membase + MBOX_IGU0_IER,
++		ep_rd32(MBOX_IGU0_IER));
++}
++
++#define PPE_INT_TIMEOUT		10
++static int dc_ep_ppe_mbox_int_stress_test(struct dc_ep_dev *dev)
++{
++	int i;
++	int j;
++	int ret;
++
++	/* Clear it first */
++	ep_wr32(PPE_MBOX_TEST_BIT, MBOX_IGU0_ISRC);
++
++	ret = request_irq(dev->irq, dc_ep_ppe_intr, 0, "PPE_MSI", dev);
++	if (ret) {
++		pr_err("%s request irq %d failed\n", __func__, dev->irq);
++		return -1;
++	}
++	pr_info("PPE test\n");
++	ep_wr32(PPE_MBOX_TEST_BIT, MBOX_IGU0_IER);
++	ppe_irq_num = 0;
++	/* Purposely trigger interrupt */
++	for (i = 0; i < PPE_MBOX_IRQ_TEST_NUM; i++) {
++		j = 0;
++		while ((ep_rd32(MBOX_IGU0_ISR) & PPE_MBOX_TEST_BIT)) {
++			j++;
++			if (j > PPE_INT_TIMEOUT)
++				break;
++		}
++		ep_wr32(PPE_MBOX_TEST_BIT, MBOX_IGU0_ISRS);
++		/* Write flush */
++		ep_rd32(MBOX_IGU0_ISR);
++	}
++	mdelay(10);
++	pr_info("irq triggered %d expected %d\n", ppe_irq_num,
++		PPE_MBOX_IRQ_TEST_NUM);
++	dc_ep_ppe_mbox_reg_dump(dev);
++	ppe_irq_num = 0;
++	return 0;
++}
++
++static void umt_txin_send(struct dc_ep_dev *dev,
++	u8 __iomem *soc_dbase, int num)
++{
++	int i;
++	struct aca_dma_desc desc;
++
++	memset(&desc, 0, sizeof(desc));
++	desc.own = 0;
++	desc.sop = 1;
++	desc.eop = 1;
++	desc.dic = 1;
++	desc.pdu_type = 1;
++	desc.data_len = 127;
++	desc.data_pointer = 0x26000000;
++	desc.dw1 = 0x700;
++	desc.dw0 = 0x0000007f;
++
++	for (i = 0; i < num; i++) {
++		desc.data_pointer += roundup(desc.data_len, 4);
++		ep_mem_write(soc_dbase + i * sizeof(desc),
++			(void *)&desc, sizeof(desc));
++	}
++
++	ep_wr32(num, TXIN_HD_ACCUM_ADD);
++}
++
++static void ppe_txout_send(struct dc_ep_dev *dev,
++	u8 __iomem *ppe_sb_base, int num)
++{
++	int i;
++	struct aca_dma_desc_2dw desc;
++
++	memset(&desc, 0, sizeof(desc));
++	desc.status.field.own = 1;
++	desc.status.field.sop = 1;
++	desc.status.field.eop = 1;
++	desc.status.field.data_len = 127;
++	desc.data_pointer = 0x26100000;
++
++	for (i = 0; i < num; i++) {
++		desc.data_pointer += roundup(desc.status.field.data_len, 4);
++		ep_mem_write(ppe_sb_base + i * sizeof(desc),
++			(void *)&desc, sizeof(desc));
++	}
++
++	ep_wr32(num, TXOUT_ACA_ACCUM_ADD);
++}
++
++static void ppe_rxout_send(struct dc_ep_dev *dev,
++	u8 __iomem *ppe_sb_base, int num)
++{
++	int i;
++	struct aca_dma_desc_2dw desc;
++
++	memset(&desc, 0, sizeof(desc));
++	desc.status.field.own = 0;
++	desc.status.field.sop = 1;
++	desc.status.field.eop = 1;
++	desc.status.field.meta_data0 = 0x3;
++	desc.status.field.meta_data1 = 0x7f;
++	desc.status.field.data_len = 127;
++	desc.data_pointer = 0x26200000;
++
++	for (i = 0; i < num; i++) {
++		desc.data_pointer += roundup(desc.status.field.data_len, 4);
++		ep_mem_write(ppe_sb_base + i * sizeof(desc),
++			(void *)&desc, sizeof(desc));
++	}
++
++	ep_wr32(num, RXOUT_ACA_ACCUM_ADD);
++}
++
++static void aca_dump(struct dc_ep_dev *dev, u32 addr, u32 size)
++{
++	int i;
++	u32 *base;
++
++	base = (u32 *)(dev->membase + addr);
++
++	for (i = 0; i < size; i++) {
++		if ((i % 4) == 0) {
++			printk("\n");
++			printk("0x%08x: ", addr + i * 4);
++		}
++		printk("0x%08x ", base[i]);
++	}
++}
++
++static void aca_dump_desc(const u32 *base, u32 num, u32 size)
++{
++	int i, j;
++
++	for (i = 0; i < num; i++)
++		for (j = 0; j < size; j++) {
++		printk(KERN_INFO"[%d].[%d]: 0x%x\n", i, j, base[i * size + j]);
++	}
++}
++
++static void dc_aca_test_check_in(struct dc_ep_dev *dev, struct aca_param *cfg, int idx)
++{
++	u32 addr;
++	pr_info("dump soc txin desc: num: %d, size: %d\n", cfg->aca_txin.soc_desc_num, cfg->aca_txin.hd_size_in_dw);
++	aca_dump_desc(aca_soc_hd_desc[idx].txin.base, 8, cfg->aca_txin.hd_size_in_dw);
++
++	pr_info("membase: 0x%x, txin pdbase: 0x%x\n", (u32)dev->membase, cfg->aca_txin.pd_desc_base);
++	addr = (u32)dev->membase + cfg->aca_txin.pd_desc_base;
++	pr_info("dump pd txin desc: addr: 0x%x, num: %d, size: %d\n",
++		addr, cfg->aca_txin.pd_desc_num, cfg->aca_txin.pd_size_in_dw);
++	aca_dump_desc((u32 *)addr, 8, cfg->aca_txin.pd_size_in_dw);
++
++	pr_info("dump soc txout desc: num: %d, size: %d\n", cfg->aca_txout.soc_desc_num, cfg->aca_txout.hd_size_in_dw);
++	addr = (u32)dev->membase + cfg->aca_txout.pd_desc_base;
++	aca_dump_desc(aca_soc_hd_desc[idx].txout.base, 8, cfg->aca_txout.hd_size_in_dw);
++	pr_info("membase: 0x%x, txout pdbase: 0x%x\n", (u32)dev->membase, cfg->aca_txout.pd_desc_base);
++	pr_info("dump pd txout desc: addr: 0x%x, num: %d, size: %d\n",
++		addr, cfg->aca_txout.pd_desc_num, cfg->aca_txout.pd_size_in_dw);
++	aca_dump_desc((u32 *)addr, 8, cfg->aca_txout.pd_size_in_dw);
++
++	pr_info("dump soc rxout desc: num: %d, size: %d\n", cfg->aca_rxout.soc_desc_num, cfg->aca_rxout.hd_size_in_dw);
++	addr = (u32)dev->membase + cfg->aca_rxout.pd_desc_base;
++	aca_dump_desc(aca_soc_hd_desc[idx].rxout.base, 8, cfg->aca_rxout.hd_size_in_dw);
++	pr_info("membase: 0x%x, rxout pdbase: 0x%x\n", (u32)dev->membase, cfg->aca_rxout.pd_desc_base);
++	pr_info("dump pd rxout desc: addr: 0x%x, num: %d, size: %d\n",
++		addr, cfg->aca_rxout.pd_desc_num, cfg->aca_rxout.pd_size_in_dw);
++	aca_dump_desc((u32 *)addr, 8, cfg->aca_rxout.pd_size_in_dw);
++}
++
++static void dc_aca_test_init(struct dc_ep_dev *dev, void *soc_base)
++{
++	umt_txin_send(dev, (u8 __iomem *)soc_base, 8);
++	ppe_txout_send(dev, (TXOUT_PD_DBASE + dev->membase), 8);
++	ppe_rxout_send(dev, (RXOUT_PD_DBASE + dev->membase), 8);
++}
++
++static const char *sysclk_str[SYS_CLK_MAX] = {
++	"36MHz",
++	"288MHz",
++};
++
++static const char *ppeclk_str[PPE_CLK_MAX] = {
++	"36MHz",
++	"576MHz",
++	"494MHz",
++	"432MHz",
++	"288MHz",
++};
++
++#define ACA_PMU_CTRL		0x11C
++#define ACA_PMU_DMA		BIT(2)
++#define ACA_PMU_EMA		BIT(22)
++
++enum {
++	DMA_ENDIAN_TYPE0 = 0,
++	DMA_ENDIAN_TYPE1,	/*!< Byte Swap(B0B1B2B3 => B1B0B3B2) */
++	DMA_ENDIAN_TYPE2,	/*!< Word Swap (B0B1B2B3 => B2B3B0B1) */
++	DMA_ENDIAN_TYPE3,	/*!< DWord Swap (B0B1B2B3 => B3B2B1B0) */
++	DMA_ENDIAN_MAX,
++};
++
++#ifdef CONFIG_CPU_BIG_ENDIAN
++#define DMA_ENDIAN_DEFAULT	DMA_ENDIAN_TYPE3
++#else
++#define DMA_ENDIAN_DEFAULT	DMA_ENDIAN_TYPE0
++#endif
++
++enum {
++	DMA_BURSTL_2DW = 1,	/*!< 2 DWORD DMA burst length */
++	DMA_BURSTL_4DW = 2,	/*!< 4 DWORD DMA burst length */
++	DMA_BURSTL_8DW = 3,	/*!< 8 DWORD DMA burst length */
++	DMA_BURSTL_16DW = 16,
++};
++
++#define DMA_BURSTL_DEFAULT	DMA_BURSTL_16DW
++
++#define DMA_TX_PORT_DEFAULT_WEIGHT	1
++/** Default Port Transmit weight value */
++#define DMA_TX_CHAN_DEFAULT_WEIGHT	1
++
++enum {
++	DMA_RX_CH = 0,  /*!< Rx channel */
++	DMA_TX_CH = 1,  /*!< Tx channel */
++};
++
++enum {
++	DMA_PKT_DROP_DISABLE = 0,
++	DMA_PKT_DROP_ENABLE,
++};
++
++#ifdef CONFIG_CPU_BIG_ENDIAN
++/* 2 DWs format descriptor */
++struct rx_desc_2dw {
++	u32 data_pointer; /* Descriptor data pointer */
++	union {
++		struct {
++			u32 own:1;
++			u32 c:1;
++			u32 sop:1;
++			u32 eop:1;
++			u32 meta:2;
++			u32 byte_offset:3;
++			u32 meta_data:7;
++			u32 data_len:16;
++		} __packed field;
++		u32 word;
++	} __packed status;
++} __packed __aligned(8);
++
++struct tx_desc_2dw {
++	u32 data_pointer; /* Descriptor data pointer */
++	union {
++		struct {
++			u32 own:1;
++			u32 c:1;
++			u32 sop:1;
++			u32 eop:1;
++			u32 meta:2;
++			u32 byte_offset:3;
++			u32 meta_data:7;
++			u32 data_len:16;
++		} __packed field;
++		u32 word;
++	} __packed status;
++} __packed __aligned(8);
++#else
++/* 2 DWs format descriptor */
++struct rx_desc_2dw {
++	u32 data_pointer; /* Descriptor data pointer */
++	union {
++		struct {
++			u32 data_len:16;
++			u32 meta_data:7;
++			u32 byte_offset:3;
++			u32 meta:2;
++			u32 eop:1;
++			u32 sop:1;
++			u32 c:1;
++			u32 own:1;
++		} __packed field;
++		u32 word;
++	} __packed status;
++} __packed __aligned(8);
++
++struct tx_desc_2dw {
++	u32 data_pointer; /* Descriptor data pointer */
++	union {
++		struct {
++			u32 data_len:16;
++			u32 meta_data:7;
++			u32 byte_offset:3;
++			u32 meta:2;
++			u32 eop:1;
++			u32 sop:1;
++			u32 c:1;
++			u32 own:1;
++		} __packed field;
++		u32 word;
++	} __packed status;
++} __packed __aligned(8);
++#endif
++
++enum {
++	SOC_TO_EP = 0,
++	EP_TO_SOC,
++};
++
++static int dma_pkt_size = 1024;
++static int dma_mode = SOC_TO_EP;
++static int dma_burst = 16;
++static int desc_num = 32;
++
++module_param(dma_pkt_size, int, 0);
++MODULE_PARM_DESC(dma_pkt_size, "Single packet length");
++
++module_param(dma_mode, int, 0);
++MODULE_PARM_DESC(dma_mode, "mode 0 -- Soc->EP, mode 1-- EP->SoC");
++
++
++static void dma_ctrl_rst(struct dc_ep_dev *dev)
++{
++	ep_wr32_mask(ACA_PMU_DMA | ACA_PMU_EMA, 0, ACA_PMU_CTRL);
++
++	udelay(10);
++	ep_wr32_mask(0, 1, DMA_CTRL);
++	udelay(10);
++	ep_wr32(0, DMA_CLC);
++}
++
++static void dma_chan_rst(struct dc_ep_dev *dev, int cn)
++{
++	ep_wr32(cn, DMA_CS);
++	ep_wr32(0x2, DMA_CCTRL);
++	while (ep_rd32(DMA_CCTRL) & 0x01)
++		udelay(10);
++}
++
++static void dma_port_cfg(struct dc_ep_dev *dev)
++{
++	u32 reg = 0;
++
++	reg |= (DMA_TX_PORT_DEFAULT_WEIGHT << 12);
++	reg |= (DMA_ENDIAN_TYPE0 << 10);
++	reg |= (DMA_ENDIAN_TYPE0 << 8);
++	reg |= (DMA_PKT_DROP_DISABLE << 6);
++	reg |= 0x3;
++	ep_wr32(0, DMA_PS);
++	ep_wr32(reg, DMA_PCTRL);
++}
++
++static void dma_byte_enable(struct dc_ep_dev *dev, int enable)
++{
++	if (enable)
++		ep_wr32_mask(0, BIT(9), DMA_CTRL);
++	else
++		ep_wr32_mask(BIT(9), 0, DMA_CTRL);
++}
++
++static void dma_tx_ch_cfg(struct dc_ep_dev *dev, int ch, u32 desc_base,
++	u32 desc_phys, dma_addr_t data_base, int desc_num)
++{
++	int i;
++	struct tx_desc_2dw *tx_desc;
++
++	for (i = 0; i < desc_num; i++) {
++		tx_desc = (struct tx_desc_2dw *)
++			(desc_base + (i * sizeof(*tx_desc)));
++		tx_desc->data_pointer = (((u32)(data_base +
++			(i * dma_pkt_size))) & 0xfffffff8);
++		tx_desc->status.word = 0;
++		tx_desc->status.field.byte_offset = 0;
++		tx_desc->status.field.data_len = dma_pkt_size;
++
++		tx_desc->status.field.sop = 1;
++		tx_desc->status.field.eop = 1;
++		tx_desc->status.field.own = 1;
++		wmb();
++	#if 0
++		pr_info("Tx desc num %d word 0x%08x data pointer 0x%08x\n",
++			i, tx_desc->status.word, tx_desc->data_pointer);
++	#endif
++	}
++	ep_wr32(ch, DMA_CS);
++	ep_wr32(desc_phys, DMA_CDBA);
++	ep_wr32(desc_num, DMA_CDLEN);
++	ep_wr32(0, DMA_CIE);
++}
++
++static void dma_rx_ch_cfg(struct dc_ep_dev *dev, int ch, u32 desc_base,
++	u32 desc_phys, dma_addr_t data_base, int desc_num)
++{
++	int i;
++	struct rx_desc_2dw *rx_desc;
++
++	for (i = 0; i < desc_num; i++) {
++		rx_desc = (struct rx_desc_2dw *)(desc_base
++			+ (i * sizeof(*rx_desc)));
++		rx_desc->data_pointer = (((u32)(data_base +
++			(i * dma_pkt_size))) & 0xfffffff8);
++
++		rx_desc->status.word = 0;
++		rx_desc->status.field.sop = 1;
++		rx_desc->status.field.eop = 1;
++		rx_desc->status.field.byte_offset = 0;
++		rx_desc->status.field.data_len = dma_pkt_size;
++		rx_desc->status.field.own = 1; /* DMA own the descriptor */
++		wmb();
++	#if 0
++		pr_info("Rx desc num %d word 0x%08x data pointer 0x%08x\n",
++			i, rx_desc->status.word, rx_desc->data_pointer);
++	#endif
++	}
++
++	ep_wr32(ch, DMA_CS);
++	ep_wr32(desc_phys, DMA_CDBA);
++	ep_wr32(desc_num, DMA_CDLEN);
++	ep_wr32(0, DMA_CIE);
++}
++
++static void dma_chan_on(struct dc_ep_dev *dev, u8 cn)
++{
++	ep_wr32(cn, DMA_CS);
++	ep_wr32_mask(0, BIT(0), DMA_CCTRL);
++}
++
++static void dma_chan_off(struct dc_ep_dev *dev, u8 cn)
++{
++	ep_wr32(cn, DMA_CS);
++	ep_wr32_mask(BIT(0), 0,  DMA_CCTRL);
++	udelay(10);
++}
++
++#define DEFAULT_TEST_PATTEN	0x12345678
++
++#define REG32(addr)		(*((volatile u32*)(addr)))
++
++#ifdef CONFIG_CPU_BIG_ENDIAN
++#define ___swab32(x) ((u32)(				\
++	(((u32)(x) & (u32)0x000000ffUL) << 24) |	\
++	(((u32)(x) & (u32)0x0000ff00UL) <<  8) |	\
++	(((u32)(x) & (u32)0x00ff0000UL) >>  8) |	\
++	(((u32)(x) & (u32)0xff000000UL) >> 24)))
++#else
++#define ___swab32(x)		(x)
++#endif
++
++static void dma_sdram_preload(void *sdram_data_tx_ptr, void *sdram_data_rx_ptr)
++{
++	int i;
++	int j;
++
++	u32 testaddr = (u32)sdram_data_tx_ptr;
++
++	for (i = 0; i < desc_num; i++) {
++		for (j = 0; j < dma_pkt_size; j = j + 4) {
++			REG32(testaddr + i * dma_pkt_size + j)
++				= DEFAULT_TEST_PATTEN;
++		}
++	}
++	pr_info("SDR Preload(0x55aa00ff) with data on TX location done\n");
++
++	testaddr = (u32)sdram_data_rx_ptr;
++	pr_info("RX Preload start address:0x%08x\n", (u32)(testaddr));
++
++	for (i = 0; i < desc_num; i++) {
++		for (j = 0; j < roundup(dma_pkt_size,
++			dma_burst << 2); j = j + 4)
++			REG32(testaddr + i * dma_pkt_size + j) = 0xcccccccc;
++	}
++	pr_info("SDR locations for Memcopy RX preset to 0xcccccccc done\n");
++}
++
++static void memcopy_data_check(u32 rx_data_addr)
++{
++	int i, j;
++	u32 read_data;
++
++	for (i = 0; i < desc_num; i++) {
++		for (j = 0; j < dma_pkt_size; j = j + 4) {
++			read_data = REG32(rx_data_addr + i * dma_pkt_size + j);
++			if (read_data != ___swab32(DEFAULT_TEST_PATTEN))
++				pr_info("Memcopy ERROR at addr 0x%08x data 0x%08x\n",
++				(rx_data_addr + j), read_data);
++		}
++	}
++}
++
++static u32 plat_throughput_calc(u32 payload, int cycles)
++{
++	return (u32)((payload * 300) / cycles);
++}
++
++#define DMA_CPOLL_CNT_MASK 0xFFF0u
++
++static void dma_ctrl_global_polling_enable(struct dc_ep_dev *dev, int interval)
++{
++	u32 reg = 0;
++
++	reg |= (1 << 31);
++	reg |= (interval << 4);
++
++	ep_wr32_mask(DMA_CPOLL_CNT_MASK,
++		reg,  DMA_CPOLL);
++}
++
++static void dma_controller_cfg(struct dc_ep_dev *dev)
++{
++	ep_wr32_mask(0, BIT(31), DMA_CTRL);
++	ep_wr32_mask(BIT(30), 0, DMA_CTRL);
++	ep_wr32_mask(0, BIT(1), DMA_CTRL);
++	ep_wr32_mask(0, BIT(13), DMA_CTRL);
++}
++
++#define PDRAM_OFFSET		0x200200
++#define PDRAM_TX_DESC_OFFSET	0x200000
++#define PDRAM_RX_DESC_OFFSET	0x200100
++#define ACA_SRAM_OFFSET		0x100000
++#define PPE_SB_TX_DESC_OFFSET	0x280000
++#define PPE_SB_RX_DESC_OFFSET	0x281000
++
++#define PPE_FPI_TX_DESC_OFFSET	0x320000
++#define PPE_FPI_RX_DESC_OFFSET	0x321000
++
++static void dma_test(struct dc_ep_dev *dev, int mode, int rcn, int tcn)
++{
++	u32 loop = 0;
++	void *tx_data;
++	void *rx_data;
++	dma_addr_t tx_data_phys = 0;
++	dma_addr_t rx_data_phys = 0;
++	u32 start, end;
++	u32 cycles;
++	struct rx_desc_2dw *rx_desc;
++	struct tx_desc_2dw *tx_desc;
++	struct tx_desc_2dw *last_tx_desc;
++	struct rx_desc_2dw *last_rx_desc;
++	dma_addr_t tx_desc_phys;
++	dma_addr_t rx_desc_phys;
++	u32 membase = (u32)(dev->membase);
++
++	rx_desc = (struct rx_desc_2dw *)(membase + PDRAM_RX_DESC_OFFSET);
++	rx_desc_phys = (dev->phy_membase + PDRAM_RX_DESC_OFFSET);
++	tx_desc = (struct tx_desc_2dw *)(membase + PDRAM_TX_DESC_OFFSET);
++	tx_desc_phys = (dev->phy_membase + PDRAM_TX_DESC_OFFSET);
++	last_rx_desc = rx_desc + (desc_num - 1);
++	last_tx_desc = tx_desc + (desc_num - 1);
++
++	if (mode == SOC_TO_EP) { /* Read from SoC DDR to local PDBRAM  */
++		tx_data = dma_alloc_coherent(NULL,
++			desc_num * dma_pkt_size, &tx_data_phys, GFP_DMA);
++		rx_data_phys = (dma_addr_t)(dev->phy_membase + PDRAM_OFFSET);
++		rx_data = (void *)(membase + PDRAM_OFFSET);
++	} else { /* Write from local PDBRAM to remote DDR */
++		tx_data_phys = (dma_addr_t)(dev->phy_membase + PDRAM_OFFSET);
++		tx_data = (void *)(membase + PDRAM_OFFSET);
++		rx_data = dma_alloc_coherent(NULL, desc_num * dma_pkt_size,
++			 &rx_data_phys, GFP_DMA);
++	}
++
++	pr_info("tx_desc_base %p tx_desc_phys 0x%08x tx_data %p tx_data_phys 0x%08x\n",
++		tx_desc, (u32)tx_desc_phys, tx_data, (u32)tx_data_phys);
++
++	pr_info("rx_desc_base %p rx_desc_phys 0x%08x rx_data %p rx_data_phys 0x%08x\n",
++		rx_desc, (u32)rx_desc_phys, rx_data, (u32)rx_data_phys);
++
++	pr_info("dma burst %d desc number %d packet size %d\n",
++		dma_burst, desc_num, dma_pkt_size);
++
++	dma_ctrl_rst(dev);
++	dma_chan_rst(dev, rcn);
++	dma_chan_rst(dev, tcn);
++	dma_port_cfg(dev);
++	dma_controller_cfg(dev);
++	dma_byte_enable(dev, 1);
++
++	dma_ctrl_global_polling_enable(dev, 24);
++
++	dma_sdram_preload(tx_data, rx_data);
++
++	dma_tx_ch_cfg(dev, tcn, (u32)tx_desc, tx_desc_phys,
++		tx_data_phys, desc_num);
++	dma_rx_ch_cfg(dev, rcn, (u32)rx_desc, rx_desc_phys,
++		rx_data_phys, desc_num);
++
++	udelay(5); /* Make sure that RX descriptor prefetched */
++
++	start = get_cycles();
++	dma_chan_on(dev, rcn);
++	dma_chan_on(dev, tcn);
++
++	/* wait till tx chan desc own is 0 */
++	while (last_tx_desc->status.field.own == 1) {
++		loop++;
++		udelay(1);
++	}
++	end = get_cycles();
++	cycles = end - start;
++	pr_info("cylces %d throughput %dMb\n", cycles,
++		plat_throughput_calc(desc_num * dma_pkt_size * 8, cycles));
++	pr_info("loop times %d\n", loop);
++	while (last_rx_desc->status.field.own == 1) {
++		loop++;
++		udelay(1);
++	}
++
++	memcopy_data_check((u32)rx_data);
++	dma_chan_off(dev, rcn);
++	dma_chan_off(dev, tcn);
++	if (mode == SOC_TO_EP) {
++		dma_free_coherent(NULL, desc_num * dma_pkt_size,
++			tx_data, tx_data_phys);
++	} else {
++		dma_free_coherent(NULL, desc_num * dma_pkt_size,
++			rx_data, rx_data_phys);
++	}
++}
++
++static int aca_soc_desc_alloc(int dev)
++{
++	dma_addr_t phy_addr;
++	void *base;
++	u32 size;
++
++	if (dev < 0 || dev > (DC_EP_MAX_PEER + 1))
++		return -EINVAL;
++
++	/* TXIN */
++	size = TXIN_SOC_DES_NUM * TXIN_HD_DES_SIZE * 4;
++	base  = dma_alloc_coherent(NULL, size, &phy_addr, GFP_DMA);
++	if (!base)
++		goto txin;
++	aca_soc_hd_desc[dev].txin.base = base;
++	aca_soc_hd_desc[dev].txin.phy_base = phy_addr;
++	aca_soc_hd_desc[dev].txin.size = size;
++	pr_info("txin soc desc base %p phy 0x%08x size 0x%08x\n",
++		base, (u32)phy_addr, size);
++
++	/* TXOUT */
++	size = TXOUT_SOC_DES_NUM * TXOUT_HD_DES_SIZE * 4;
++	base  = dma_alloc_coherent(NULL, size, &phy_addr, GFP_DMA);
++	if (!base)
++		goto txout;
++	aca_soc_hd_desc[dev].txout.base = base;
++	aca_soc_hd_desc[dev].txout.phy_base = phy_addr;
++	aca_soc_hd_desc[dev].txout.size = size;
++	pr_info("txout soc desc base %p phy 0x%08x size 0x%08x\n",
++		base, (u32)phy_addr, size);
++	/* RXOUT */
++	size = RXOUT_SOC_DES_NUM * RXOUT_HD_DES_SIZE * 4;
++	base  = dma_alloc_coherent(NULL, size, &phy_addr, GFP_DMA);
++	if (!base)
++		goto rxout;
++	aca_soc_hd_desc[dev].rxout.base = base;
++	aca_soc_hd_desc[dev].rxout.phy_base = phy_addr;
++	aca_soc_hd_desc[dev].rxout.size = size;
++	pr_info("rxout soc desc base %p phy 0x%08x size 0x%08x\n",
++		base, (u32)phy_addr, size);
++	return 0;
++rxout:
++	dma_free_coherent(NULL, aca_soc_hd_desc[dev].txout.size,
++		aca_soc_hd_desc[dev].txout.base,
++		aca_soc_hd_desc[dev].txout.phy_base);
++txout:
++	dma_free_coherent(NULL, aca_soc_hd_desc[dev].txin.size,
++		aca_soc_hd_desc[dev].txin.base,
++		aca_soc_hd_desc[dev].txin.phy_base);
++txin:
++	return -ENOMEM;
++}
++
++static int aca_soc_desc_free(int dev)
++{
++	dma_addr_t phy_addr;
++	void *base;
++	size_t size;
++
++	if (dev < 0 || dev > (DC_EP_MAX_PEER + 1))
++		return -EINVAL;
++
++	/* TXIN */
++	base = aca_soc_hd_desc[dev].txin.base;
++	phy_addr = aca_soc_hd_desc[dev].txin.phy_base;
++	size = aca_soc_hd_desc[dev].txin.size;
++	dma_free_coherent(NULL, size, base, phy_addr);
++
++	/* TXOUT */
++	base = aca_soc_hd_desc[dev].txout.base;
++	phy_addr = aca_soc_hd_desc[dev].txout.phy_base;
++	size = aca_soc_hd_desc[dev].txout.size;
++	dma_free_coherent(NULL, size, base, phy_addr);
++
++	/* RXOUT */
++	base = aca_soc_hd_desc[dev].rxout.base;
++	phy_addr = aca_soc_hd_desc[dev].rxout.phy_base;
++	size = aca_soc_hd_desc[dev].rxout.size;
++	dma_free_coherent(NULL, size, base, phy_addr);
++	return 0;
++}
++
++static int __init dc_ep_test_init(void)
++{
++	int i, j;
++	int dev_num;
++	struct dc_ep_dev dev;
++	int func = 0;
++	u32 sysclk = 0;
++	u32 ppeclk = 0;
++
++	if (dc_ep_dev_num_get(&dev_num)) {
++		pr_err("%s failed to get total device number\n", __func__);
++		return -EIO;
++	}
++
++	pr_info("%s: total %d EPs found\n", __func__, dev_num);
++
++	for (i = 0; i < dev_num; i++)
++		aca_soc_desc_alloc(i);
++
++	for (i = 0; i < dev_num; i++) {
++		struct aca_param aca_cfg = {
++			.aca_txin = {
++				.soc_desc_base
++					= aca_soc_hd_desc[i].txin.phy_base,
++				.soc_desc_num = TXIN_SOC_DES_NUM,
++				.pp_buf_desc_num = 32,
++				.pd_desc_base = TXIN_PD_DBASE,
++				.pd_desc_num = TXIN_PD_DES_NUM,
++				.hd_size_in_dw = TXIN_HD_DES_SIZE,
++				.pd_size_in_dw = TXIN_PD_DES_SIZE,
++				.byteswap = 1,
++			},
++			.aca_txout = {
++				.soc_desc_base
++					= aca_soc_hd_desc[i].txout.phy_base,
++				.soc_desc_num = TXOUT_SOC_DES_NUM,
++				.pp_buf_desc_num = 32,
++				.pd_desc_base = TXOUT_PD_DBASE,
++				.pd_desc_num = TXOUT_PD_DES_NUM,
++				.hd_size_in_dw = TXOUT_HD_DES_SIZE,
++				.pd_size_in_dw = TXOUT_PD_DES_SIZE,
++				.byteswap = 1,
++			},
++			.aca_rxout = {
++				.soc_desc_base
++					= aca_soc_hd_desc[i].rxout.phy_base,
++				.soc_desc_num = RXOUT_SOC_DES_NUM,
++				.pp_buf_desc_num = 32,
++				.pd_desc_base = RXOUT_PD_DBASE,
++				.pd_desc_num = RXOUT_PD_DES_NUM,
++				.hd_size_in_dw = RXOUT_HD_DES_SIZE,
++				.pd_size_in_dw = RXOUT_PD_DES_SIZE,
++				.byteswap = 1,
++			},
++		};
++		struct aca_modem_param modem_cfg = {
++			.mdm_txout = {
++				.stat = SB_XBAR_ADDR(__TX_OUT_ACA_ACCUM_STATUS),
++				.pd      = SB_XBAR_ADDR(__TX_OUT_QUEUE_PD_BASE_ADDR_OFFSET),
++				.acc_cnt = SB_XBAR_ADDR(__TX_OUT_ACA_ACCUM_COUNT),
++			},
++			.mdm_rxout = {
++				.stat    = SB_XBAR_ADDR(__RX_OUT_ACA_ACCUM_STATUS),
++				.pd      = SB_XBAR_ADDR(__RX_OUT_QUEUE_PD_BASE_ADDR_OFFSET),
++				.acc_cnt = SB_XBAR_ADDR(__RX_OUT_ACA_ACCUM_COUNT),
++			},
++			.mdm_rxin = {
++				.stat    = SB_XBAR_ADDR(__RX_IN_ACA_ACCUM_STATUS),
++				.pd      = SB_XBAR_ADDR(__RX_IN_QUEUE_PD_BASE_ADDR_OFFSET),
++				.acc_cnt = SB_XBAR_ADDR(__RX_IN_ACA_ACCUM_COUNT),
++			},
++		};
++		if (dc_ep_dev_info_req(i, DC_EP_INT_PPE, &dev))
++			pr_info("%s failed to get pcie ep %d information\n",
++			__func__, i);
++		pr_info("irq %d\n", dev.irq);
++		pr_info("phyiscal membase 0x%08x virtual membase 0x%p\n",
++			dev.phy_membase, dev.membase);
++		if (dev_num > 1) {
++			for (j = 0; j < dev.peer_num; j++) {
++				pr_info("phyiscal peer membase 0x%08x virtual peer membase 0x%p\n",
++					dev.peer_phy_membase[j], dev.peer_membase[j]);
++			}
++		}
++		/* For module unload perpose */
++		memcpy(&pcie_dev[i], &dev, sizeof(struct dc_ep_dev));
++		dc_ep_ppe_mbox_int_stress_test(&pcie_dev[i]);
++		dev.hw_ops->clk_on(&dev, PMU_CDMA | PMU_EMA | PMU_PPM2);
++		dev.hw_ops->clk_set(&dev, SYS_CLK_288MHZ, PPE_CLK_576MHZ);
++		dev.hw_ops->pinmux_set(&dev, 14, MUX_FUNC_ALT1);
++		dev.hw_ops->pinmux_set(&dev, 15, MUX_FUNC_ALT2);
++		dev.hw_ops->pinmux_get(&dev, 15, &func);
++		pr_info("gpio 15 func %d\n", func);
++		dev.hw_ops->pinmux_set(&dev, 13, MUX_FUNC_GPIO);
++		dev.hw_ops->gpio_dir(&dev, 13, GPIO_DIR_OUT);
++		dev.hw_ops->gpio_set(&dev, 13, 1);
++		dev.hw_ops->gpio_get(&dev, 13, &func);
++		pr_info("gpio 13 value %d\n", func);
++		dev.hw_ops->gpio_pupd_set(&dev, 14, GPIO_PULL_DOWN);
++		dev.hw_ops->gpio_od_set(&dev, 0, 1);
++		dev.hw_ops->gpio_src_set(&dev, 0, GPIO_SLEW_RATE_FAST);
++		dev.hw_ops->gpio_dcc_set(&dev, 0, GPIO_DRV_CUR_8MA);
++		dev.hw_ops->clk_get(&dev, &sysclk, &ppeclk);
++		pr_info("ppe clk %s sys clk %s\n", ppeclk_str[ppeclk],
++			sysclk_str[sysclk]);
++		aca_cfg.aca_txin.soc_cmlt_cnt_addr = TXIN_TARGET_CNT_ADDR + dev.phy_membase;
++		aca_cfg.aca_txout.soc_cmlt_cnt_addr = TXOUT_TARGET_CNT_ADDR + dev.phy_membase;
++		aca_cfg.aca_rxout.soc_cmlt_cnt_addr = RXOUT_TARGET_CNT_ADDR + dev.phy_membase;
++		dev.hw_ops->aca_init(&dev, &aca_cfg, &modem_cfg);
++		func = ACA_ALL_EN;
++		dev.hw_ops->aca_stop(&dev, &func, 0); 
++		dev.hw_ops->aca_start(&dev, ACA_ALL_EN, 1);
++		//dev.hw_ops->aca_start(&dev, ACA_RXOUT_EN, 1);
++
++		pr_info("ACA test\n");
++		dc_aca_test_init(&dev, aca_soc_hd_desc[i].txin.base);
++		dc_aca_test_check_in(&dev, &aca_cfg, i);
++
++		aca_dump(&dev, 0x50000, 200);
++		aca_dump(&dev, 0x5c000, 100);
++		aca_dump(&dev, 0x100000, 200);
++		pr_info("DMA test\n");
++		dma_pkt_size = 64;
++		dma_test(&dev, dma_mode, 0, 1);
++#if 0
++		dma_pkt_size = 128;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 256;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 512;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 1024;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 2048;
++		dma_test(&dev, dma_mode, 0, 1);
++
++		dma_mode = EP_TO_SOC;
++		dma_pkt_size = 64;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 128;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 256;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 512;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 1024;
++		dma_test(&dev, dma_mode, 0, 1);
++		dma_pkt_size = 2048;
++		dma_test(&dev, dma_mode, 0, 1);
++#endif
++	}
++
++	pr_info("Intel(R) SmartPHY DSL(VRX518) PCIe EP Test Driver - %s\n",
++		ep_test_driver_version);
++	return 0;
++}
++
++static void __exit dc_ep_test_exit(void)
++{
++	int i;
++	int dev_num;
++	u32 func = ACA_ALL_EN;
++	struct dc_ep_dev *dev;
++
++	if (dc_ep_dev_num_get(&dev_num)) {
++		pr_err("%s failed to get total device number\n", __func__);
++		return;
++	}
++	pr_info("%s: total %d EPs found\n", __func__, dev_num);
++	for (i = 0; i < dev_num; i++) {
++		dev = &pcie_dev[i];
++		free_irq(dev->irq, dev);
++		dev->hw_ops->aca_stop(dev, &func, 1);
++		dev->hw_ops->clk_off(dev, PMU_EMA);
++		if (dc_ep_dev_info_release(i)) {
++			pr_info("%s failed to release pcie ep %d information\n",
++				__func__, i);
++		}
++		aca_soc_desc_free(i);
++	}
++}
++
++module_init(dc_ep_test_init);
++module_exit(dc_ep_test_exit);
++
++MODULE_AUTHOR("Intel Corporation, <Chuanhua.lei@intel.com>");
++MODULE_DESCRIPTION("Intel(R) SmartPHY (VRX518) PCIe EP/ACA test driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/net/ethernet/intel/vrx518/test/ep_test.h b/drivers/net/ethernet/intel/vrx518/test/ep_test.h
+new file mode 100755
+--- /dev/null
++++ b/drivers/net/ethernet/intel/vrx518/test/ep_test.h
+@@ -0,0 +1,277 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#ifndef EP_TEST_H
++#define EP_TEST_H
++
++/* SB address on xBar */
++#define SB_XBAR_BASE		0x280000
++#define SB_XBAR_DES_RXBASE	SB_XBAR_BASE
++#define SB_XBAR_DES_TXBASE	(SB_XBAR_BASE + 0x400)
++#define SB_XBAR_DATA_BASE	(SB_XBAR_BASE + 0x800)
++#define SB_XBAR_ADDR(x)		(SB_XBAR_BASE + ((((x) - 0xA000)) << 2))
++
++/*----------------------------------------------------------
++ * ACA Shadow Registers
++ * 3 * 4 = 12
++ * *_STATUS need to be initialized to nonzero by PPE driver
++ *----------------------------------------------------------
++ */
++
++#define __ACA_SHADOW_REG_BASE			0xADF0
++
++#define __TX_IN_ACA_ACCUM_COUNT			0xADF0
++
++#define __TX_IN_ACA_ACCUM_STATUS		0xADF1
++
++#define __TX_IN_QUEUE_PD_BASE_ADDR_OFFSET	0xADF2
++
++#define __TX_OUT_ACA_ACCUM_COUNT		0xADF3
++
++#define __TX_OUT_ACA_ACCUM_STATUS		0xADF4
++
++#define __TX_OUT_QUEUE_PD_BASE_ADDR_OFFSET	0xADF5
++
++#define __RX_IN_ACA_ACCUM_COUNT			0xADF6
++
++#define __RX_IN_ACA_ACCUM_STATUS		0xADF7
++
++#define __RX_IN_QUEUE_PD_BASE_ADDR_OFFSET	0xADF8
++
++#define __RX_OUT_ACA_ACCUM_COUNT		0xADF9
++
++#define __RX_OUT_ACA_ACCUM_STATUS		0xADFA
++
++#define __RX_OUT_QUEUE_PD_BASE_ADDR_OFFSET	0xADFB
++
++#define TXIN_PD_DES_NUM		64
++#define TXIN_PD_DBASE		0x105400
++#define TXIN_SOC_DES_NUM	32
++#define TXIN_SOC_DBASE		0x24000000
++#define TXIN_HOST_DES_NUM	32
++#define TXIN_HD_DES_SIZE	4 /* size in DWORD */
++#define TXIN_PD_DES_SIZE	2 /* size in DWORD */
++#define TXIN_TARGET_CNT_ADDR	0x105600
++
++#define TXOUT_PD_DES_NUM	32
++#define TXOUT_PD_DBASE		0x105700
++#define TXOUT_SOC_DES_NUM	32
++#define TXOUT_SOC_DBASE		0x24001000
++#define TXOUT_HOST_DES_NUM	32
++#define TXOUT_HD_DES_SIZE	4 /* size in DWORD */
++#define TXOUT_PD_DES_SIZE	2 /* size in DWORD */
++#define TXOUT_TARGET_CNT_ADDR	0x105900
++
++#define RXOUT_PD_DES_NUM	32
++#define RXOUT_PD_DBASE		0x105C00
++#define RXOUT_SOC_DES_NUM	32
++#define RXOUT_SOC_DBASE		0x24002000
++#define RXOUT_HOST_DES_NUM	32
++#define RXOUT_HD_DES_SIZE	4 /* size in DWORD */
++#define RXOUT_PD_DES_SIZE	2 /* size in DWORD */
++#define RXOUT_TARGET_CNT_ADDR	0x105E00
++
++
++/* PPE interrupt */
++#define PPE_MBOX_TEST_BIT	0x1
++#define PPE_MBOX_IRQ_TEST_NUM	100
++
++#define PPE_MBOX_BASE		0x334800
++
++#define MBOX_REG(X)	(PPE_MBOX_BASE + (X))
++#define MBOX_IGU0_ISRS	MBOX_REG(0x0)
++#define MBOX_IGU0_ISRC	MBOX_REG(0x4)
++#define MBOX_IGU0_ISR	MBOX_REG(0x8)
++#define MBOX_IGU0_IER	MBOX_REG(0xc)
++
++#define HOST_IF_BASE		0x50000
++#define HOST_IF_REG(X)		(HOST_IF_BASE + (X))
++#define TXIN_CONV_CFG		HOST_IF_REG(0x14)
++#define RXIN_HD_ACCUM_ADD	HOST_IF_REG(0xC8) /* UMT Message trigger */
++#define TXIN_HD_ACCUM_ADD	HOST_IF_REG(0xCC) /* UMT Message trigger */
++#define RXOUT_ACA_ACCUM_ADD	HOST_IF_REG(0xE0) /* PPE FW tigger */
++#define TXOUT_ACA_ACCUM_ADD	HOST_IF_REG(0xE4) /* PPE FW tigger */
++
++#define CDMA_BASE	0x2D0000
++#define CDMA_REG(X)	(CDMA_BASE + (X))
++
++#define DMA_CLC		CDMA_REG(0x00)
++#define DMA_ID		CDMA_REG(0x08)
++#define DMA_CTRL	CDMA_REG(0x10)
++
++#define DMA_CTRL_RST		BIT(0)
++#define DMA_CTRL_DSRAM_PATH	BIT(1)
++#define DMA_CTRL_CH_FL		BIT(6)
++#define DMA_CTRL_DS_FOD		BIT(7)
++#define DMA_CTRL_DRB		BIT(8)
++#define DMA_CTRL_ENBE		BIT(9)
++#define DMA_CTRL_PRELOAD_INT_S	10
++#define DMA_CTRL_PRELOAD_INT	0x0C00u
++#define DMA_CTRL_PRELOAD_EN	BIT(12)
++#define DMA_CTRL_MBRST_CNT_S	16
++#define DMA_CTRL_MBRST_CNT	0x3FF0000u
++#define DMA_CTRL_MBRSTARB	BIT(30)
++#define DMA_CTRL_PKTARB		BIT(31)
++
++#define DMA_CPOLL	CDMA_REG(0x14)
++#define DMA_CPOLL_CNT_S		4
++#define DMA_CPOLL_CNT		0xFFF0u
++#define DMA_CPOLL_EN		BIT(31)
++
++#define DMA_CS		CDMA_REG(0x18)
++#define DMA_CCTRL	CDMA_REG(0x1C)
++#define DMA_CCTRL_ON		BIT(0)
++#define DMA_CCTRL_RST		BIT(1)
++#define DMA_CCTRL_DIR_TX	BIT(8)
++#define DMA_CCTRL_CLASS_S	9
++#define DMA_CCTRL_CLASS		0xE00u
++#define DMA_CCTRL_PRTNR_S	12
++#define DMA_CCTRL_PRTNR		0xF000u
++#define DMA_CCTRL_TXWGT_S	16
++#define DMA_CCTRL_TXWGT		0x30000u
++#define DMA_CCTRL_CLASSH_S	18
++#define DMA_CCTRL_CLASSH	0xC0000u
++#define DMA_CCTRL_PDEN		BIT(23)
++#define DMA_CCTRL_P2PCPY	BIT(24)
++#define DMA_CCTRL_LBEN		BIT(25)
++#define DMA_CCTRL_LBCHNR_S	26
++#define DMA_CCTRL_LBCHNR	0xFC000000u
++
++#define DMA_CDBA	CDMA_REG(0x20)
++#define DMA_CDLEN	CDMA_REG(0x24)
++#define DMA_CIS		CDMA_REG(0x28)
++#define DMA_CIE		CDMA_REG(0x2C)
++
++#define DMA_CI_EOP		BIT(1)
++#define DMA_CI_DUR		BIT(2)
++#define DMA_CI_DESCPT		BIT(3)
++#define DMA_CI_CHOFF		BIT(4)
++#define DMA_CI_RDERR		BIT(5)
++#define DMA_CI_ALL	(DMA_CI_EOP | DMA_CI_DUR | DMA_CI_DESCPT\
++			| DMA_CI_CHOFF | DMA_CI_RDERR)
++
++#define DMA_CI_DEFAULT	(DMA_CI_EOP | DMA_CI_DESCPT)
++#define DMA_CDPTNRD	CDMA_REG(0x34)
++
++#define DMA_PS		CDMA_REG(0x40)
++#define DMA_PCTRL	CDMA_REG(0x44)
++#define DMA_PCTRL_RXBL16	BIT(0)
++#define DMA_PCTRL_TXBL16	BIT(1)
++#define DMA_PCTRL_RXBL_S	2
++#define DMA_PCTRL_RXBL		0xCu
++#define DMA_PCTRL_TXBL_S	4
++#define DMA_PCTRL_TXBL		0x30u
++#define DMA_PCTRL_PDEN		BIT(6)
++#define DMA_PCTRL_PDEN_S	6
++#define DMA_PCTRL_RXENDI_S	8
++#define DMA_PCTRL_RXENDI	0x300u
++#define DMA_PCTRL_TXENDI_S	10
++#define DMA_PCTRL_TXENDI	0xC00u
++#define DMA_PCTRL_TXWGT_S	12
++#define DMA_PCTRL_TXWGT		0x7000u
++#define DMA_PCTRL_MEM_FLUSH	BIT(16)
++
++#define DMA_IRNEN	CDMA_REG(0xF4)
++#define DMA_IRNCR	CDMA_REG(0xF8)
++#define DMA_IRNICR	CDMA_REG(0xFC)
++
++#ifdef CONFIG_CPU_BIG_ENDIAN
++struct aca_dma_desc {
++	/* DW0 */
++	u32 dw0;
++	/* DW1 */
++	u32 dw1;
++	/* DW2 */
++	u32 data_pointer;
++	/* DW3 */
++	u32 own:1;
++	u32 c:1;
++	u32 sop:1;
++	u32 eop:1;
++	u32 dic:1;
++	u32 pdu_type:1;
++	u32 byte_off:3;
++	u32 qid:4;
++	u32 mpoa_pt:1;
++	u32 mpoa_mode:2;
++	u32 data_len:16;
++}__packed __aligned(16);
++
++/* 2 DWs format descriptor */
++struct aca_dma_desc_2dw {
++	u32 data_pointer; /* Descriptor data pointer */
++	union {
++		struct {
++			u32 own:1;
++			u32 c:1;
++			u32 sop:1;
++			u32 eop:1;
++			u32 meta_data0:2;
++			u32 byte_offset:3;
++			u32 meta_data1:7;
++			u32 data_len:16;
++		} __packed field;
++		u32 word;
++	} __packed status;
++} __packed __aligned(8);
++#else
++struct aca_dma_desc {
++	/* DW0 */
++	u32 dw0;
++	/* DW1 */
++	u32 dw1;
++	/* DW2 */
++	u32 data_pointer;
++	/* DW 3 */
++	u32 data_len:16;
++	u32 mpoa_mode:2;
++	u32 mpoa_pt:1;
++	u32 qid:4;
++	u32 byte_off:3;
++	u32 pdu_type:1;
++	u32 dic:1;
++	u32 eop:1;
++	u32 sop:1;
++	u32 c:1;
++	u32 own:1;
++}__packed __aligned(16);
++
++/* 2 DWs format descriptor */
++struct aca_dma_desc_2dw {
++	u32 data_pointer; /* Descriptor data pointer */
++	union {
++		struct {
++			u32 data_len:16;
++			u32 meta_data1:7;
++			u32 byte_offset:3;
++			u32 meta_data0:2;
++			u32 eop:1;
++			u32 sop:1;
++			u32 c:1;
++			u32 own:1;
++		} __packed field;
++		u32 word;
++	} __packed status;
++} __packed __aligned(8);
++#endif
++#endif /* EP_TEST_H */
+diff --git a/include/net/dc_ep.h b/include/net/dc_ep.h
+new file mode 100644
+--- /dev/null
++++ b/include/net/dc_ep.h
+@@ -0,0 +1,349 @@
++/*******************************************************************************
++
++  Intel SmartPHY DSL PCIe Endpoint/ACA Linux driver
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify it
++  under the terms and conditions of the GNU General Public License,
++  version 2, as published by the Free Software Foundation.
++
++  This program is distributed in the hope it will be useful, but WITHOUT
++  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++  more details.
++
++  You should have received a copy of the GNU General Public License along with
++  this program; if not, write to the Free Software Foundation, Inc.,
++  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++
++  The full GNU General Public License is included in this distribution in
++  the file called "COPYING".
++
++*******************************************************************************/
++
++#ifndef DC_EP_H
++#define DC_EP_H
++
++#include <linux/types.h>
++#include <linux/pci.h>
++#include <linux/device.h>
++
++/* @{ */
++/*! \def DC_EP_MAX_PEER
++ *  \brief how many EP partners existed. In most cases, this number should be
++ *  one for bonding application. For the future extension, it could be bigger
++ *  value. For example, multiple bonding
++ */
++#define DC_EP_MAX_PEER		1
++
++/* Reset related module bit definition */
++#define RST_GPIO		BIT(2)
++#define RST_DSL_IF		BIT(3)
++#define RST_DFE			BIT(7)
++#define RST_PPE			BIT(8)
++#define RST_CDMA		BIT(9)
++#define RST_SPI			BIT(10)
++#define RST_IMCU		BIT(11)
++#define RST_ACA_DMA		BIT(14)
++#define RST_AFE			BIT(16)
++#define RST_ACA_HOSTIF		BIT(17)
++#define RST_PCIE		BIT(22)
++#define RST_PPE_ATM_TC		BIT(23)
++#define RST_FPI_SLAVE		BIT(25)
++#define RST_GLOBAL		BIT(30)
++
++/* PMU related module definition */
++#define PMU_ADMA		BIT(0)
++#define PMU_CDMA		BIT(2)
++#define PMU_SPI			BIT(8)
++#define PMU_DSL			BIT(9)
++#define PMU_PPE_QSB		BIT(18)
++#define PMU_PPE_SLL01		BIT(19)
++#define PMU_PPE_TC		BIT(21)
++#define PMU_EMA			BIT(22)
++#define PMU_PPM2		BIT(23)
++#define PMU_PPE_TOP		BIT(29)
++
++/* IMER bit definition */
++#define PPE2HOST_INT0		BIT(0)
++#define PPE2HOST_INT1		BIT(1)
++#define DYING_GASP_INT		BIT(3)
++#define MEI_IRQ			BIT(8)
++#define ACA_XBAR_INT		BIT(9)
++#define MODEM_XBAR_INT		BIT(12)
++#define LED0_INT		BIT(13)
++#define LED1_INT		BIT(14)
++#define NMI_PLL			BIT(15)
++#define DMA_TX			BIT(16)
++#define DMA_RX			BIT(17)
++#define ACA_HOSTIF_TX		BIT(20)
++#define ACA_HOSTIF_RX		BIT(21)
++#define ACA_RXOUT_PD_RING_FULL	BIT(22)
++#define ACA_TXOUT_PD_RING_FULL	BIT(23)
++
++/*
++ * Structure used to specify available pin mux functions for gpio pinx
++ * It will be used in pinmux_set() function
++ */
++enum gpio_padc_func {
++	MUX_FUNC_GPIO = 0,
++	MUX_FUNC_ALT1,
++	MUX_FUNC_ALT2,
++	MUX_FUNC_RES,
++};
++
++/*
++ * Structure used to specify interrupt source so that EP can assign unique
++ *  interruot to it
++*/
++enum dc_ep_int {
++	DC_EP_INT_PPE, /*!< PPE2HOST_INT 0/1 */
++	DC_EP_INT_MEI, /*!< DSL MEI_IRQ */
++	DC_EP_INT_MAX,
++};
++
++/* Clock setting for system clock */
++enum {
++	SYS_CLK_36MHZ	= 0,
++	SYS_CLK_288MHZ,
++	SYS_CLK_MAX,
++};
++
++/* Clock setting for PPE clock */
++enum {
++	PPE_CLK_36MHZ	= 0,
++	PPE_CLK_576MHZ,
++	PPE_CLK_494MHZ,
++	PPE_CLK_432MHZ,
++	PPE_CLK_288MHZ,
++	PPE_CLK_MAX,
++};
++
++/* GPIO direction IN/OUT */
++enum {
++	GPIO_DIR_IN = 0,
++	GPIO_DIR_OUT,
++	GPIO_DIR_MAX,
++};
++
++/* GPIO Pullup/Pulldown setting */
++enum {
++	GPIO_PUPD_DISABLE = 0,
++	GPIO_PULL_UP,
++	GPIO_PULL_DOWN,
++	GPIO_PUPD_BOTH,
++};
++
++/* GPIO slew rate setting */
++enum {
++	GPIO_SLEW_RATE_SLOW = 0,
++	GPIO_SLEW_RATE_FAST,
++};
++
++/* GPIO driver current setting */
++enum {
++	GPIO_DRV_CUR_2MA = 0,
++	GPIO_DRV_CUR_4MA,
++	GPIO_DRV_CUR_8MA,
++	GPIO_DRV_CUR_12MA,
++	GPIO_DRV_CUR_MAX,
++};
++
++enum {
++	ACA_LITTLE_ENDIAN = 0,
++	ACA_BIG_ENDIAN,
++	ACA_ENDIAN_MAX,
++};
++
++enum {
++	ACA_TXIN = 0,
++	ACA_TXOUT,
++	ACA_RXIN,
++	ACA_RXOUT,
++	ACA_MAX,
++};
++
++/* ACA four major direction functions for start/stop */
++#define ACA_TXIN_EN	BIT(0)
++#define ACA_TXOUT_EN	BIT(1)
++#define ACA_RXIN_EN	BIT(2)
++#define ACA_RXOUT_EN	BIT(3)
++#define ACA_ALL_EN	0xF
++
++struct dc_ep_dev;
++
++/*
++ * ACA SoC specific parameters. The caller needs to fill up all necessary info
++ * according to specific SoC and specific project
++ * For each function, different parameters are needed.
++ */
++struct aca_cfg_param {
++	u32 soc_desc_base; /*!< SoC CBM or DDR descriptor base address */
++	u32 soc_desc_num; /*!< SoC and HostIF (same) descriptor number */
++	u32 soc_cmlt_cnt_addr; /*! SoC cumulative counter address */
++	u32 pp_buf_desc_num; /*!< ACA ping pong buffer descriptor number */
++	u32 pd_desc_base; /*!< Packet Descriptor base address in modem */
++	u32 pd_desc_num; /*!< Packet Descriptor number in modem */
++	u32 hd_size_in_dw; /*!< Host(SoC) descriptor size in dwords */
++	u32 pd_size_in_dw; /*!< Packet descriptor size in dwords */
++	u32 byteswap; /*!< Byte swap enabled or not in ACA FW */
++	u32 prefill_cnt; /*!< Prefill counter special required for some platform */
++};
++
++struct aca_param {
++	struct aca_cfg_param aca_txin;
++	struct aca_cfg_param aca_txout;
++	struct aca_cfg_param aca_rxin;
++	struct aca_cfg_param aca_rxout;
++};
++
++/* ACA project/modem specific parameters. It is only valid for VRX518 */
++struct aca_proj_param {
++	u32 stat; /*!< Target state */
++	u32 pd; /*!< Target packet descripor */
++	u32 acc_cnt; /*!< Target accumulate counter */
++};
++
++/* Project specific configuration */
++struct aca_modem_param {
++	struct aca_proj_param mdm_txout;
++	struct aca_proj_param mdm_rxin;
++	struct aca_proj_param mdm_rxout;
++};
++
++/* Event trigger register address <offset> */
++struct aca_event_reg_addr {
++	u32 txin_acc_sub;
++	u32 txout_acc_add;
++	u32 rxin_acc_sub;
++	u32 rxout_acc_add;
++};
++
++/*
++ * ACA common hardware low level APIs, presented as callbacks instead of
++ * separate APIs to support mulitple instances
++ */
++struct aca_hw_ops {
++	/* RCU Callbacks */
++	void (*reset_assert)(struct dc_ep_dev *pdev, u32 rd);
++	void (*reset_deassert)(struct dc_ep_dev *pdev, u32 rd);
++	/* For hardware self-clear reset, most apply except PCIe */
++	int (*reset_device)(struct dc_ep_dev *pdev, u32 hd);
++
++	/* PMU Callbacks */
++	int (*clk_on)(struct dc_ep_dev *pdev, u32 cd);
++	int (*clk_off)(struct dc_ep_dev *pdev, u32 cd);
++
++	/* CGU Callbacks */
++	int (*clk_set)(struct dc_ep_dev *pdev, u32 sysclk, u32 ppeclk);
++	int (*clk_get)(struct dc_ep_dev *pdev, u32 *sysclk, u32 *ppeclk);
++
++	/* GPIO Callbacks */
++	int (*gpio_dir)(struct dc_ep_dev *pdev, u32 gpio, int dir);
++	int (*gpio_set)(struct dc_ep_dev *pdev, u32 gpio, int val);
++	int (*gpio_get)(struct dc_ep_dev *pdev, u32 gpio, int *val);
++
++	/* PinMux Callbacks */
++	int (*pinmux_set)(struct dc_ep_dev *pdev, u32 gpio, int func);
++	int (*pinmux_get)(struct dc_ep_dev *pdev, u32 gpio, int *func);
++	int (*gpio_pupd_set)(struct dc_ep_dev *pdev, u32 gpio, u32 val);
++	int (*gpio_od_set)(struct dc_ep_dev *pdev, u32 gpio, int val);
++	int (*gpio_src_set)(struct dc_ep_dev *pdev, u32 gpio, int val);
++	int (*gpio_dcc_set)(struct dc_ep_dev *pdev, u32 gpio, u32 val);
++
++	/* ICU Callbacks */
++	void (*icu_en)(struct dc_ep_dev *pdev, u32 bit);
++	void (*icu_mask)(struct dc_ep_dev *pdev, u32 bit); 
++
++	/* ACA related stuff */
++	int (*aca_start)(struct dc_ep_dev *pdev, u32 func, int start);
++	int (*aca_stop)(struct dc_ep_dev *pdev, u32 *func, int reset);
++	/* If there is no project specific parameters, input NULL */
++	int (*aca_init)(struct dc_ep_dev *pdev, struct aca_param *aca,
++		struct aca_modem_param *mdm);
++	void (*aca_event_addr_get)(struct dc_ep_dev *pdev,
++		struct aca_event_reg_addr *regs);
++	/* UMT address needed for SoC filled in to trigger UMT msg */
++	u32 (*umt_msg_addr)(struct dc_ep_dev *pdev, u32 endian, u32 type);
++	/* TXIN accum sub to ack PPE already processed */
++	void (*aca_txin_ack_sub)(struct dc_ep_dev *pdev, u32 val);
++	u32 (*aca_txin_hd_cnt)(struct dc_ep_dev *pdev);
++};
++
++/*
++ * Structure used to extract attached EP detailed information
++ * for PPE/DSL_MEI driver/Bonding
++ */
++struct dc_ep_dev {
++	struct device *dev;
++	u32 irq;          /*!< MSI interrupt number for this device */
++	u32 aca_tx_irq; /*!< ACA Non-empty TX irq number for PPE driver */
++	u32 aca_rx_irq; /*!< ACA Non-empty RX irq number for PPE driver */
++	/*!< The EP inbound memory base address derived from BAR0, SoC
++	     virtual address for PPE/DSL_MEI driver
++	 */
++	bool switch_attached; /*!< EP attach switch */
++	u8 __iomem *membase; /*!< virtual memory base address to access EP */
++	u32 phy_membase;  /*!< The EP inbound memory base address derived
++			from BAR0, physical address for PPE FW
++			*/
++	u32 peer_num;    /*!< Bonding peer number available */
++	/*!< The bonding peer EP inbound memory base address derived from
++	 its BAR0, SoC virtual address for PPE/DSL_MEI driver
++	 */
++	u8 __iomem *peer_membase[DC_EP_MAX_PEER];
++	/*!< The bonding peer EP inbound memory base address derived from
++	     its BAR0, physical address for PPE FW
++	*/
++	u32 peer_phy_membase[DC_EP_MAX_PEER];
++	const struct aca_hw_ops *hw_ops;
++	void *priv; /* Pointer to driver proprietary data for internal use */
++};
++
++/*
++ * This function returns the total number of EPs attached. Normally,
++ * the number should be one <standard smartPHY EP> or two <smartPHY
++ * off-chip bonding cases>. Extended case is also considered
++
++ * \param[in/out]  dev_num   Pointer to detected EP numbers in total.
++ * \return         -EIO      Invalid total EP number which means this
++ * 		     module is not initialized properly
++ * \return         0         Successfully return the detected EP numbers
++ */
++int dc_ep_dev_num_get(int *dev_num);
++
++/*
++ * This function returns detailed EP device information for PPE/DSL/Bonding
++ * partner by its logical index obtained
++ * by \ref dc_ep_dev_num_get and its interrupt module number
++ * \ref dc_ep_int
++
++ * \param[in]      dev_idx   Logical device index referred to the related
++ * 		     device
++ * \param[in]      module    EP interrupt module user<PPE/MEI>
++ * \param[in/out]  dev       Pointer to returned detail device structure
++ * 		     \ref dc_ep_dev
++ * \return         -EIO      Invalid logical device index or too many modules
++ * 		     referred to this module
++ * \return         0         Successfully return required device information
++
++ * \remarks This function normally will be called to trace the detailed device
++ *     information after calling \ref dc_ep_dev_num_get
++ */
++int dc_ep_dev_info_req(int dev_idx, enum dc_ep_int module,
++			struct dc_ep_dev *dev);
++
++/*
++ * This function releases the usage of this module by PPE/DSL
++
++ * \param[in]  dev_idx   Logical device index referred to the related device
++ * \return     -EIO      Invalid logical device index or release too many
++ * 		 times to refer to this module
++ * \return     0         Successfully release the usage of this module
++
++ * \remarks This function should be called once their reference is over.
++ *     The reference usage must matches \ref dc_ep_dev_info_req
++ */
++int dc_ep_dev_info_release(int dev_idx);
++
++#endif /* DC_EP_H */

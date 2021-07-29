@@ -1,0 +1,1720 @@
+# HG changeset patch
+# Parent 1c8c3f3199da86527dbb81bd84ed0631dbb5d3ca
+diff --git a/arch/x86/pal_cppi41/pal_cppi41.c b/arch/x86/pal_cppi41/pal_cppi41.c
+--- a/arch/x86/pal_cppi41/pal_cppi41.c
++++ b/arch/x86/pal_cppi41/pal_cppi41.c
+@@ -87,6 +87,7 @@
+ #include <linux/avalanche/puma7/puma7_cppi_prv.h>
+ #include <linux/avalanche/generic/avalanche_pp_api.h>
+ #include <linux/avalanche/generic/pal_cppi41.h>
++#include <linux/avalanche/generic/cslr_cppi41.h>
+ #include <linux/avalanche/generic/pal_os.h>
+ #include <linux/avalanche/generic/pal_osProtect.h>
+ #include <linux/avalanche/generic/pal_osProtect_inline.h>
+@@ -137,6 +138,8 @@
+ unsigned int qMgrs_qMngBase [PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };     /* queue manager's queue management base */
+ unsigned int qMgrs_qStatBase[PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };     /* queue manager's queue stats base */
+ unsigned int qMgrs_regsBase [PAL_CPPI41_NUM_QUEUE_MGR] = { 0 };     /* queue manager's managment registers */
++unsigned int bMgrBase = 0;                                          /* buffers pools manager base address */
++
+ static bool initialized = false;
+ static spinlock_t init_lock;
+ 
+@@ -197,6 +200,7 @@ PAL_Handle PAL_cppi4Init (void * initCfg
+ 
+     qMgr1Base = PAL_CPPI_PP_QMGR_G1_QUEUES_BASE;
+     qMgr2Base = PAL_CPPI_PP_QMGR_G2_QUEUES_BASE;
++    bMgrBase  = PAL_CPPI_PP_BUF_MGR_BASE;
+ 
+     DPRINTK("qMgr1Base = 0x%08x, qMgr2Base = 0x%08x", qMgr1Base, qMgr2Base);
+ 
+@@ -230,6 +234,17 @@ int PAL_cppi4Exit(PAL_Handle hnd, void *
+ }
+ EXPORT_SYMBOL(PAL_cppi4Exit);
+ 
++int PAL_cppi4BufDecRefCnt (PAL_Handle hnd, Cppi4BufPool pool, Ptr bufPtr)
++{
++    CSL_BufMgr_Regs *bPoolRegs = (CSL_BufMgr_Regs *)bMgrBase;
++
++    bPoolRegs->Pointer_Size[pool.bPool].Buffer_Pool_Pointer = cpu_to_be32((__u32) bufPtr);
++
++    return 0;
++}
++EXPORT_SYMBOL(PAL_cppi4BufDecRefCnt);
++
++
+ PAL_Cppi4QueueHnd PAL_cppi4QueueOpen(PAL_Handle hnd, Cppi4Queue  queue)
+ {
+     PAL_Cppi4QueueHnd qHnd;
+diff --git a/arch/x86/pp_init/puma7_pp_init.c b/arch/x86/pp_init/puma7_pp_init.c
+--- a/arch/x86/pp_init/puma7_pp_init.c
++++ b/arch/x86/pp_init/puma7_pp_init.c
+@@ -35,6 +35,7 @@
+ #include <linux/avalanche/puma7/puma7_pp.h>
+ #include <linux/avalanche/generic/pal.h>
+ #include <linux/avalanche/generic/pal_cppi41.h>
++#include <linux/avalanche/generic/cslr_cppi41.h>
+ #include <linux/avalanche/puma7/puma7_cppi.h>
+ #include <linux/avalanche/puma7/puma7_cppi_prv.h>
+ #include <linux/avalanche/puma7/puma7.h>
+diff --git a/drivers/mrpc/cppi_client.c b/drivers/mrpc/cppi_client.c
+--- a/drivers/mrpc/cppi_client.c
++++ b/drivers/mrpc/cppi_client.c
+@@ -74,6 +72,15 @@
+     Uint32 buffer_sz;
+     Uint32 buffer_cnt;
+ };
++typedef struct {
++    Uint32 bMgr;
++    Uint32 bPool;
++} cppi_get_bpool_info_args_t;
++
++typedef struct  {
++    PAL_Result result;
++    Cppi4BufPoolInfo bp_info;
++} cppi_get_bpool_info_rep_t;
+ 
+ #ifdef CONFIG_PP_SANITY_TESTS
+ struct cppi_sanity_dma_args {
+@@ -92,6 +99,7 @@
+ 
+ enum {
+     CPPI_INIT_PP_WIFI_BUFFER_POOL = 0,
++    CPPI_GET_BPOOL_INFO,
+     CPPI_CONFIGURE_SANITY_DMA_CHANNELS,
+     CPPI_POP_BUFFER_PP_REGION,
+ };
+@@ -117,6 +125,30 @@
+     }
+ 
+     return ntohl(rep);
++    return be32_to_cpu(rep);
++}
++
++static inline cppi_get_bpool_info_rep_t cppi_mrpc_call_bpool_info(__u8 procid, void *args, ssize_t args_size )
++{
++    struct cppi_private *priv = this;
++    int ret, errcode;
++    cppi_get_bpool_info_rep_t rep;
++
++    if (!priv) {
++        pr_err("ERROR: mrpc cppi not initialized");
++        rep.result = -EFAULT;
++        return rep;
++    }
++
++    ret = mrpc_call(priv->mrpc, procid, args, args_size, &rep, sizeof(rep),
++								   0, &errcode);
++
++    if (ret || errcode) {
++        pr_err("ERROR: ret=%d, errcode=%d", ret, errcode);
++        rep.result = errcode;
++        return rep;
++    }
++    return rep;
+ }
+ 
+ Uint32 avalanche_cppi_init_pp_wifi_buffer_pool(PAL_Handle palHandle,
+@@ -127,14 +159,50 @@
+ {
+     struct cppi_wifi_args args;
+ 
+-    args.buffers_base_addr = htonl(buffers_base_addr);
+-    args.buffer_sz = htonl(buffer_sz);
+-    args.buffer_cnt = htonl(buffer_cnt);
++    args.buffers_base_addr = cpu_to_be32(buffers_base_addr);
++    args.buffer_sz         = cpu_to_be32(buffer_sz        );
++    args.buffer_cnt        = cpu_to_be32(buffer_cnt       );
+ 
+     return cppi_mrpc_call(CPPI_INIT_PP_WIFI_BUFFER_POOL, &args, sizeof(args));
+ }
+ EXPORT_SYMBOL(avalanche_cppi_init_pp_wifi_buffer_pool);
+ 
++/*
++ * PAL_cppi4GetBufferPoolInfo
++ *  - Get Buffer Pool info
++ */
++PAL_Result PAL_cppi4GetBufferPoolInfo(PAL_Handle hnd, Cppi4BufPool pool, Cppi4BufPoolInfo* bp_info)
++{
++    cppi_get_bpool_info_args_t args;
++    cppi_get_bpool_info_rep_t rep;
++    PAL_Result result; 
++
++    args.bMgr = cpu_to_be32(pool.bMgr);
++    args.bPool = cpu_to_be32(pool.bPool);
++
++    rep = (cppi_get_bpool_info_rep_t) cppi_mrpc_call_bpool_info(CPPI_GET_BPOOL_INFO, &args, sizeof(args));
++    
++    result = rep.result;
++
++    if (PAL_SOK == result)
++    {
++        memcpy(bp_info, &rep.bp_info, sizeof(Cppi4BufPoolInfo));
++        bp_info->bPoolPhyAddr = be32_to_cpu(bp_info->bPoolPhyAddr);
++        bp_info->bPoolTopPhyAddr = be32_to_cpu(bp_info->bPoolTopPhyAddr);
++        bp_info->bPoolOffset = be32_to_cpu(bp_info->bPoolOffset);
++        bp_info->bPoolSize = be32_to_cpu(bp_info->bPoolSize); 
++        bp_info->bufSize = be32_to_cpu(bp_info->bufSize); 
++        bp_info->numBuf = be32_to_cpu(bp_info->numBuf);
++
++        pr_debug("BPOOL INFO MRPC OK: buffStart: 0x%08x, buffEnd: 0x%08x, poolOffset: 0x%08x",
++            bp_info->bPoolPhyAddr, bp_info->bPoolTopPhyAddr, bp_info->bPoolOffset);
++    }
++
++    return result;
++}
++EXPORT_SYMBOL(PAL_cppi4GetBufferPoolInfo);
++
++
+ #ifdef CONFIG_PP_SANITY_TESTS
+ /* DMA channels configuration for sanity tool */
+ Int32 avalanche_cppi_init_pp_sanity_dma_channels(PAL_Handle palHandle, Cppi4Queue freeQ, Cppi4BufPool freeBuf)
+--- a/include/linux/avalanche/generic/avalanche_pp_api.h
++++ b/include/linux/avalanche/generic/avalanche_pp_api.h
+@@ -985,6 +985,71 @@ static inline __u32 __bit_field32_set(__
+ 	return (var | (mask & (val << off)));
+ }
+ 
++/**
++ * Get bit field from 16 bits value
++ *
++ * @param value Value to extract the bit field from
++ * @param off bit field's first bit
++ * @param len bit field's length in bits
++ * @return __u16
++ */
++static inline __u16 __bit_field16_get(__u16 val, __u16 off, __u16 len)
++{
++    __u16 mask;
++    mask = ((0xFFFF >> (16 - len)) << off);
++    return ((val & mask) >> off);
++}
++
++/**
++ * Set a bit field value into a 16 bits value
++ *
++ * @param value Value to set the bit field
++ * @param bf_val bit field value
++ * @param off bit field's first bit
++ * @param len bit field's length in bits
++ * @return __u16
++ */
++static inline __u16 __bit_field16_set(__u16 var, __u16 val, __u16 off, __u16 len)
++{
++        __u16 mask;
++        mask = ((0xFFFF >> (16 - len)) << off);
++        var &= ~(mask);
++        return (var | (mask & (val << off)));
++}
++
++/**
++ * Get bit field from 8 bits value
++ *
++ * @param value Value to extract the bit field from
++ * @param off bit field's first bit
++ * @param len bit field's length in bits
++ * @return __u8
++ */
++static inline __u8 __bit_field8_get(__u8 val, __u8 off, __u8 len)
++{
++    __u8 mask;
++    mask = ((0xFF >> (8 - len)) << off);
++    return ((val & mask) >> off);
++}
++
++/**
++ * Set a bit field value into a 8 bits value
++ *
++ * @param value Value to set the bit field
++ * @param bf_val bit field value
++ * @param off bit field's first bit
++ * @param len bit field's length in bits
++ * @return __u8
++ */
++static inline __u8 __bit_field8_set(__u8 var, __u8 val, __u8 off, __u8 len)
++{
++        __u8 mask;
++        mask = ((0xFF >> (8 - len)) << off);
++        var &= ~(mask);
++        return (var | (mask & (val << off)));
++}
++
++
+ #if PUMA7_OR_NEWER_SOC_TYPE
+ /**
+  * struct pp_psi_t Packet processor protocol specific
+@@ -2110,6 +2175,12 @@ typedef enum {
+     WIFI_DEV_MODE_FULL,
+     WIFI_DEV_MODES_CNT
+ } wifi_dev_mode_e;
++#define WIFI_DEV_MODE_VALID(mode) \
++    ((WIFI_DEV_MODE_PARTIAL <= (mode)) && ((mode) < WIFI_DEV_MODES_CNT))
++#define WIFI_DEV_MOD_STR(mode)    \
++    ((mode) == WIFI_DEV_MODE_PARTIAL ? "WIFI Proxy Partial Mode" : \
++    ((mode) == WIFI_DEV_MODE_FULL    ? "WIFI Proxy Full Mode"    : \
++    "WiFi Proxy invalid mode"))
+ 
+ /**
+  * wifi_proxy_add_ch_info_t
+@@ -2124,6 +2195,7 @@ struct wifi_proxy_add_ch_info_t {
+     struct wifi_proxy_tx_ch_t   tx_ch;
+     struct wifi_proxy_rx_ch_t   rx_ch;
+     wifi_dev_mode_e             mode;
++    __u8                        seq_num;
+ };
+ 
+ /**
+@@ -2163,14 +2235,11 @@ struct pp_hal_wifi_device_stats{
+     Uint32 rx_req_recv_pkt_num;
+ };
+ 
+-#define WIFI_TX_PDSP_DMEM_CTRL_OFFSET               0x100
+-#define WIFI_TX_PDSP_DMEM_CTRL_DESC_PER_DEVS        0x000 + WIFI_TX_PDSP_DMEM_CTRL_OFFSET
+-#define WIFI_TX_PDSP_DMEM_CTRL_PDSP_COPY_CNT_HIST   0x010 + WIFI_TX_PDSP_DMEM_CTRL_OFFSET
+-#define WIFI_TX_PDSP_DMEM_DEVICE_CTRL_OFFSET        0x080 + WIFI_TX_PDSP_DMEM_CTRL_OFFSET
++#define WIFI_TX_PDSP_DMEM_DEVICE_CTRL_OFFSET        0x100
++#define WIFI_TX_PDSP_DMEM_DEVICE_MARKS_DB           0x120
++#define WIFI_TX_PDSP_DMEM_CTRL_DESC_PER_DEVS        0x130
+ #define WIFI_TX_PDSP_DMEM_DEVICE_DB_OFFSET          0x200
+-#define WIFI_RX_PDSP_DMEM_CTRL_OFFSET               0x100
+-#define WIFI_RX_PDSP_DMEM_CTRL_PDSP_COPY_CNT_HIST   0x000 + WIFI_RX_PDSP_DMEM_CTRL_OFFSET
+-#define WIFI_RX_PDSP_DMEM_DEVICE_CTRL_OFFSET        0x080 + WIFI_RX_PDSP_DMEM_CTRL_OFFSET
++#define WIFI_RX_PDSP_DMEM_DEVICE_CTRL_OFFSET        0x100
+ #define WIFI_RX_PDSP_DMEM_DEVICE_DB_OFFSET          0x200
+ 
+ /**
+@@ -2187,7 +2256,7 @@ struct pp_hal_wifi_device_stats{
+  */
+ struct __attribute__((packed)) fw_tx_pdsp_devs_ctrl_reg {
+ #if defined(__BIG_ENDIAN_BITFIELD)
+-    Uint8   reserve:1,
++    __u8    reserve:1,
+             pdsp_res:2,
+             mode:1,
+             cmp_irq:1,
+@@ -2195,7 +2264,7 @@ struct __attribute__((packed)) fw_tx_pds
+             suspend:1,
+             valid:1;
+ #elif defined (__LITTLE_ENDIAN_BITFIELD)
+-    Uint8   valid:1,
++    __u8    valid:1,
+             suspend:1,
+             req_irq:1,
+             cmp_irq:1,
+@@ -2203,11 +2272,10 @@ struct __attribute__((packed)) fw_tx_pds
+             pdsp_res:2,
+             reserve:1;
+ #endif
+-    Uint8   Breserve0;
+-
+-    Uint16  stat_counters_off;
+-    Uint16  free_buffers;
+-    Uint16  max_buffers ;
++    __u8    rsvd1;
++    __be16  stat_counters_off;
++    __be16  free_buffers;
++    __be16  max_buffers ;
+ };
+ 
+ /**
+@@ -2235,25 +2303,25 @@ struct __attribute__((packed)) fw_tx_pds
+ struct __attribute__((packed)) fw_tx_pdsp_devs_db_entry {
+     /* request ring */
+     struct send_ring_t req_ring;
+-    Uint32             req_ring_head;
+-    Uint32             req_ring_tail;
++    __be32             req_ring_head;
++    __be32             req_ring_tail;
+     /* request ring control */
+-    Uint16             internal_q_off;
+-    Uint16             infra_dma_q;
+-    Uint8              seq_num;
+-    Uint8              next_exp_seq_num;
+-    Uint8              internal_desc_use_cnt;
+-    Uint8              num_elemments_pushed;
++    __be16             internal_q_off;
++    __be16             infra_dma_q;
++    __u8               seq_num;
++    __u8               next_exp_seq_num;
++    __u8               internal_desc_use_cnt;
++    __u8               num_elemments_pushed;
+     /* complete ring */
+     struct recv_ring_t cmp_ring;
+-    Uint32             cmp_ring_head;
+-    Uint32             cmp_ring_tail;
++    __be32             cmp_ring_head;
++    __be32             cmp_ring_tail;
+     /* complete ring control */
+-    Uint16  mcdma_page_offset;
+-    Uint16  pdsp_page_offset;
+-    Uint8   mcdma_page_num_entries;
+-    Uint8   mcdma_ch_regs_offset;
+-    Uint16  pagesBase;
++    __be16             mcdma_page_offset;
++    __be16             pdsp_page_offset;
++    __u8               mcdma_page_num_entries;
++    __u8               mcdma_ch_regs_offset;
++    __be16             pagesBase;
+ };
+ 
+ /**
+@@ -2271,24 +2339,24 @@ struct __attribute__((packed)) fw_tx_pds
+  */
+ struct __attribute__((packed)) fw_rx_pdsp_devs_ctrl_reg {
+ #if defined(__BIG_ENDIAN_BITFIELD)
+-    Uint8   reserve:3,
++    __u8    reserve:3,
+             mode:1,
+             cmp_irq:1,
+             req_irq:1,
+             suspend:1,
+             valid:1;
+ #elif defined (__LITTLE_ENDIAN_BITFIELD)
+-    Uint8   valid:1,
++    __u8    valid:1,
+             suspend:1,
+             req_irq:1,
+             cmp_irq:1,
+             mode:1,
+             reserve:3;
+ #endif
+-    Uint8   pid;
+-    Uint16  stat_counters_off;
+-    Uint16  free_buffers;
+-    Uint16  max_buffers ;
++    __u8    pid;
++    __be16  stat_counters_off;
++    __be16  free_buffers;
++    __be16  max_buffers ;
+ };
+ /**
+  * proxy rx pdsp devices database entry structure
+@@ -2296,8 +2364,7 @@ struct __attribute__((packed)) fw_rx_pds
+  * @cmp_ring complete ring structure
+  * @cmp_ring_head complete ring head pointer
+  * @cmp_ring_tail complete ring tail pointer
+- * @devBuffersLack specify how much buffers needs to be send to
+- *                 the device on complete ring
++ * @mark mark field to mark buffers when send on complete ring
+  * @req_ring request ring structure
+  * @req_ring_head request ring head pointer
+  * @req_ring_tail request ring tail pointer
+@@ -2315,25 +2382,24 @@ struct __attribute__((packed)) fw_rx_pds
+  * @note the struct contains reserve fields in order to be
+  * align to the actual memory layout
+  */
+-struct __attribute__((packed, aligned(64))) fw_rx_pdsp_devs_db_entry {
+-    /* complete ring */
+-    struct recv_ring_t cmp_ring;
+-    Uint32             cmp_ring_head;
+-    Uint32             cmp_ring_tail;
+-    /* request ring control */
+-    Uint16  devBuffersLack;
+-    Uint16  Reserved16;
+-    Uint32  Reserved32;
+-    /* request ring */
+-    struct send_ring_t req_ring;
+-    Uint32             req_ring_head;
+-    Uint32             req_ring_tail;
+-    /* request ring control */
+-    Uint16  mcdma_page_offset;
+-    Uint16  next_free_page_offset;
+-    Uint8   mcdma_page_num_entries;
+-    Uint8   mcdma_ch_regs_offset;
+-    Uint16  pagesBase;
++struct __attribute__((packed, aligned(64)))fw_rx_pdsp_devs_db_entry {
++	/* complete ring */
++	struct recv_ring_t cmp_ring;
++	__be32             cmp_ring_head;
++	__be32             cmp_ring_tail;
++	/* complete ring control */
++    __be32             mark;
++    __be32             rsvd1;
++	/* request ring */
++	struct send_ring_t req_ring;
++	__be32             req_ring_head;
++	__be32             req_ring_tail;
++	/* request ring control */
++	__be16 			   mcdma_page_offset;
++	__be16 			   next_free_page_offset;
++	__u8   			   mcdma_page_num_entries;
++    __u8               mcdma_ch_regs_offset;
++    __be16             pagesBase;
+ };
+ 
+ AVALANCHE_PP_RET_e avalanche_pp_wifi_init(struct wifi_proxy_fw_init_info_t *init_info);
+diff --git a/include/linux/avalanche/generic/csl_defs.h b/include/linux/avalanche/generic/csl_defs.h
+new file mode 100755
+--- /dev/null
++++ b/include/linux/avalanche/generic/csl_defs.h
+@@ -0,0 +1,355 @@
++/*
++ *
++ * csl_defs.h
++ * Description:
++ * see below
++ *
++ *
++  This file is provided under a dual BSD/GPLv2 license.  When using or 
++  redistributing this file, you may do so under either license.
++
++  GPL LICENSE SUMMARY
++
++  Copyright(c) 2008-2014 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify 
++  it under the terms of version 2 of the GNU General Public License as
++  published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful, but 
++  WITHOUT ANY WARRANTY; without even the implied warranty of 
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
++  General Public License for more details.
++
++  You should have received a copy of the GNU General Public License 
++  along with this program; if not, write to the Free Software 
++  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++  The full GNU General Public License is included in this distribution 
++  in the file called LICENSE.GPL.
++
++
++  Contact Information:
++  Intel Corporation
++  2200 Mission College Blvd.
++  Santa Clara, CA  97052
++
++  BSD LICENSE 
++
++  Copyright(c) 2008-2014 Intel Corporation. All rights reserved.
++
++  Redistribution and use in source and binary forms, with or without 
++  modification, are permitted provided that the following conditions 
++  are met:
++
++    * Redistributions of source code must retain the above copyright 
++      notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above copyright 
++      notice, this list of conditions and the following disclaimer in 
++      the documentation and/or other materials provided with the 
++      distribution.
++
++    * Neither the name of Intel Corporation nor the names of its 
++      contributors may be used to endorse or promote products derived 
++      from this software without specific prior written permission.
++
++  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
++  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
++  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR 
++  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
++  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
++  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
++  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
++  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY 
++  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
++  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
++  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++/** \file   csl_defs.h
++    \brief  Generic, Platform independent CSL definitions header
++
++    This file defines macros and data types that are generic or common to
++    all SoC platforms.
++
++
++    \author     PSP Architecture Team
++    \version    1.0
++ */
++
++#ifndef __CSL_DEFS_H__
++#define __CSL_DEFS_H__
++
++#include "_tistdtypes.h" /* Get the primitive C data types */
++
++/**
++ * \defgroup CSLDefines CSL Defines
++ * 
++ *  CSL Generic Defines - for use with any CSL module.
++ */
++/*@{*/
++
++/* CSL IOCTL defines */
++#define CSL_IOCTL_SHIFT     (0)
++
++#define CSL_IOCTL_MASK      (0xFF)
++
++/* Extract CSL relevant IOCTL code from input value */
++#define CSL_IOCTL(ioctl) ((ioctl & CSL_IOCTL_MASK) >> CSL_IOCTL_SHIFT)
++
++typedef void *      CSL_ResHandle;  /**< arbitrary resource handle */
++typedef Int16       CSL_ModuleId;   /**< numeric identifier of CSL module */
++typedef Uint16      CSL_BitMask16;  /**< 16bit binary mask */
++typedef Uint32      CSL_BitMask32;  /**< 32bit binary mask */
++
++/**
++  \note CSL_Reg16 & CSL_Reg32 may need to be further adorned by compiler
++        specific qualifiers in SoCs where I/O address space is distinct
++        from that of program/data. For example on TMS320C54xx, an "ioport"
++        qualifier is in order ahead of volatile to refer to peripheral
++        memory mapped registers.
++ */
++typedef volatile Uint16 CSL_Reg16;      /* 16bit register */
++typedef volatile Uint32 CSL_Reg32;      /* 32bit register */
++
++typedef Int16       CSL_Status;     /* CSL API execution status or result */
++typedef Int16       CSL_InstNum;    /* numeric instance number of the device */
++typedef Int16       CSL_ChaNum;     /* numeric channel number, local to a device instance */
++
++typedef enum 
++{
++  CSL_FAIL = 0,
++  CSL_PASS = 1
++} CSL_Test;
++
++#ifndef NULL
++#define NULL            ((void*)0)  /**< Definition of NULL */
++#endif
++
++#define CFG_INCLUDE_CSL_RESOURCE_CHECK 1
++
++#ifdef CFG_INCLUDE_CSL_RESOURCE_CHECK
++
++typedef Int16  CSL_Uid; /* CSL unique identifier for peripheral resources */
++typedef Uint32 CSL_Xio; /* SoC pin multiplex mask */
++
++typedef struct 
++{
++    CSL_Uid uid;
++    CSL_Xio xio;
++} CSL_ResAttrs;
++
++#endif /* CFG_INCLUDE_CSL_RESOURCE_CHECK */
++
++/**
++ * \brief   Following utility macros allow CSL register bitfield 
++ *          manipulations. The memory mapped register could be local 
++ *          to the CPU and/or related to a specific h/w peripheral device
++ *          associated with the CPU.
++ * \note    The macros are written as normal math-expressions and therefore
++ *          assume "native endianness" MSB:LSB of parameters passed.
++ * \warning These macros DO NOT perform any swaps to deal with Endianess
++ *          missmatch between the addressed peripheral device register
++ *          and the CPU. Typically, there'd exist h/w circuitry on the SoC
++ *          that adjusts the byte ordering such that CPU always sees
++ *          the values read/written to its memory mapped peripherals in
++ *          its own "native endianness". In the rare event where s/w is
++ *          required to make necessary endianess corrections, user is expected
++ *          to do so outside these macros. Refer to <pal_defs.h> file for
++ *          some utility macros that perform endianness corrections.
++ * \note    The following notational conventions apply while using these
++ *          macros. User is refered to cslr_<module>.h device specific
++ *          header file to know the predefined register fields and symbolic
++ *          tokens for use w/ these macros.
++ *
++ * CSL_<MODULE>_<REG>_<FIELD>_<SYMBOL>    Where..
++ * CSL_        : Standard prefix to avert namespace pollution by CSL
++ * <MODULE>    : CSL Peripheral module Ex: CPMAC
++ * <REG>       : The peripheral device register Ex: TX_CONTROL
++ * <FIELD> : Bit-field of interest Ex: EN (enable)
++ * <SYMBOL>    : Operational symbol for constant being defined Ex: SHIFT
++ *
++ * The cslr_<module>.h file mandatorily includes following 3 defines
++ * for each peripheral register bitfield --
++ *
++ *  [1] CSL_<MODULE>_<REG>_<FIELD>_SHIFT #of left shift positions to
++ *          reach the register bit-field of interest
++ *  [2] CSL_<MODULE>_<REG>_<FIELD>_MASK binary *and* mask bounding the
++ *          register bitfield of interest
++ *  [3] CSL_<MODULE>_<REG>_<FIELD>_RESETVAL The power-on reset value
++ *          assumed by the register bit-field of interest
++ *      Other symbolic tokens are defined along same lines as RESETVAL
++ */
++
++/* Following Macros help compose a numeric value at the specified fields */
++
++/**
++ * \def     CSL_FMK(PER_REG_FIELD, val) Macro composes the supplied
++ *          val to the bits FIELD within the register REG of the given
++ *          module MODULE
++ * \note    The macro does NOT write into the register, it merely composes
++ *          and returns the resulting value.
++ *
++ *          \b Example: CSL_FMK(CPMAC_TX_CONTROL_EN, 0) will compose 0 into EN field of
++ *          register TX_CONTROL of the device CPMAC
++ */
++#define CSL_FMK(PER_REG_FIELD, val) \
++    (((val) << CSL_##PER_REG_FIELD##_SHIFT) & CSL_##PER_REG_FIELD##_MASK)
++
++/**
++ * \brief   CSL_FMKT(MODULE_REG_FIELD, TOKEN) Macro composes the 
++ *          supplied symbolic TOKEN to the bits FIELD within the register
++ *          REG of the given module MODULE
++ * \note    The macro does NOT write into the register, it merely composes
++ *          and returns the resulting value.
++ *
++ *          \b Example: CSL_FMKT(CPMAC_TX_CONTROL_EN, RESETVAL) will compose 
++ *          reset value as defined by token RESETVAL into EN field of register
++ *          TX_CONTROL of the device CPMAC
++ */
++#define CSL_FMKT(PER_REG_FIELD, TOKEN) \
++    CSL_FMK(PER_REG_FIELD, CSL_##PER_REG_FIELD##_##TOKEN)
++
++/**
++ * \brief   CSL_FMKR(msb, lsb, val) Macro composes the supplied val to
++ *          to the bit fields in the range msb:lsb
++ * \note    The macro does NOT write into any register, it merely composes
++ *          and returns the resulting value.
++ *
++ *          \b Example: CSL_FMKR(7,4, 0xF) will compose binary value '1111'
++ *          at the bit-field whose most significant bit is at position 7
++ *          and least significant bit is at position 4. The bit poistion
++ *          is numbered starting from left most bit as bit #0. This is
++ *          according to math ordering of MSB:LSB
++ */
++#define CSL_FMKR(msb, lsb, val) \
++    (((val) & ((1 << ((msb) - (lsb) + 1)) - 1)) << (lsb))
++
++/* Following Macros help extract numeric value of bits residing
++ * in the specified fields of the specified register 
++ */
++
++/**
++ * \brief   CSL_FEXT(reg, MODULE_REG_FIELD) Macro snoops at the
++ *          specified bits FIELD of the register REG of the device
++ *          MODULE and constructs the numeric value of it by applying
++ *          the correct number of arithmetic right shift operations.
++ * \note    The macro does NOT write into any register, it merely extracts
++ *          and returns the value stored at specified bitfield.
++ *
++ *          \b Example: CSL_FEXT(rxCtrlReg, CPMAC_RX_CONTROL_EN) will 
++ *          extract value of the EN field of CPMAC's RX Control register 
++ *          whose addres was passed via rxCtrlReg parameter
++ */
++#define CSL_FEXT(reg, PER_REG_FIELD) \
++    (((reg) & CSL_##PER_REG_FIELD##_MASK) >> CSL_##PER_REG_FIELD##_SHIFT)
++
++/**
++ * \brief   CSL_FEXTR(reg, msb, lsb) Macro snoops at the
++ *          specified bits b/w msb:lsb of the register reg and constructs
++ *          the numeric value of it by applying the correct number of
++ *          arithmetic right shift operations.
++ * \note    The macro does NOT write into any register, it merely extracts
++ *          and returns the value stored at specified bitfield.
++ *
++ *          \b Example: CSL_FEXTR(dmaCcrReg, 15, 14) will extract value of 
++ *          2 bitscorresponding to destination addressing mode field within the
++ *          DMA Control register CCR whose address was passed via dmaCcrReg
++ */
++#define CSL_FEXTR(reg, msb, lsb) \
++    (((reg) >> (lsb)) & ((1 << ((msb) - (lsb) + 1)) - 1))
++
++/* Following macros help assign a a value to specified bitfield of a
++ * variable. This variable may or maynot be a peripheral register.
++ */
++
++/**
++ * \brief   CSL_FINS(reg, MODULE_REG_FIELD, val) Macro writes val
++ *      in specified bit field MODULE_REG_FIELD of the register
++ *      whose address is passed via reg parameter to the macro
++ *
++ *      Similiar to the Field make macros (FMK) discussed above,
++ *      the field insert macros are also provided in 3 flavours:
++ *      - CSL_FINS  -- value specified as a numeric quantity
++ *      - CSL_FINST -- value specified as a predefined symbolic token
++ *      - CSL_FINSR -- same as CSL_FINS, exception being the bitfield
++ *        is specified as msb:lsb range rather than symbolically
++ *
++ * \note    This macro can be used to write to normal C variable whose
++ *          address is passed via reg parameter. It is not necessary that
++ *          reg always refer to peripheral memory mapped registers.
++ *          As can be seen from the macro definition, the specified field
++ *          is first wiped clear before 'or'ing with the specified bit
++ *          pattern.
++ *
++ * \warning If access to specified reg from CPU requires explicit endian
++ *          corrections by software, user must first construct the
++ *          overall value to be assigned in a local C variable and then,
++ *          swap it as required for endian corrections before doing
++ *          final assignment to the register.
++ *
++ * \warning In case of special registers where a '1' is written to
++ *          clear the specified bit rather than set it, these macros will
++ *          NOT work as exspected. Please use the CSL Functional API
++ *          support to write to such peripheral registers.
++ *
++ *          \b Example: Let myNetworkReg be address of a peripheral register 
++ *          which when accessed by CPU results in endianness mismatch (ie.,
++ *          swapped msb/lsb). Also assume you wish to insert the STANDBY
++ *          power settings to the NET_POWER_DOWN bit field of this register
++ *          To handle this, do as follows:
++ *
++ *          Uint16 trueReg;
++ *          trueReg = PAL_SWAP_UINT16(myNetworkReg);
++ *          CSL_FINST(trueReg, NET_POWER_DOWN, STANDBY);
++ *          myNetworkReg = PAL_SWAP_UINT16(trueReg);
++ *
++ *          The PAL_SWAP_UINT16() used above is a simple macro that swaps
++ *          MSB with LSB. It is defined in <pal_defs.h>
++ */
++#define CSL_FINS(reg, PER_REG_FIELD, val) \
++    ((reg) = ((reg) & ~CSL_##PER_REG_FIELD##_MASK)\
++    | CSL_FMK(PER_REG_FIELD, val))
++
++#define CSL_FINST(reg, PER_REG_FIELD, TOKEN)\
++    CSL_FINS((reg), PER_REG_FIELD, CSL_##PER_REG_FIELD##_##TOKEN)
++
++#define CSL_FINSR(reg, msb, lsb, val)\
++    ((reg) = ((reg) &~ (((1 << ((msb) - (lsb) + 1)) - 1) << (lsb)))\
++    | CSL_FMKR(msb, lsb, val))
++
++
++/**
++ * \defgroup CSLErrotCodes CSL Error Codes
++ * 
++ * All CSL modules shall use standard CSL error codes
++ * - CSL makes use of 16bit error codes 
++ * - All errors carry a negative code. Positive value means no error!
++ * - First block of 32 codes are reserved for CSL system alone
++ * - Ensuing blocks of 32 distinct numbers can be allocated to individual
++ *   peripheral devices.
++ * - In order to promote CSL errors up the Driver stack, please use the
++ *   utility macro PAL_CSLERROR(cslErrorCode) defined in <pal_defs.h>
++ *   
++ *  \b Example: PAL_ERROR_CSLSTATUS(CSL_ESYS_INVQUERY) gives a corresponding
++ *   32bit error code per the PAL error code format.
++ */
++/*@{*/
++
++
++#define CSL_SOK                 (1)     /* Success */
++#define CSL_ESYS_FAIL           (-1)    /* Generic failure */
++#define CSL_ESYS_INUSE          (-2)    /* Peripheral resource is already in use */
++#define CSL_ESYS_XIO            (-3)    /* Encountered a shared I/O(XIO) pin conflict */
++#define CSL_ESYS_OVFL           (-4)    /* Encoutered CSL system resource overflow */
++#define CSL_ESYS_BADHANDLE      (-5)    /* Handle passed to CSL was invalid */
++#define CSL_ESYS_INVPARAMS      (-6)    /* invalid parameters */
++#define CSL_ESYS_INVCMD         (-7)    /* invalid command */
++#define CSL_ESYS_INVQUERY       (-8)    /* invalid query */
++#define CSL_ESYS_NOTSUPPORTED   (-9)    /* action not supported */
++#define CSL_ESYS_LAST           (-32)   /* Sentinel error code, end of sys range */
++
++/*@}*/
++/*@}*/
++
++#endif /* _CSL_DEFS_H_ */
+diff --git a/include/linux/avalanche/generic/cslr_cppi41.h b/include/linux/avalanche/generic/cslr_cppi41.h
+new file mode 100755
+--- /dev/null
++++ b/include/linux/avalanche/generic/cslr_cppi41.h
+@@ -0,0 +1,743 @@
++/*
++ *
++ * cslr_cppi41.h
++ * Description:
++ * see below
++ *
++ *
++  This file is provided under a dual BSD/GPLv2 license.  When using or
++  redistributing this file, you may do so under either license.
++
++  GPL LICENSE SUMMARY
++
++  Copyright(c) 2008-2014 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License as
++  published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful, but
++  WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++  General Public License for more details.
++
++  You should have received a copy of the GNU General Public License
++  along with this program; if not, write to the Free Software
++  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++  The full GNU General Public License is included in this distribution
++  in the file called LICENSE.GPL.
++
++
++  Contact Information:
++  Intel Corporation
++  2200 Mission College Blvd.
++  Santa Clara, CA  97052
++
++  BSD LICENSE
++
++  Copyright(c) 2008-2014 Intel Corporation. All rights reserved.
++
++  Redistribution and use in source and binary forms, with or without
++  modification, are permitted provided that the following conditions
++  are met:
++
++    * Redistributions of source code must retain the above copyright
++      notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above copyright
++      notice, this list of conditions and the following disclaimer in
++      the documentation and/or other materials provided with the
++      distribution.
++
++    * Neither the name of Intel Corporation nor the names of its
++      contributors may be used to endorse or promote products derived
++      from this software without specific prior written permission.
++
++  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++/** \file   cslr_cppi41.h
++    \brief  CPPI4 Buffer and Queue Manager and channel configuration
++            CSL Header - Register Layer Abstraction
++
++    Register layer abstraction of CPPI 4.1 Buffer/Queue manager and channel configuration.
++
++    @author     Greg Guyotte
++    @author     Sekhar Nori
++
++    @version    0.1
++ */
++
++
++#ifndef __CSLR_CPPI4_MGR_H__
++#define __CSLR_CPPI4_MGR_H__
++
++#include "csl_defs.h"
++
++
++/**
++ * \defgroup CPPI4_CSL_Interface CPPI4 CSL Interface
++ *
++ *  CPPI4 CSL Layer Interface
++ */
++/*@{*/
++
++/**
++ * \defgroup CPPI4_CSL_SchedCtrl CPPI4 CSL Queue Scheduler control
++ *
++ *  CPPI4 CSL Layer Scheduler control register overlay
++ */
++
++/*@{*/
++
++/**
++ * \brief CPPI4 DMA scheduler control.
++ *
++ * The structure instance variable points to CPPI4 DMA scheduler control
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Control_Reg;
++
++} CSL_DMA_Sched_Control_Regs;
++
++/* DMA memory setup control register bits */
++#if PUMA7_OR_NEWER_SOC_TYPE
++#define DMA_SCHED_CTRL_RX_TX_ARBITRATION_RR                 0x00000001  /* 1 for round-robin, 0 for strict priority */
++#define DMA_SCHED_CTRL_CHANNEL_ARBITRATION_RR               0x00000002  /* 1 for round-robin, 0 for strict priority */
++#define DMA_SCHED_CTRL_NO_RECYCLE_ON_TX                     0x00010000  /* 0 for normal operation, 1 for no recycling of descriptors */
++#define DMA_SCHED_CTRL_PORT_NUMBER_SHIFT                    8
++#define DMA_SCHED_CTRL_PORT_NUMBER_MASK                     0x3F
++#define DMA_SCHED_CTRL_ENABLE                               0x80000000
++#define DMA_SCHED_CTRL_ENABLE_SHIFT                 		(31)
++#else
++#define DMA_SCHED_CTRL_LAST_ENTRY_SHIFT             (0)
++#define DMA_SCHED_CTRL_LAST_ENTRY_MASK              (0xFF << DMA_SCHED_CTRL_LAST_ENTRY_SHIFT)
++#define DMA_SCHED_CTRL_ENABLE_SHIFT                 (31)
++#define DMA_SCHED_CTRL_ENABLE_MASK                  (0x1 << DMA_SCHED_CTRL_ENABLE_SHIFT)
++#endif
++
++
++#if PUMA7_OR_NEWER_SOC_TYPE
++
++#define BYPASS_ENABLE_BIT (1 << 8)
++
++typedef volatile struct
++{
++    CSL_Reg32 Control_Reg;
++
++} CSL_DMA_RAL_Control_Regs;
++
++typedef CSL_DMA_RAL_Control_Regs* CSL_DMA_RAL_Control_RegsOvly;
++
++
++typedef volatile struct
++{
++  CSL_Reg32   Register_A;                                   /* The Queue Monitor Configuration Register A is used to configure Event TH value - Depth Threshold value where event will be asserted */
++  CSL_Reg32   Register_B;                                   /* The Queue Monitor Configuration Register B is used to configure monitored Queue/Pull number */
++} CSL_QSMon_Config_Thread;
++
++typedef volatile struct
++{
++  CSL_Reg32     Stats_Qdepth_Cnt;                                   /* The Monitor Status Register A - returns current value of a depth counter. This register can be overwritten by SW with a new value */
++  CSL_Reg32     Stats_Qdepth_Watermark;                             /* The Monitor Status Register B – returns watermark value of the depth counter */
++} CSL_QSMon_QDepth;
++
++
++typedef volatile struct
++{
++  CSL_Reg32     Ctrl_Revision;                                     /* The Revision Register contains the major and minor revisions for the module */
++  CSL_Reg32     Ctrl_Soft_Reset;                                   /* The Soft Reset Register is written in order to perform a software reset of the monitored queue [NUM_OF_MONITORS-1:0] */
++  CSL_Reg32     Ctrl_Event_Status;                                 /* This status register returns current event state per monitored queue [NUM_OF_MONITORS-1:0] */
++  CSL_Reg32     Ctrl_Event_Sticky_Bits;                            /* This status register returns captured event state per monitored queue [NUM_OF_MONITORS-1:0] (Clear by Read) */
++  CSL_Reg32     Ctrl_Reserved[60];
++  CSL_QSMon_Config_Thread Cmds[32];
++  CSL_QSMon_QDepth Depth[32];
++} CSL_QSMon_Regs;
++
++
++#define QSMON_CONFIG_MONITORED_QUEUE_NUM_SHIFT      (0)
++#define QSMON_CONFIG_MONITORED_QUEUE_NUM_MASK       (0x7FF) /* Number of monitored Queue or Pool */
++#define QSMON_CONFIG_MONITORED_QUEUE_MGR_SHIFT      (11)
++#define QSMON_CONFIG_MONITORED_QUEUE_MGR_MASK       (0x3)   /* Queue Manager of monitored Queue or Pool */
++#define QSMON_CONFIG_MONITORED_QUEUE_DIR_SHIFT      (30)
++#define QSMON_CONFIG_MONITORED_QUEUE_DIR_MASK       (0x1)   /* Depth level changing direction where event will be generated (set 1 to DOWN, clear to UP direction). Watermark is measured accordingly */
++#define QSMON_CONFIG_MONITORED_QUEUE_EN_SHIFT       (31)
++#define QSMON_CONFIG_MONITORED_QUEUE_EN_MASK        (0x1)   /* Entry enable bit (set 1 to enable monitoring on this queue ) */
++
++typedef CSL_QSMon_Regs* CSL_QSMon_RegsOvly;
++#endif
++
++/**
++ * \brief CPPI4 DMA scheduler control register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_DMA_Sched_Control_Regs* CSL_DMA_Sched_Control_RegsOvly;
++
++
++/**
++ * \brief CPPI4 DMA scheduler table.
++ *
++ * The structure instance variable points to CPPI4 DMA scheduler table
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Sched_Table_Word[64];
++} CSL_DMA_Sched_Table_Regs;
++
++/**
++ * \brief CPPI4 DMA scheduler control register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_DMA_Sched_Table_Regs* CSL_DMA_Sched_Table_RegsOvly;
++
++/*@}*/
++
++/**
++ * \defgroup CPPI4_CSL_QueueMgr CPPI4 CSL Queue Manager
++ *
++ *  CPPI4 CSL Layer Queue Manager register overlay
++ */
++
++/*@{*/
++
++/**
++ * \brief Queue Manager region
++ *
++ * The structure instance variable points to CPPI4 Queue manager region
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++  CSL_Reg32   Revision;                     /* Major and Minor verisions of the module */
++  CSL_Reg32   Reserved;                     /* Reserved */
++  CSL_Reg32   Queue_Diversion;              /* Queue Diversion register */
++  CSL_Reg32   Reserved0[5];                 /* Reserved */
++  CSL_Reg32   Free_Desc_Buf_Starvation[4];  /* Free Descriptor/Buffer starvation count */
++  CSL_Reg32   Free_Desc_Starvation[4];      /* Free Descriptor starvation count */
++  CSL_Reg32   Reserved1[16];                /* Reserved */
++  CSL_Reg32   Linking_RAM_Reg0_Base;        /* Linking RAM Region 0 Base Address */
++  CSL_Reg32   Linking_RAM_Reg0_Size;        /* Linking RAM Region 0 Size */
++  CSL_Reg32   Linking_RAM_Reg1_Base;        /* Linking RAM Region 1 Base  */
++  CSL_Reg32   Reserved2;                    /* Reserved */
++  CSL_Reg32   Queue_Pending[((PAL_CPPI41_SR_QMGR_TOTAL_Q_COUNT)/sizeof(CSL_Reg32)) + 1]; /* Pending status for all queues. */
++
++} CSL_Queue_Manager_Region_Regs;
++
++
++/**
++ * \brief CPPI4 Queue Manager region overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_Queue_Manager_Region_Regs* CSL_Queue_Manager_Region_RegsOvly;
++
++/**
++ * \brief Queue Manager descriptor memory setup regs
++ *
++ * The structure instance variable points to CPPI4 descriptor memory setup
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Mem_Reg_Base;
++    CSL_Reg32 Mem_Reg_Control;
++    CSL_Reg32 Reserved[2];
++
++} CSL_Desc_Mem_Setup_Regs;
++
++/* Descriptor memory setup control register bits */
++#define QMGR_MEMREG_CTRL_INDEX_SHIFT                (16)
++#if PUMA7_OR_NEWER_SOC_TYPE
++	#define QMGR_MEMREG_CTRL_INDEX_MASK                 (0xFFFF << QMGR_MEMREG_CTRL_INDEX_SHIFT)	// mask was changed in order to support 64K descriptors
++#else
++	#define QMGR_MEMREG_CTRL_INDEX_MASK                 (0x3FFF << QMGR_MEMREG_CTRL_INDEX_SHIFT)
++#endif
++
++#define QMGR_MEMREG_CTRL_DESCSZ_SHIFT               (8)
++#define QMGR_MEMREG_CTRL_DESCSZ_MASK                (0xF << QMGR_MEMREG_CTRL_DESCSZ_SHIFT)
++#define QMGR_MEMREG_CTRL_REGSZ_SHIFT                (0)
++#define QMGR_MEMREG_CTRL_REGSZ_MASK                 (0x7 << QMGR_MEMREG_CTRL_REGSZ_SHIFT)
++
++/**
++ * \brief Queue Manager descriptor memory setup region
++ *
++ * The structure instance variable points to CPPI4 descriptor memory setup
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Desc_Mem_Setup_Regs Desc_Mem_Setup[PAL_CPPI41_MAX_DESC_REGIONS];
++} CSL_Desc_Mem_Setup_Region;
++
++/**
++ * \brief CPPI4 Queue Manager descriptor memory setup register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_Desc_Mem_Setup_Region* CSL_Desc_Mem_Setup_Region_RegsOvly;
++
++/**
++ * \brief Queue Manager queue management region
++ *
++ * The structure instance variable points to CPPI4 queue management
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Queue_Reg_A;
++    CSL_Reg32 Queue_Reg_B;
++    CSL_Reg32 Queue_Reg_C;
++    CSL_Reg32 Queue_Reg_D;
++
++} CSL_Queue_Mgmt_Regs;
++
++#define QMGR_QUEUE_N_REG_C_PKTSZ_SHIFT              0
++#define QMGR_QUEUE_N_REG_C_PKTSZ_MASK              (0x3FFF << QMGR_QUEUE_N_REG_C_PKTSZ_SHIFT)
++
++#define QMGR_QUEUE_N_REG_D_DESCSZ_SHIFT             0
++#define QMGR_QUEUE_N_REG_D_DESCSZ_MASK              (0x1F << QMGR_QUEUE_N_REG_D_DESCSZ_SHIFT)
++#define QMGR_QUEUE_N_REG_D_DESC_ADDR_SHIFT          5
++#define QMGR_QUEUE_N_REG_D_DESC_ADDR_MASK           (0x7FFFFFF << QMGR_QUEUE_N_REG_D_DESC_ADDR_SHIFT)
++
++/**
++ * \brief Queue Manager Queue management region
++ *
++ * The structure instance variable points to CPPI4 descriptor memory setup
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Queue_Mgmt_Regs Queue_Mgmt[PAL_CPPI41_SR_QMGR_TOTAL_Q_COUNT];
++} CSL_Queue_Mgmt_Region;
++
++/**
++ * \brief CPPI4 Queue Manager queue management register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_Queue_Mgmt_Region* CSL_Queue_Mgmt_Region_RegsOvly;
++
++/**
++ * \brief Queue Manager queue status region
++ *
++ * The structure instance variable points to CPPI4 queue status
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Queue_Status_Reg_A;
++    CSL_Reg32 Queue_Status_Reg_B;
++    CSL_Reg32 Queue_Status_Reg_C;
++    CSL_Reg32 Reserved;
++
++} CSL_Queue_Status_Regs;
++
++/**
++ * \brief Queue Manager Queue status region
++ *
++ * The structure instance variable points to CPPI4 descriptor memory setup
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Queue_Status_Regs Queue_Status[PAL_CPPI41_SR_QMGR_TOTAL_Q_COUNT];
++} CSL_Queue_Status_Region;
++
++/**
++ * \brief CPPI4 Queue Manager queue status register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_Queue_Status_Region* CSL_Queue_Status_Region_RegsOvly;
++
++/*@}*/
++
++/**
++ * \defgroup CPPI4_CSL_BufMgr CPPI4 CSL Buffer Manager
++ *
++ *  CPPI4 CSL Layer Buffer Manager register overlay
++ */
++
++/*@{*/
++
++/**
++ * \brief Buffer Manager pointer and size registers
++ *
++ * The structure instance variable points to CPPI4 buffer management
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Buffer_Pool_Pointer;
++    CSL_Reg32 Buffer_Pool_Size;
++
++} CSL_Buffer_Mgr_Pointer_Size_Regs;
++
++/**
++ * \brief CPPI4 Buffer Manager pointer and size register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_Buffer_Mgr_Pointer_Size_Regs* CSL_Buffer_Mgr_Pointer_Size_RegsOvly;
++
++/**
++ * \brief Buffer Manager base and config registers
++ *
++ * The structure instance variable points to CPPI4 buffer management
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Buffer_Pool_Base;
++    CSL_Reg32 Buffer_Pool_Config;
++
++} CSL_Buffer_Mgr_Base_Config_Regs;
++
++/* Buffer pool configuraton register bits */
++#define BUFMGR_POOL_ENABLE_SHIFT                    (31)
++#define BUFMGR_POOL_ENABLE_MASK                     (1 << BUFMGR_POOL_ENABLE_SHIFT)
++#define BUFMGR_POOL_REFCNT_ENABLE_SHIFT             (24)
++#define BUFMGR_POOL_REFCNT_ENABLE_MASK              (1 << BUFMGR_POOL_REFCNT_ENABLE_SHIFT)
++#define BUFMGR_POOL_BUFFER_SIZE_SHIFT               (16)
++#define BUFMGR_POOL_BUFFER_SIZE_MASK                (0xF << BUFMGR_POOL_BUFFER_SIZE_SHIFT)
++#define BUFMGR_POOL_POOL_SIZE_SHIFT                 (0)
++#define BUFMGR_POOL_POOL_SIZE_MASK                  (0xF << BUFMGR_POOL_POOL_SIZE_SHIFT)
++
++/**
++ * \brief CPPI4 Buffer Manager base and config register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_Buffer_Mgr_Base_Config_Regs* CSL_Buffer_Mgr_Base_Config_RegsOvly;
++
++/**
++ * \brief Buffer Manager Peripheral Device Register Layout structure
++ *
++ * The structure instance variable points to CPPI4 register space in
++ * SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++#define CSL_CPPI41_BUFMGR_NUM_BUF_POOLS     (32)
++
++typedef volatile struct
++{
++  CSL_Reg32   Revision;                     /* Major and Minor verisions of the module */
++  CSL_Reg32   Soft_Reset;                   /* Soft reset of the module */
++  CSL_Reg32   Reserved0[8];                 /* Reserved */
++  CSL_Reg32   Ref_Cnt_Inc_Val;              /* Buffer reference count increment value register */
++  CSL_Reg32   Ref_Cnt_Inc_Ptr;              /* Buffer reference count increment pointer register */
++  CSL_Reg32   Reserved1[52];                /* Reserved */
++
++  /* =========== Offset 0x100 ============== */
++  CSL_Buffer_Mgr_Pointer_Size_Regs  Pointer_Size  [CSL_CPPI41_BUFMGR_NUM_BUF_POOLS];  /* Buffer pool pointer and size register */
++  CSL_Reg32   Reserved2[256];               /* Reserved */
++
++  /* =========== Offset 0x600 ============== */
++  CSL_Buffer_Mgr_Base_Config_Regs   Base_Config   [CSL_CPPI41_BUFMGR_NUM_BUF_POOLS];  /* Buffer pool base and config register */
++
++} CSL_BufMgr_Regs;
++
++/**
++ * \brief CPPI4 Buffer manager register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_BufMgr_Regs *CSL_BufMgr_RegsOvly;
++
++/*@}*/
++
++/**
++ * \defgroup CPPI4_DMA_Global_Ctrl CPPI4 CSL DMA Global Control
++ *
++ *  CPPI4 CSL Layer DMA Global control register overlay
++ */
++
++/*@{*/
++
++/**
++ * \brief DMA Global Control Register Layout structure
++ *
++ * The structure instance variable points to CPPI4 register space in
++ * SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++  CSL_Reg32   Revision;                     /* Major and Minor verisions of the module */
++  CSL_Reg32   Teardown_FD_Queue_Control;    /* Defines Queue manager/Queue number for Teardown free descriptor queue */
++  CSL_Reg32   Emu_Ctrl;                     /* Emulation control register */
++} CSL_DMA_Global_Ctrl_Regs;
++
++/* Global control register bits */
++#define DMA_GLOBCTRL_TDFQ_QNUM_SHIFT            0
++#define DMA_GLOBCTRL_TDFQ_QNUM_MASK             (0xFFF << DMA_GLOBCTRL_TDFQ_QNUM_SHIFT)
++#define DMA_GLOBCTRL_TDFQ_QMGR_SHIFT            12
++#define DMA_GLOBCTRL_TDFQ_QMGR_MASK             (0x3 << DMA_GLOBCTRL_TDFQ_QMGR_SHIFT)
++
++
++/**
++ * \brief CPPI4 DMA Global control register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_DMA_Global_Ctrl_Regs *CSL_DMA_Global_Ctrl_RegsOvly;
++
++/*@}*/
++
++/**
++ * \defgroup CPPI4_DMA_Channel_Ctrl_Status CPPI4 CSL DMA Channel Control and Status
++ *
++ *  CPPI4 CSL Layer DMA Channel Control and Status register overlay
++ */
++
++/*@{*/
++
++/**
++ * \brief CPPI channel configuration registers
++ *
++ * The structure instance variable points to CPPI4 buffer management
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Tx_Global_Config;
++    CSL_Reg32 Reserved;
++    CSL_Reg32 Rx_Global_Config;
++    CSL_Reg32 Host_Pkt_Config_Reg_A;
++    CSL_Reg32 Host_Pkt_Config_Reg_B;
++    CSL_Reg32 Embedded_Pkt_Config_Reg_A;
++    CSL_Reg32 Embedded_Pkt_Config_Reg_B;
++    CSL_Reg32 Monolithic_Pkt_Config_Reg_A;
++
++} CSL_DMA_Channel_Config_Regs;
++
++/* channel configuration register bits */
++#define DMA_CHAN_CTRL_TX_GLOBAL_CHAN_ENABLE_SHIFT           31
++#define DMA_CHAN_CTRL_TX_GLOBAL_CHAN_ENABLE_MASK            (1 << DMA_CHAN_CTRL_TX_GLOBAL_CHAN_ENABLE_SHIFT)
++#define DMA_CHAN_CTRL_TX_GLOBAL_CHAN_TD_SHIFT               30
++#define DMA_CHAN_CTRL_TX_GLOBAL_CHAN_TD_MASK                (1 << DMA_CHAN_CTRL_TX_GLOBAL_CHAN_TD_SHIFT)
++#define DMA_CHAN_CTRL_TX_GLOBAL_DEF_QMGR_SHIFT              12
++#define DMA_CHAN_CTRL_TX_GLOBAL_DEF_QMGR_MASK               (0x3 << DMA_CHAN_CTRL_TX_GLOBAL_DEF_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_TX_GLOBAL_DEF_QNUM_SHIFT              0
++#define DMA_CHAN_CTRL_TX_GLOBAL_DEF_QNUM_MASK               (0xFFF << DMA_CHAN_CTRL_TX_GLOBAL_DEF_QNUM_SHIFT)
++
++#define DMA_CHAN_CTRL_RX_GLOBAL_CHAN_ENABLE_SHIFT           31
++#define DMA_CHAN_CTRL_RX_GLOBAL_CHAN_ENABLE_MASK            (1 << DMA_CHAN_CTRL_RX_GLOBAL_CHAN_ENABLE_SHIFT)
++#define DMA_CHAN_CTRL_RX_GLOBAL_CHAN_TD_SHIFT               30
++#define DMA_CHAN_CTRL_RX_GLOBAL_CHAN_TD_MASK                (1 << DMA_CHAN_CTRL_RX_GLOBAL_CHAN_TD_SHIFT)
++#define DMA_CHAN_CTRL_RX_GLOBAL_ERROR_HANDLING_SHIFT        24
++#define DMA_CHAN_CTRL_RX_GLOBAL_ERROR_HANDLING_MASK         (1 << DMA_CHAN_CTRL_RX_GLOBAL_ERROR_HANDLING_SHIFT)
++#define DMA_CHAN_CTRL_RX_GLOBAL_SOP_OFFSET_SHIFT            16
++#define DMA_CHAN_CTRL_RX_GLOBAL_SOP_OFFSET_MASK             (0xFF << DMA_CHAN_CTRL_RX_GLOBAL_SOP_OFFSET_SHIFT)
++#define DMA_CHAN_CTRL_RX_GLOBAL_DEF_DESC_SHIFT              14
++#define DMA_CHAN_CTRL_RX_GLOBAL_DEF_DESC_MASK               (0x3 << DMA_CHAN_CTRL_RX_GLOBAL_DEF_DESC_SHIFT)
++#define DMA_CHAN_CTRL_RX_GLOBAL_RXCOMP_QMGR_SHIFT           12
++#define DMA_CHAN_CTRL_RX_GLOBAL_RXCOMP_QMGR_MASK            (0x3 << DMA_CHAN_CTRL_RX_GLOBAL_RXCOMP_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_GLOBAL_RXCOMP_QNUM_SHIFT           0
++#define DMA_CHAN_CTRL_RX_GLOBAL_RXCOMP_QNUM_MASK            (0xFFF << DMA_CHAN_CTRL_RX_GLOBAL_RXCOMP_QNUM_SHIFT)
++
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB0_QNUM_SHIFT            0
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB0_QNUM_MASK             (0xFFF << DMA_CHAN_CTRL_RX_HOSTPKT_FDB0_QNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB0_QMGR_SHIFT            12
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB0_QMGR_MASK             (0x3 << DMA_CHAN_CTRL_RX_HOSTPKT_FDB0_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB1_QNUM_SHIFT            16
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB1_QNUM_MASK             (0xFFF << DMA_CHAN_CTRL_RX_HOSTPKT_FDB1_QNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB1_QMGR_SHIFT            28
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB1_QMGR_MASK             (0x3 << DMA_CHAN_CTRL_RX_HOSTPKT_FDB1_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB2_QNUM_SHIFT            0
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB2_QNUM_MASK             (0xFFF << DMA_CHAN_CTRL_RX_HOSTPKT_FDB2_QNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB2_QMGR_SHIFT            12
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB2_QMGR_MASK             (0x3 << DMA_CHAN_CTRL_RX_HOSTPKT_FDB2_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB3_QNUM_SHIFT            16
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB3_QNUM_MASK             (0xFFF << DMA_CHAN_CTRL_RX_HOSTPKT_FDB3_QNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB3_QMGR_SHIFT            28
++#define DMA_CHAN_CTRL_RX_HOSTPKT_FDB3_QMGR_MASK             (0x3 << DMA_CHAN_CTRL_RX_HOSTPKT_FDB3_QMGR_SHIFT)
++
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP0_PNUM_SHIFT           0
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP0_PNUM_MASK            (0x1F << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP0_PNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP0_BMGR_SHIFT           6
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP0_BMGR_MASK            (0x3 << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP0_BMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP1_PNUM_SHIFT           8
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP1_PNUM_MASK            (0x1F << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP1_PNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP1_BMGR_SHIFT           14
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP1_BMGR_MASK            (0x3 << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP1_BMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP2_PNUM_SHIFT           16
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP2_PNUM_MASK            (0x1F << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP2_PNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP2_BMGR_SHIFT           22
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP2_BMGR_MASK            (0x3 << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP2_BMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP3_PNUM_SHIFT           24
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP3_PNUM_MASK            (0x1F << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP3_PNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP3_BMGR_SHIFT           30
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FBP3_BMGR_MASK            (0x3 << DMA_CHAN_CTRL_RX_EMBEDPKT_FBP3_BMGR_SHIFT)
++
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FDQ_QNUM_SHIFT            0
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FDQ_QNUM_MASK             (0xFFF << DMA_CHAN_CTRL_RX_EMBEDPKT_FDQ_QNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FDQ_QMGR_SHIFT            12
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_FDQ_QMGR_MASK             (0x3 << DMA_CHAN_CTRL_RX_EMBEDPKT_FDQ_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_SOP_SLOT_SHIFT            16
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_SOP_SLOT_MASK             (0x7 << DMA_CHAN_CTRL_RX_EMBEDPKT_SOP_SLOT_SHIFT)
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_NUM_SLOT_SHIFT            24
++#define DMA_CHAN_CTRL_RX_EMBEDPKT_NUM_SLOT_MASK             (0x7 << DMA_CHAN_CTRL_RX_EMBEDPKT_NUM_SLOT_SHIFT)
++
++#define DMA_CHAN_CTRL_RX_MONOLITHICPKT_FDQ_QNUM_SHIFT       0
++#define DMA_CHAN_CTRL_RX_MONOLITHICPKT_FDQ_QNUM_MASK        (0xFFF << DMA_CHAN_CTRL_RX_MONOLITHICPKT_FDQ_QNUM_SHIFT)
++#define DMA_CHAN_CTRL_RX_MONOLITHICPKT_FDQ_QMGR_SHIFT       12
++#define DMA_CHAN_CTRL_RX_MONOLITHICPKT_FDQ_QMGR_MASK        (0x3 << DMA_CHAN_CTRL_RX_MONOLITHICPKT_FDQ_QMGR_SHIFT)
++#define DMA_CHAN_CTRL_RX_MONOLITHICPKT_SOP_OFFSET_SHIFT     16
++#define DMA_CHAN_CTRL_RX_MONOLITHICPKT_SOP_OFFSET_MASK      (0xFF << DMA_CHAN_CTRL_RX_MONOLITHICPKT_SOP_OFFSET_SHIFT)
++
++
++/**
++ * \brief DMA Channel control and status Register Layout structure
++ *
++ * The structure instance variable points to CPPI4 register space in
++ * SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++#if PUMA7_OR_NEWER_SOC_TYPE
++	CSL_DMA_Channel_Config_Regs  Channel_Config[PAL_CPPI41_MAX_TOTAL_CHAN];
++#else
++	CSL_DMA_Channel_Config_Regs  Channel_Config[PAL_CPPI41_NUM_TOTAL_CHAN];
++#endif
++} CSL_DMA_Channel_Ctrl_Status_Regs;
++
++/**
++ * \brief CPPI4 Global control register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef CSL_DMA_Channel_Ctrl_Status_Regs *CSL_DMA_Channel_Ctrl_Status_RegsOvly;
++
++/*@}*/
++
++/**
++ * \defgroup APDSP_Command_Status APDSP command and status
++ *
++ *  APDSP CSL Layer Command and Status register overlay
++ */
++
++/*@{*/
++
++
++/**
++ * \brief APDSP Status registers
++ *
++ * The structure instance variable points to APDSP status
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 List_Buffer_Address;
++    CSL_Reg32 Status_A;
++    CSL_Reg32 Status_B;
++    CSL_Reg32 Status_C;
++} APDSP_Status_Regs;
++
++/**
++ * \brief APDSP Command/Status registers
++ *
++ * The structure instance variable points to APDSP Command/status
++ * register space in  SOC memory map directly.
++ * This is a template only, no memory is ever allocated for this!
++ *
++ * Register naming comes directly from the spec names, with redundant words
++ * dropped and abbreviations made where appropriate.
++ */
++typedef volatile struct
++{
++    CSL_Reg32 Command;
++    CSL_Reg32 List_Buffer_Address;
++    CSL_Reg32 Config_A;
++    CSL_Reg32 Config_B;
++    APDSP_Status_Regs Status[32];
++} APDSP_Command_Status_Regs;
++
++/**
++ * \brief APDSP Command/status register overlay pointer
++ *
++ * Can be used in PAL layer directly for performance considerations.
++ */
++typedef APDSP_Command_Status_Regs *APDSP_Command_Status_RegsOvly;
++
++/*@}*/
++/*@}*/
++#endif /* __CSLR_CPPI4_MGR_H__ */
++
+diff --git a/include/linux/avalanche/generic/pal_cppi41.h b/include/linux/avalanche/generic/pal_cppi41.h
+--- a/include/linux/avalanche/generic/pal_cppi41.h
++++ b/include/linux/avalanche/generic/pal_cppi41.h
+@@ -103,7 +103,6 @@
+     CPPI41_DOMAIN_NUM
+ } CPPI41_DOMAIN;
+ 
+-typedef volatile unsigned int CSL_Reg32;                    /* 32bit register */
+ //#define PAL_CPPI_PP_QMGR_GLOBAL_DEFAULT_DESC_SIZE           (64)
+ 
+ /* convert cppi descriptor size tp descriptor hint */
+@@ -328,80 +327,18 @@
+ } Cppi4BufPool;
+ 
+ /**
+- * \brief Queue Manager queue management region
+- *
+- * The structure instance variable points to CPPI4 queue management
+- * register space in  SOC memory map directly.
+- * This is a template only, no memory is ever allocated for this!
+- *
+- */
+-typedef volatile struct
+-{
+-    CSL_Reg32 Queue_Reg_A;
+-    CSL_Reg32 Queue_Reg_B;
+-    CSL_Reg32 Queue_Reg_C;
+-    CSL_Reg32 Queue_Reg_D;
+-} CSL_Queue_Mgmt_Regs;
+-
+-/**
+- * \brief Queue Manager queue status region
+- *
+- * The structure instance variable points to CPPI4 queue status
+- * register space in  SOC memory map directly.
+- * This is a template only, no memory is ever allocated for this!
+- *
+- */
+-typedef volatile struct
+-{
+-    CSL_Reg32 Queue_Status_Reg_A;
+-    CSL_Reg32 Queue_Status_Reg_B;
+-    CSL_Reg32 Queue_Status_Reg_C;
+-    CSL_Reg32 Reserved;
+-
+-} CSL_Queue_Status_Regs;
+-
+-
+-/**
+- * \brief Queue Manager region
+- *
+- * The structure instance variable points to CPPI4 Queue manager region
+- * register space in  SOC memory map directly.
+- * This is a template only, no memory is ever allocated for this!
+- *
+- * Register naming comes directly from the spec names, with redundant words
+- * dropped and abbreviations made where appropriate.
++ * \brief The BufPool Info
++ * - A broader information about a specific buffer pool
+  */
+-typedef volatile struct
++typedef struct
+ {
+-    CSL_Reg32   Revision;                     /* Major and Minor verisions of the module */
+-    CSL_Reg32   Reserved;                     /* Reserved */
+-    CSL_Reg32   Queue_Diversion;              /* Queue Diversion register */
+-    CSL_Reg32   Reserved0[5];                 /* Reserved */
+-    CSL_Reg32   Free_Desc_Buf_Starvation[4];  /* Free Descriptor/Buffer starvation count */
+-    CSL_Reg32   Free_Desc_Starvation[4];      /* Free Descriptor starvation count */
+-    CSL_Reg32   Reserved1[16];                /* Reserved */
+-    CSL_Reg32   Linking_RAM_Reg0_Base;        /* Linking RAM Region 0 Base Address */
+-    CSL_Reg32   Linking_RAM_Reg0_Size;        /* Linking RAM Region 0 Size */
+-    CSL_Reg32   Linking_RAM_Reg1_Base;        /* Linking RAM Region 1 Base  */
+-    CSL_Reg32   Reserved2;                    /* Reserved */
+-    CSL_Reg32   Queue_Pending[((/*PAL_CPPI_PP_QMGR_G0_TOTAL_Q_COUNT*/ 1 )/sizeof(CSL_Reg32)) + 1]; /* Pending status for all queues. */
+-
+-} CSL_Queue_Manager_Region_Regs;
+-
+-/**
+- * \brief CPPI4 Queue Manager region overlay pointer
+- *
+- * Can be used in PAL layer directly for performance considerations.
+- */
+-typedef CSL_Queue_Manager_Region_Regs* CSL_Queue_Manager_Region_RegsOvly;
+-
+-#define QMGR_QUEUE_N_REG_C_PKTSZ_SHIFT                  (0)
+-#define QMGR_QUEUE_N_REG_C_PKTSZ_MASK                   (0x3FFF << QMGR_QUEUE_N_REG_C_PKTSZ_SHIFT)
+-
+-#define QMGR_QUEUE_N_REG_D_DESCSZ_SHIFT                 (0)
+-#define QMGR_QUEUE_N_REG_D_DESCSZ_MASK                  (0x1F << QMGR_QUEUE_N_REG_D_DESCSZ_SHIFT)
+-#define QMGR_QUEUE_N_REG_D_DESC_ADDR_SHIFT              (5)
+-#define QMGR_QUEUE_N_REG_D_DESC_ADDR_MASK               (0x7FFFFFF << QMGR_QUEUE_N_REG_D_DESC_ADDR_SHIFT)
++    Uint32 bPoolPhyAddr;
++    Uint32 bPoolSize;
++    Uint32 bufSize;
++    Uint32 numBuf;
++    Uint32 bPoolTopPhyAddr;
++    Uint32 bPoolOffset;
++} Cppi4BufPoolInfo;
+ 
+ /**
+  * \brief Accumulator list mode configuration
+@@ -599,6 +543,34 @@
+  */
+ int PAL_cppi4Exit(PAL_Handle hnd, void *param);
+ 
++/**
++ *  \brief PAL CPPI4.1 Decrement the reference count of buffer
++ *
++ *  Decrement the reference count of the buffer.
++ *
++ *  @param  hnd        [IN]      PAL handle returned from a previous PAL_cppi4Init() call.
++ *
++ *  @param  pool       [IN]      The buffer pool to which buffer belonged.
++ *
++ *  @param  bufPtr     [IN]      Buffer pointer whose reference count needs to be decremented
++ *
++ *  @return PAL_SOK
++ */
++int PAL_cppi4BufDecRefCnt (PAL_Handle hnd, Cppi4BufPool pool, Ptr bufPtr);
++
++/**
++ *  \brief PAL CPPI4.1 Pop buffer and Increment reference count
++ *
++ *  Pop buffer from buffer pool and Increment reference count.
++ *
++ *  @param  hnd        [IN]      PAL handle returned from a previous PAL_cppi4Init() call.
++ *
++ *  @param  pool       [IN]      The buffer pool to which buffer belonged.
++ *
++ *  @return Buffer point, NULL is pool is empty
++ */
++Ptr PAL_cppi4BufPopBuf (PAL_Handle hnd, Cppi4BufPool pool);
++
+ 
+ /**
+  *  \brief PAL CPPI4.1 Queue Open
+@@ -678,6 +650,18 @@
+ 
+ #if (defined(CONFIG_PP_SANITY_TESTS) && defined(CONFIG_MRPC_CPPI_CLIENT))
+ /**
++ *  \brief Get buffer pool info for WiFi TX Zero Copy feature
++ *
++ *  @param  hnd           [IN]      Handle to the PAL Layer.
++ *  @param  pool          [IN]      Buffer pool num.
++ *  @param  bp_info       [OUT]     Buffer Pool Info structure
++ *                        Ptr.
++ *
++ *  @return PAL_SOK on success
++ */
++PAL_Result PAL_cppi4GetBufferPoolInfo(PAL_Handle hnd, Cppi4BufPool pool, Cppi4BufPoolInfo* bp_info);
++
++/**
+  *  \brief PAL CPPI4.1 Pop buffer and Increment reference count
+  *
+  *  Pop buffer from buffer pool and Increment reference count.
+diff --git a/include/linux/avalanche/puma7/puma7_pp.h b/include/linux/avalanche/puma7/puma7_pp.h
+--- a/include/linux/avalanche/puma7/puma7_pp.h
++++ b/include/linux/avalanche/puma7/puma7_pp.h
+@@ -209,6 +209,7 @@ typedef enum {
+ #define WIFI_DEVICE_ID_VALID(dev_id)                    (WIFI_DEV_ID_0 <= (dev_id) && (dev_id) < WIFI_DEVS_CNT)
+ #define FOR_EACH_WIFI_DEVICE_ID(i)                      for (i = WIFI_DEV_ID_0; i < WIFI_DEVS_CNT; i++)
+ #define WIFI_DEVICE_TO_PID(dev_id)                      ((dev_id) + PP_WiFi_PORT0_PID_NUM)
++#define PID_TO_WIFI_DEVICE(pid)                         ((pid) - PP_WiFi_PORT0_PID_NUM)
+ #define IS_WIFI_PID(pid)                                (((pid) >= PP_WiFi_PORT0_PID_NUM) && ((pid) <= (PP_WiFi_PORT0_PID_NUM + (WIFI_DEVS_CNT - 1))))
+ 
+ /**

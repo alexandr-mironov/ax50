@@ -1,0 +1,2312 @@
+# HG changeset patch
+# Parent 35b3414f1d6234eeb1fc03a7a9550bfea556de76
+
+diff --git a/arch/x86/NetIP_SubSystem/Makefile b/arch/x86/NetIP_SubSystem/Makefile
+--- a/arch/x86/NetIP_SubSystem/Makefile
++++ b/arch/x86/NetIP_SubSystem/Makefile
+@@ -23,4 +23,5 @@ netip_subsystem-objs += netip_subsystem_
+ netip_subsystem-objs += avalanche_intc.o
+ netip_subsystem-objs += netip_mem_util.o
+ netip_subsystem-objs += netip_subsystem_config.o
++netip_subsystem-objs += puma7_spi.o
+ obj-$(CONFIG_NET_SUBSYSTEM_SYSFS) += netip_subsystem_sysfs.o
+diff --git a/arch/x86/NetIP_SubSystem/puma7_spi.c b/arch/x86/NetIP_SubSystem/puma7_spi.c
+new file mode 100644
+--- /dev/null
++++ b/arch/x86/NetIP_SubSystem/puma7_spi.c
+@@ -0,0 +1,243 @@
++/*
++ *
++ * puma7_spi.c
++ * Description:
++ * SPI Platform device data for Puma7 SoC.
++ *
++ *
++ *
++ */
++
++#include <linux/device.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/types.h>
++#include <linux/init.h>
++#include <linux/resource.h>
++#include <linux/device.h>
++#include <linux/platform_device.h>
++#include <linux/netip_mem_util.h>
++#include <linux/avalanche/puma7/puma7.h>
++#include <linux/spi/spi.h>
++#include <linux/avalanche/puma7/avalanche_spi.h>
++#include <linux/avalanche/puma7/spi_ticodec.h>
++#include <linux/avalanche/puma7/puma7_spi.h>
++#include <linux/avalanche/puma7/puma7_cru_ctrl.h>
++
++#define  BOOTCFG_MOD_BASE            (IO_ADDRESS(0xF00C0000))
++#define  PUMA_VCE_CODEC_START        (IO_ADDRESS(0xF01200C8))
++#define  UNLOCK_REGISTER0_BASE       (BOOTCFG_MOD_BASE + 0x07C)
++#define  UNLOCK_REGISTER1_BASE       (BOOTCFG_MOD_BASE + 0x080)
++#define  PUMA_BOOTCFG_KICK_0_VAL     (cpu_to_be32(0x20406080))
++#define  PUMA_BOOTCFG_KICK_1_VAL     (cpu_to_be32(0x10305070))
++#define  BOOTCFG_GPCR                (0x00)
++
++/***********************************************************************
++ *       Puma7 SPI Slave devices section
++ ***********************************************************************/
++
++#if 0
++struct avalanche_sfi_dev_info_t flash0_info = {
++	.mode = CONFIG_SFL_SFI,
++	.sfi_base = MM_SPI_VIRT, /* form puma7_hardware.h */
++    .initialized = 0,
++};
++
++struct avalanche_sfi_dev_info_t flash1_info = {
++	.mode = CONFIG_SFL_SFI,
++	.sfi_base = MM_SPI_VIRT, /* form puma7_hardware.h */
++    .initialized = 0,
++};
++
++/***********************************************************************
++ *       Puma7 SPI Controller section
++ ***********************************************************************/
++
++/* Platform specifc information, can be changed from platform to platform */
++struct avalanche_spi_platform_data puma7_spi_platform_data = {
++    .bus_num                = AVALANCHE_SPI_BUS_NUM,
++    .max_chipselect         = AVALANCHE_SPI_MAX_CHIPSELECT,
++    .addr_mode              = AVALANCHE_SPI_3_BYTE_ADDR_MODE,
++	};
++
++
++
++static struct resource puma7_spi_resources[] = {
++        [0] = {
++                .start          = AVALANCHE_FLASH_SPI_BASE,
++                .end            = AVALANCHE_FLASH_SPI_BASE + AVALANCHE_SPI_SIZE,
++                .flags          = IORESOURCE_MEM,
++        },
++};
++
++
++/* Flash SPI Device */
++static struct platform_device puma7_flash_spi_device = {
++        .name           = "puma7_spi_device",    /* this name used to for driver matching */
++        .id             = 0,                     /* the device instance number, or else "-1" to indicate there's only one. */
++        .dev = {
++               .platform_data = &puma7_spi_platform_data,
++                /* Note: platform_device.dev.bus_id = 'puma7_spi.0'   (name.id) */
++        },
++        .num_resources  = ARRAY_SIZE(puma7_spi_resources),
++        .resource       = puma7_spi_resources,
++};
++
++#endif
++
++#ifdef CONFIG_SPI_TI_CODEC
++
++static void PAL_sysBootCfgCtrl_UnlockKickReg(void)
++{
++    volatile u32 *UnlockReg = (u32 *)UNLOCK_REGISTER0_BASE;
++    *UnlockReg = PUMA_BOOTCFG_KICK_0_VAL;
++    UnlockReg = (u32 *)UNLOCK_REGISTER1_BASE;
++    *UnlockReg = PUMA_BOOTCFG_KICK_1_VAL;
++}
++
++static void PAL_sysBootCfgCtrl_lockKickReg(void)
++{
++    volatile u32 *UnlockReg = (u32 *)UNLOCK_REGISTER0_BASE;
++    *UnlockReg = 0; /* can be any value other than PUMA_BOOTCFG_KICK_0_VAL*/
++    UnlockReg = (u32 *)UNLOCK_REGISTER1_BASE;
++    *UnlockReg = 0;  /* can be any value other than PUMA_BOOTCFG_KICK_1_VAL*/
++}
++
++static void PAL_sysBootCfgCtrl_ReadModifyWriteReg(u32 RegOffset, u32 BitMask, u32 BitValue)
++{
++    volatile u32 *RegAddr = (u32 *)(BOOTCFG_MOD_BASE + RegOffset);
++    u32 RegVal;
++
++#if 0
++    if (InitOK == false)
++    {
++        printk (KERN_WARNING "BootConfig init not called \n");
++        return;
++    }
++#endif
++
++    //down(&BootCfg_sem); /* FIXME: keep the protection? */
++    PAL_sysBootCfgCtrl_UnlockKickReg();
++
++    RegVal  = be32_to_cpu(*RegAddr);
++    RegVal &= ~(BitMask);
++    RegVal |= BitValue;
++    *RegAddr = cpu_to_be32(RegVal);
++
++    PAL_sysBootCfgCtrl_lockKickReg();
++    //up(&BootCfg_sem);
++}
++
++/******************************************************************************
++ *            CODEC SPI Controller and slave devices section
++ ******************************************************************************/
++int codec_spi_activate_cs( u8 cs, u8 pol, struct ti_ctlr_cs_sel_t *ctlr_cs_sel)
++{
++    int ret_val = 0;
++
++    /* this is a system level register used to drive chip select to TIDs */
++    if (cs)
++    {
++        PAL_sysBootCfgCtrl_ReadModifyWriteReg(BOOTCFG_GPCR ,0x40,0x40);
++    }
++    else
++    {
++        PAL_sysBootCfgCtrl_ReadModifyWriteReg(BOOTCFG_GPCR ,0x40,0x00);
++    }
++
++    ctlr_cs_sel->cs = cs;
++    ctlr_cs_sel->pol = pol;
++    return ret_val;
++}
++
++struct ti_codec_spi_platform_data puma7_codec_spi_platform_data = {
++        .initial_spmode         = AVALANCHE_SPI_INIT_SPMODE,
++        .bus_num                = AVALANCHE_CODEC_SPI_BUS_NUM,
++        .max_chipselect         = AVALANCHE_CODEC_SPI_MAX_CHIPSELECT,
++        .activate_cs            = codec_spi_activate_cs,
++        .deactivate_cs          = NULL,
++        /* four our controller cs is taken care by framelength */
++        .sysclk                 = AVALANCHE_DEFAULT_SYS_CLK,
++};
++
++#if 0
++static struct resource puma7_codec_spi_resources[] = {
++        [0] = {
++                .start          = AVALANCHE_CODEC_SPI_BASE,
++                .end            = AVALANCHE_SPI_1_BASE + AVALANCHE_SPI_SIZE,
++                .flags          = IORESOURCE_MEM,
++        },
++        [1] = {
++                .start          = AVALANCHE_CODEC_SPI_INT,
++                .end            = AVALANCHE_CODEC_SPI_INT,
++                .flags          = IORESOURCE_IRQ,
++        },
++};
++#else
++static struct resource puma7_codec_spi_resources[] = {
++        [0] = {
++                /* FIXME: move resources to device tree */
++                .start          = 0,
++                .end            = 0,
++                .flags          = IORESOURCE_MEM,
++        },
++        [1] = {
++                .start          = AVALANCHE_CODEC_SPI_INT,
++                .end            = AVALANCHE_CODEC_SPI_INT,
++                .flags          = IORESOURCE_IRQ,
++        },
++};
++#endif
++
++static struct platform_device puma7_codec_spi_device = {
++        .name           = "ti_codec_spi",
++        .id             = 0,
++        .dev = {
++               .platform_data = &puma7_codec_spi_platform_data,
++        },
++        .num_resources  = ARRAY_SIZE(puma7_codec_spi_resources),
++        .resource       = puma7_codec_spi_resources,
++};
++
++
++/*********************************************************************************
++ *           Generic Section
++ *********************************************************************************/
++
++/* This function registers the spi mastere device with the platform and the spi
++ *slave devices with the spi bus
++ */
++
++static struct platform_device *spi_controller_devices[] __initdata = {
++    &puma7_codec_spi_device,
++};
++
++
++
++static int puma7_spi_init(void)
++{
++    /* FIXME: remove next call in case if PP init is called before,
++       memmap init is done there. */
++
++    netip_memmap_init();
++
++    spi_controller_devices[0]->resource[0].start = PUMA_VCE_CODEC_START;
++    spi_controller_devices[0]->resource[0].end = PUMA_VCE_CODEC_START + AVALANCHE_SPI_SIZE;
++
++    /* Register the master controllers with platform */
++    platform_add_devices( spi_controller_devices, ARRAY_SIZE(spi_controller_devices));
++
++
++    return 0;
++}
++
++//subsys_initcall(puma7_spi_init);
++late_initcall(puma7_spi_init);/* <-- SPI init should be done after memory map */
++
++#endif /* CONFIG_SPI_TI_CODEC */
++
++int puma7_spi_register_board_info(struct spi_board_info const *info, unsigned n)
++{
++   return spi_register_board_info(info, n);
++}
++EXPORT_SYMBOL(puma7_spi_register_board_info);
+diff --git a/drivers/spi/Kconfig b/drivers/spi/Kconfig
+--- a/drivers/spi/Kconfig
++++ b/drivers/spi/Kconfig
+@@ -507,6 +507,46 @@ config SPI_TI_SSP
+ 	help
+ 	  This selects an SPI master implementation using a TI sequencer
+ 	  serial port.
++config SPI_TI_CODEC
++	bool "SPI interface in TI Codec implementation"
++	depends on SPI_MASTER
++	help
++	  SPI master controller in TI Codec implementation.
++
++if SPI_TI_CODEC
++config SPI_TI_CODEC_3_WIRE_MODE
++	bool "3 wIRE mode"
++    default n
++	help
++	  Enable 3 wire mode in SPI CODEC Driver.
++endif # SPI_TI_CODEC
++
++choice
++    prompt "SPI Operating Mode"
++    depends on SPI
++    default SPI_POLLING_MODE
++    help
++      Specifies the operating mode. Available mode - Pure Interrupt,
++      Polling and tasklet
++
++config SPI_INTERRUPT_MODE
++    boolean "SPI Pure Interrupt Mode"
++    help
++      Works in pure interrupt mode. Interrupts will be generated for
++      every word.
++
++config SPI_TASKLET_MODE
++    boolean "SPI Tasklet Mode"
++    help
++      Works in tasklet mode. Only one interrupt will be generated for
++      each transfer and the remaining transfer happens in a tasklet
++
++config SPI_POLLING_MODE
++    boolean "SPI Polling Mode"
++    help
++      Works in polling mode. (Not recommended)
++
++endchoice
+ 
+ config SPI_TOPCLIFF_PCH
+ 	tristate "Intel EG20T PCH/LAPIS Semicon IOH(ML7213/ML7223/ML7831) SPI"
+diff --git a/drivers/spi/Makefile b/drivers/spi/Makefile
+--- a/drivers/spi/Makefile
++++ b/drivers/spi/Makefile
+@@ -88,3 +88,5 @@ obj-$(CONFIG_SPI_TOPCLIFF_PCH)		+= spi-t
+ obj-$(CONFIG_SPI_TXX9)			+= spi-txx9.o
+ obj-$(CONFIG_SPI_XCOMM)		+= spi-xcomm.o
+ obj-$(CONFIG_SPI_XILINX)		+= spi-xilinx.o
++obj-$(CONFIG_SPI_MASTER)		+= avalanche_spi_bitbang.o
++obj-$(CONFIG_SPI_TI_CODEC)		+= spi_ticodec.o
+diff --git a/drivers/spi/avalanche_spi_bitbang.c b/drivers/spi/avalanche_spi_bitbang.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/spi/avalanche_spi_bitbang.c
+@@ -0,0 +1,638 @@
++/*
++ *
++ * avalanche_spi_bitbang.c
++ * Description:
++ * referred drivers/spi/spi_bitbang.c
++ * avalanche_spi_bitbang.c - polling/bitbanging TI avalanche SPI master
++ *                           controller driver utilities
++ *
++ *
++ * Copyright (C) 2008, Texas Instruments, Incorporated
++ *
++ *  This program is free software; you can distribute it and/or modify it
++ *  under the terms of the GNU General Public License (Version 2) as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope it will be useful, but WITHOUT
++ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ *  for more details.
++ *
++ *  You should have received a copy of the GNU General Public License along
++ *  with this program; if not, write to the Free Software Foundation, Inc.,
++ *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
++ *
++ */
++/*
++Includes Intel Corporation's changes/modifications dated: 2014.
++Changed/modified portions - Copyright © 2014, Intel Corporation.
++*/
++
++#include <linux/init.h>
++#include <linux/spinlock.h>
++#include <linux/kthread.h>
++#include <linux/interrupt.h>
++#include <linux/delay.h>
++#include <linux/errno.h>
++#include <linux/device.h>
++#include <linux/spi/spi.h>
++#include <linux/avalanche/puma7/avalanche_spi.h>
++#include "avalanche_spi_bitbang.h"
++#include <linux/module.h>
++
++#define SLAB_KERNEL GFP_KERNEL
++
++#undef CONFIG_SPI_DEBUG
++
++#if defined(CONFIG_SPI_DEBUG)
++#define SPI_DEBUG(fmt,arg...)  printk(KERN_EMERG fmt , ##arg);
++#else
++#define SPI_DEBUG(fmt,arg...)
++#endif
++
++#define ENTER SPI_DEBUG("[Ei %s-%d] \n", __FUNCTION__, __LINE__);
++#define EXIT  SPI_DEBUG("[Ex %s-%d] \n", __FUNCTION__, __LINE__);
++
++#define AVALANCHE_SPI_MAX_FLEN 4096
++
++
++/*
++ * FIRST PART (OPTIONAL):  word-at-a-time spi_transfer support.
++ * Use this for GPIO or shift-register level hardware APIs.
++ *
++ * spi_bitbang_cs is in spi_device->controller_state, which is unavailable
++ * to glue code.  These bitbang setup() and cleanup() routines are always
++ * used, though maybe they're called from controller-aware code.
++ *
++ * chipselect() and friends may use use spi_device->controller_data and
++ * controller registers as appropriate.
++ *
++ *
++ * NOTE:  SPI controller pins can often be used as GPIO pins instead,
++ * which means you could use a bitbang driver either to get hardware
++ * working quickly, or testing for differences that aren't speed related.
++ */
++
++struct spi_bitbang_cs {
++	unsigned nsecs;	/* (clock cycle time)/2 */
++
++	u32	(*txrx_word)(struct spi_device *spi, unsigned nsecs,u32 word, u8 bits);
++
++	unsigned (*txrx_bufs)(struct spi_device *,
++	u32 (*txrx_word)(struct spi_device *spi,unsigned nsecs,u32 word, u8 bits),
++
++	unsigned,
++    struct spi_transfer *);
++};
++
++
++static unsigned bitbang_txrx_8( struct spi_device *spi,
++	u32	(*txrx_word)(struct spi_device *spi,unsigned nsecs, u32 word, u8 bits),
++	unsigned ns,
++	struct spi_transfer	*t )
++
++{
++	unsigned bits  = spi->bits_per_word;
++	unsigned count = t->len;
++	const u8 *tx   = t->tx_buf;
++	u8		 *rx   = t->rx_buf;
++
++	while (likely(count > 0)) {
++		u8		word = 0;
++
++		if (tx)
++			word = *tx++;
++		word = txrx_word(spi, ns, word, bits);
++		if (rx)
++			*rx++ = word;
++		count -= 1;
++	}
++	return t->len - count;
++}
++
++static unsigned bitbang_txrx_16(struct spi_device	*spi,
++	u32 (*txrx_word)(struct spi_device *spi,unsigned nsecs,	u32 word, u8 bits),
++	unsigned ns,
++	struct spi_transfer	*t)
++{
++	unsigned bits  = spi->bits_per_word;
++	unsigned count = t->len;
++	const u16 *tx  = t->tx_buf;
++	u16		  *rx  = t->rx_buf;
++
++	while (likely(count > 1)) {
++		u16		word = 0;
++
++		if (tx)
++			word = *tx++;
++		word = txrx_word(spi, ns, word, bits);
++		if (rx)
++			*rx++ = word;
++		count -= 2;
++	}
++	return t->len - count;
++}
++
++static unsigned bitbang_txrx_32( struct spi_device	*spi,
++	u32 (*txrx_word)(struct spi_device *spi,unsigned nsecs,	u32 word, u8 bits),
++	unsigned ns,
++	struct spi_transfer	*t)
++{
++	unsigned bits  = spi->bits_per_word;
++	unsigned count = t->len;
++	const u32 *tx  = t->tx_buf;
++	u32		 *rx   = t->rx_buf;
++
++	while (likely(count > 3)) {
++		u32		word = 0;
++
++		if (tx)
++			word = *tx++;
++		word = txrx_word(spi, ns, word, bits);
++		if (rx)
++			*rx++ = word;
++		count -= 4;
++	}
++	return t->len - count;
++}
++
++int avalanche_spi_bitbang_setup_transfer( struct spi_device *spi,
++										  struct spi_transfer *t )
++{
++	struct spi_bitbang_cs *cs = spi->controller_state;
++	u8 bits_per_word;
++	u32 hz;
++
++	if (t) {
++		bits_per_word = t->bits_per_word;
++		hz = t->speed_hz;
++	} else {
++		bits_per_word = 0;
++		hz = 0;
++	}
++
++	/* spi_transfer level calls that work per-word */
++	if (!bits_per_word)
++		bits_per_word = spi->bits_per_word;
++	if (bits_per_word <= 8)
++		cs->txrx_bufs = bitbang_txrx_8;
++	else if (bits_per_word <= 16)
++		cs->txrx_bufs = bitbang_txrx_16;
++	else if (bits_per_word <= 32)
++		cs->txrx_bufs = bitbang_txrx_32;
++	else
++		return -EINVAL;
++
++	/* nsecs = (clock period)/2 */
++	if (!hz)
++		hz = spi->max_speed_hz;
++	if (hz) {
++		cs->nsecs = (1000000000/2) / hz;
++		if (cs->nsecs > (MAX_UDELAY_MS * 1000 * 1000))
++			return -EINVAL;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(avalanche_spi_bitbang_setup_transfer);
++
++/**
++ * avalanche_spi_bitbang_setup - default setup for per-word I/O loops
++ */
++int avalanche_spi_bitbang_setup(struct spi_device *spi)
++{
++	struct spi_bitbang_cs *cs = spi->controller_state;
++	struct spi_bitbang *bitbang;
++	int retval;
++
++	bitbang = spi_master_get_devdata(spi->master);
++
++	/* REVISIT: some systems will want to support devices using lsb-first
++	 * bit encodings on the wire.  In pure software that would be trivial,
++	 * just bitbang_txrx_le_cphaX() routines shifting the other way, and
++	 * some hardware controllers also have this support.
++	 */
++	if ((spi->mode & SPI_LSB_FIRST) != 0)
++		return -EINVAL;
++
++	if (!cs) {
++		cs = kzalloc(sizeof *cs, SLAB_KERNEL);
++		if (!cs)
++			return -ENOMEM;
++		spi->controller_state = cs;
++	}
++
++	if (!spi->bits_per_word)
++		spi->bits_per_word = 8;
++
++	/* per-word shift register access, in hardware or bitbanging */
++	cs->txrx_word = bitbang->txrx_word[spi->mode & (SPI_CPOL|SPI_CPHA)];
++	if (!cs->txrx_word)
++		return -EINVAL;
++
++	retval = avalanche_spi_bitbang_setup_transfer(spi, NULL);
++	if (retval < 0)
++		return retval;
++
++	dev_dbg(&spi->dev, "%s, mode %d, %u bits/w, %u nsec/bit\n",
++			__FUNCTION__, spi->mode & (SPI_CPOL | SPI_CPHA),
++			spi->bits_per_word, 2 * cs->nsecs);
++
++	/* NOTE we _need_ to call chipselect() early, ideally with adapter
++	 * setup, unless the hardware defaults cooperate to avoid confusion
++	 * between normal (active low) and inverted chipselects.
++	 */
++
++	/* deselect chip (low or high) */
++	bitbang->chipselect(spi, BITBANG_CS_INACTIVE);
++	ndelay(cs->nsecs);
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(avalanche_spi_bitbang_setup);
++
++/**
++ * avalanche_spi_bitbang_cleanup - default cleanup for per-word I/O loops
++ */
++void avalanche_spi_bitbang_cleanup(struct spi_device *spi)
++{
++	kfree(spi->controller_state);
++}
++EXPORT_SYMBOL_GPL(avalanche_spi_bitbang_cleanup);
++
++static int avalanche_spi_bitbang_bufs( struct spi_device *spi,
++                                       struct spi_transfer *t )
++{
++	struct spi_bitbang_cs *cs = spi->controller_state;
++	unsigned nsecs = cs->nsecs;
++
++	return cs->txrx_bufs(spi, cs->txrx_word, nsecs, t);
++}
++
++/*----------------------------------------------------------------------*/
++
++/*
++ * SECOND PART ... simple transfer queue runner.
++ *
++ * This costs a task context per controller, running the queue by
++ * performing each transfer in sequence.  Smarter hardware can queue
++ * several DMA transfers at once, and process several controller queues
++ * in parallel; this driver doesn't match such hardware very well.
++ *
++ * Drivers can provide word-at-a-time i/o primitives, or provide
++ * transfer-at-a-time ones to leverage dma or fifo hardware.
++ */
++static int avalanche_spi_bitbang_transfer_one_message(struct spi_master *master,
++						       struct spi_message *m)
++{
++	struct spi_bitbang	*bitbang = spi_master_get_devdata(master);
++	struct spi_message	*new_m = NULL;
++	struct spi_device	*spi = m->spi;
++	struct spi_transfer	*t = NULL;
++	struct spi_transfer	*new_t = NULL;
++	struct spi_transfer	*temp_t = NULL, *prev_t = NULL;
++	unsigned	major_flen, minor_flen;
++	u8		bits_per_word;
++	unsigned	len, cs_change;
++	int		status;
++	int (*setup_transfer)(struct spi_device *,struct spi_transfer *);
++	struct avalanche_sfi_dev_info_t *sfi =
++			(struct avalanche_sfi_dev_info_t*)(spi->controller_data);
++
++	cs_change = 1;
++	status = 0;
++	setup_transfer = NULL;
++
++	major_flen = 0;
++
++	//list_entry((&m->transfers)->next, typeof(*t_start), transfer_list);
++
++	// create a new message
++	new_m = kmalloc(sizeof(struct spi_message), GFP_KERNEL);
++	if(new_m == NULL) {
++		panic("[Avalanche SPI] Not Enough Memory\n");
++		return;
++	}
++
++	spi_message_init(new_m);
++
++	list_for_each_entry (new_t, &m->transfers, transfer_list) {
++
++		if (bitbang->shutdown) {
++			status = -ESHUTDOWN;
++			break;
++		}
++
++		len = new_t->len;
++
++		/* calculate minor FLEN for this spi_transfer based on
++		*   bits_per_word
++		*/
++
++		bits_per_word = spi->bits_per_word;
++
++		if(new_t->bits_per_word) {
++			bits_per_word = new_t->bits_per_word;
++		}
++
++		if (bits_per_word <= 8 || bits_per_word > 32)
++			minor_flen = len;
++		else if(bits_per_word <= 16)
++			minor_flen = len/2;
++		else
++			minor_flen = len/4;
++
++		major_flen += minor_flen;
++
++
++		if((major_flen > AVALANCHE_SPI_MAX_FLEN)) {
++			if(sfi == NULL || sfi->mode != AVALANCHE_SFI_MODE) {
++				printk("SPI frame length supplied is more than supported \
++		    length\n");
++				break;
++			}
++		}
++
++		/* add this spi_transfer to our spi_message my_m */
++		temp_t = NULL;
++		temp_t = kmalloc(sizeof(struct spi_transfer), GFP_KERNEL);
++		if(!temp_t) {
++			panic("[SPI Bitbang] Kmalloc failed");
++		}
++
++		memcpy(temp_t, new_t, sizeof(struct spi_transfer));
++
++		spi_message_add_tail(temp_t, new_m);
++
++		if(!new_t->cs_change &&
++		   (new_t->transfer_list.next != &m->transfers)) {
++			continue;
++		}
++
++		/* program the major_flen in the command register with dummy
++		 * transfer command
++		 */
++
++		if(bitbang->set_flen)
++			bitbang->set_flen(spi, major_flen);
++
++		/* for first time cs has to be deactivated */
++		cs_change = 1;
++
++		t = NULL;
++
++		/* now trasfer the frame created by us */
++		list_for_each_entry (t, &(new_m->transfers), transfer_list) {
++			if(prev_t) {
++				spi_transfer_del(prev_t);
++				kfree(prev_t);
++				prev_t = NULL;
++			}
++
++			/* override or restore speed and wordsize */
++			if (t->speed_hz || t->bits_per_word) {
++				setup_transfer = bitbang->setup_transfer;
++				if (!setup_transfer) {
++					status = -ENOPROTOOPT;
++					SPI_DEBUG("No setup transfer installed\n");
++					break;
++				}
++			}
++			if (setup_transfer) {
++				status = setup_transfer(spi, t);
++				if (status < 0){
++					SPI_DEBUG("Setup transfer failed \n");
++					break;
++				}
++			}
++
++			/* set up default clock polarity, and activate chip;
++			 * this implicitly updates clock and spi modes as
++			 * previously recorded for this device via setup().
++			 * (and also deselects any other chip that might be
++			 * selected ...)
++			 */
++			if (cs_change) {
++				bitbang->chipselect(spi, BITBANG_CS_ACTIVE);
++			}
++			cs_change = t->cs_change;
++			if (!t->tx_buf && !t->rx_buf && t->len) {
++				status = -EINVAL;
++				SPI_DEBUG("is somebody playing with me?\n");
++				break;
++			}
++
++			/* transfer data.  the lower level code handles any
++			 * new dma mappings it needs. our caller always gave
++			 * us dma-safe buffers.
++			 */
++			if (t->len) {
++				/* REVISIT dma API still needs a designated
++				 * DMA_ADDR_INVALID; ~0 might be better.
++				 */
++				if (!m->is_dma_mapped)
++					t->rx_dma = t->tx_dma = 0;
++				status = bitbang->txrx_bufs(spi, t);
++			}
++			if (status != t->len) {
++				if (status > 0)
++					status = -EMSGSIZE;
++				SPI_DEBUG("bufs not successful in transmitting data\n");
++				break;
++			}
++			m->actual_length += status;
++			status = 0;
++
++			/* protocol tweaks before next transfer */
++			if (t->delay_usecs)
++				udelay(t->delay_usecs);
++
++			prev_t = t;
++
++			if (!cs_change) {
++				continue;
++			}
++
++
++			if (t->transfer_list.next == &new_m->transfers) {
++				break;
++			}
++
++			/* sometimes a short mid-message deselect of the chip
++			 * may be needed to terminate a mode or command
++			 */
++			bitbang->chipselect(spi, BITBANG_CS_INACTIVE);
++			EXIT
++		}
++
++		if(prev_t) {
++			spi_transfer_del(prev_t);
++			kfree(prev_t);
++			prev_t = NULL;
++		}
++		else if(t) {
++			spi_transfer_del(t);
++			kfree(t);
++			t = NULL;
++		}
++
++		// Re-initialize our spi_message
++		spi_message_init(new_m);
++
++		if (new_t->transfer_list.next == &m->transfers)
++		{
++			break;
++		}
++	}
++
++
++	// free newly created message
++	spi_message_free(new_m);
++
++	m->status = status;
++
++	/* restore speed and wordsize */
++	if (setup_transfer)
++		setup_transfer(spi, NULL);
++
++	/* normally deactivate chipselect ... unless no error and
++	 * cs_change has hinted that the next message will probably
++	 * be for this chip too.
++	 */
++	if (!(status == 0 && cs_change)) {
++		bitbang->chipselect(spi, BITBANG_CS_INACTIVE);
++	}
++
++	spi_finalize_current_message(master);
++
++	return 0;
++}
++
++
++/**
++ * avalanche_spi_bitbang_transfer - default submit to transfer queue
++ */
++/*
++int avalanche_spi_bitbang_transfer( struct spi_device *spi,
++                                    struct spi_message *m )
++{
++	struct spi_bitbang	*bitbang;
++	unsigned long		flags;
++	int			status = 0;
++
++	ENTER
++	m->actual_length = 0;
++	m->status = -EINPROGRESS;
++
++	bitbang = spi_master_get_devdata(spi->master);
++	if (bitbang->shutdown)
++		return -ESHUTDOWN;
++
++	spin_lock_irqsave(&bitbang->lock, flags);
++	if (!spi->max_speed_hz)
++		status = -ENETDOWN;
++	else {
++		list_add_tail(&m->queue, &bitbang->queue);
++		wake_up_process(bitbang->task);
++	}
++	spin_unlock_irqrestore(&bitbang->lock, flags);
++
++	EXIT
++	return status;
++}
++EXPORT_SYMBOL_GPL(avalanche_spi_bitbang_transfer);
++*/
++
++/**
++ * avalanche_spi_bitbang_thread
++ * @data: Pointer to structure spi_bitbang, passed as a void pointer.
++ *
++ * This thread invokes avalanche_bitbang_work to process the queue
++ * of SPI transfers, and goes back to sleep until a new transfer is queued,
++ * or when requested to stop.
++ */
++/*static int avalanche_spi_bitbang_thread(void* data)
++{
++	   struct spi_bitbang *bitbang = (struct spi_bitbang*)data;
++
++	   while (!kthread_should_stop())
++	   {
++			   unsigned long flags;
++			   spin_lock_irqsave(&bitbang->lock, flags);
++			   if (list_empty(&bitbang->queue) && !kthread_should_stop())
++			   {
++					   set_current_state(TASK_INTERRUPTIBLE);
++					   spin_unlock_irqrestore(&bitbang->lock, flags);
++					   schedule();
++					   spin_lock_irqsave(&bitbang->lock, flags);
++			   }
++			   spin_unlock_irqrestore(&bitbang->lock, flags);
++			   avalanche_bitbang_work(bitbang);
++	   }
++	   return 0;
++}*/
++
++/*----------------------------------------------------------------------*/
++
++/**
++ * avalanche_spi_bitbang_start - start up a polled/bitbanging SPI master driver
++ * @bitbang: driver handle
++ *
++ * Caller should have zero-initialized all parts of the structure, and then
++ * provided callbacks for chip selection and I/O loops.  If the master has
++ * a transfer method, its final step should call spi_bitbang_transfer; or,
++ * that's the default if the transfer routine is not initialized.  It should
++ * also set up the bus number and number of chipselects.
++ *
++ * For i/o loops, provide callbacks either per-word (for bitbanging, or for
++ * hardware that basically exposes a shift register) or per-spi_transfer
++ * (which takes better advantage of hardware like fifos or DMA engines).
++ *
++ * Drivers using per-word I/O loops should use (or call) spi_bitbang_setup and
++ * spi_bitbang_cleanup to handle those spi master methods.  Those methods are
++ * the defaults if the bitbang->txrx_bufs routine isn't initialized.
++ *
++ * This routine registers the spi_master, which will process requests in a
++ * dedicated task, keeping IRQs unblocked most of the time.  To stop
++ * processing those requests, call spi_bitbang_stop().
++ */
++int avalanche_spi_bitbang_start(struct spi_bitbang *bitbang)
++{
++	if (!bitbang->master || !bitbang->chipselect)
++		return -EINVAL;
++
++	if (!bitbang->master->transfer_one_message)
++		bitbang->master->transfer_one_message = avalanche_spi_bitbang_transfer_one_message;
++	if (!bitbang->txrx_bufs) {
++		bitbang->use_dma = 0;
++		bitbang->txrx_bufs = avalanche_spi_bitbang_bufs;
++		if (!bitbang->master->setup) {
++			if (!bitbang->setup_transfer)
++				bitbang->setup_transfer =
++					 avalanche_spi_bitbang_setup_transfer;
++			bitbang->master->setup = avalanche_spi_bitbang_setup;
++			bitbang->master->cleanup = avalanche_spi_bitbang_cleanup;
++		}
++	} else if (!bitbang->master->setup)
++		return -EINVAL;
++
++	/* this task is the only thing to touch the SPI bits */
++	SPI_DEBUG("dev_name = %s\n", dev_name(bitbang->master->dev.parent));
++
++	return spi_register_master(bitbang->master);
++}
++EXPORT_SYMBOL_GPL(avalanche_spi_bitbang_start);
++
++/**
++ * spi_bitbang_stop - stops the task providing spi communication
++ */
++int avalanche_spi_bitbang_stop(struct spi_bitbang *bitbang)
++{
++	bitbang->shutdown = 0;
++	spi_unregister_master(bitbang->master);
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(avalanche_spi_bitbang_stop);
++MODULE_LICENSE("GPL");
++
+diff --git a/drivers/spi/avalanche_spi_bitbang.h b/drivers/spi/avalanche_spi_bitbang.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/spi/avalanche_spi_bitbang.h
+@@ -0,0 +1,165 @@
++/*
++ *
++ * avalanche_spi_bitbang.h
++ * Description:
++ * referred include/linux/spi/spi_bitbang.h
++ * avalanche_spi_bitbang.c - polling/bitbanging TI avalanche SPI master
++ *                           controller driver utilities
++ *
++ *
++ * Copyright (C) 2008, Texas Instruments, Incorporated
++ *
++ *  This program is free software; you can distribute it and/or modify it
++ *  under the terms of the GNU General Public License (Version 2) as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope it will be useful, but WITHOUT
++ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ *  for more details.
++ *
++ *  You should have received a copy of the GNU General Public License along
++ *  with this program; if not, write to the Free Software Foundation, Inc.,
++ *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
++ *
++ */
++/*
++Includes Intel Corporation's changes/modifications dated: 2014.
++Changed/modified portions - Copyright © 2014, Intel Corporation.
++*/
++
++#ifndef	__AVALANCHE_SPI_BITBANG_H
++#define	__AVALANCHE_SPI_BITBANG_H
++
++/*
++ * Mix this utility code with some glue code to get one of several types of
++ * simple SPI master driver.  Two do polled word-at-a-time I/O:
++ *
++ *   -	GPIO/parport bitbangers.  Provide chipselect() and txrx_word[](),
++ *	expanding the per-word routines from the inline templates below.
++ *
++ *   -	Drivers for controllers resembling bare shift registers.  Provide
++ *	chipselect() and txrx_word[](), with custom setup()/cleanup() methods
++ *	that use your controller's clock and chipselect registers.
++ *
++ * Some hardware works well with requests at spi_transfer scope:
++ *
++ *   -	Drivers leveraging smarter hardware, with fifos or DMA; or for half
++ *	duplex (MicroWire) controllers.  Provide chipslect() and txrx_bufs(),
++ *	and custom setup()/cleanup() methods.
++ */
++struct spi_bitbang {
++	/* struct task_struct	*task; */
++	u8			shutdown;
++	u8			use_dma;
++	u8			flags;		/* extra spi->mode support */
++	struct spi_master	*master;
++	/* setup_transfer() changes clock and/or wordsize to match settings
++	 * for this transfer; zeroes restore defaults from spi_device.
++	 */
++	int	(*setup_transfer)(struct spi_device *spi,struct spi_transfer *t);
++	void (*chipselect)(struct spi_device *spi, int is_on);
++#define	BITBANG_CS_ACTIVE	1	/* normally nCS, active low */
++#define	BITBANG_CS_INACTIVE	0
++	/* txrx_bufs() may handle dma mapping for transfers that don't
++	 * already have one (transfer.{tx,rx}_dma is zero), or use PIO
++	 */
++	int	(*txrx_bufs)(struct spi_device *spi, struct spi_transfer *t);
++	/* txrx_word[SPI_MODE_*]() just looks like a shift register */
++	u32	(*txrx_word[4])( struct spi_device *spi,
++                                 unsigned nsecs,
++                                 u32 word,
++                                 u8 bits);
++	void (*set_flen)(struct spi_device *spi, u32 flen);
++};
++
++/* you can call these default bitbang->master methods from your custom
++ * methods, if you like.
++ */
++extern int avalanche_spi_bitbang_setup(struct spi_device *spi);
++extern void avalanche_spi_bitbang_cleanup(struct spi_device *spi);
++extern int avalanche_spi_bitbang_transfer( struct spi_device *spi,
++                                           struct spi_message *m);
++extern int avalanche_spi_bitbang_setup_transfer( struct spi_device *spi,
++                                                 struct spi_transfer *t);
++
++/* start or stop queue processing */
++extern int avalanche_spi_bitbang_start(struct spi_bitbang *spi);
++extern int avalanche_spi_bitbang_stop(struct spi_bitbang *spi);
++
++#endif	/* __AVALANCHE_SPI_BITBANG_H */
++
++/*-------------------------------------------------------------------------*/
++
++#ifdef	EXPAND_BITBANG_TXRX
++
++/*
++ * The code that knows what GPIO pins do what should have declared four
++ * functions, ideally as inlines, before #defining EXPAND_BITBANG_TXRX
++ * and including this header:
++ *
++ *  void setsck(struct spi_device *, int is_on);
++ *  void setmosi(struct spi_device *, int is_on);
++ *  int getmiso(struct spi_device *);
++ *  void spidelay(unsigned);
++ *
++ * A non-inlined routine would call bitbang_txrx_*() routines.  The
++ * main loop could easily compile down to a handful of instructions,
++ * especially if the delay is a NOP (to run at peak speed).
++ *
++ * Since this is software, the timings may not be exactly what your board's
++ * chips need ... there may be several reasons you'd need to tweak timings
++ * in these routines, not just make to make it faster or slower to match a
++ * particular CPU clock rate.
++ */
++
++static inline u32
++bitbang_txrx_be_cpha0(struct spi_device *spi,
++                      unsigned nsecs,
++                                        unsigned cpol,
++                        u32 word, u8 bits)
++{
++	/* if (cpol == 0) this is SPI_MODE_0; else this is SPI_MODE_2
++	 * clock starts at inactive polarity
++     */
++
++	for (word <<= (32 - bits); likely(bits); bits--) {
++		/* setup MSB (to slave) on trailing edge */
++		setmosi(spi, word & (1 << 31));
++		spidelay(nsecs);	/* T(setup) */
++
++		setsck(spi, !cpol);
++		spidelay(nsecs);
++
++		/* sample MSB (from slave) on leading edge */
++		word <<= 1;
++		word |= getmiso(spi);
++		setsck(spi, cpol);
++	}
++	return word;
++}
++
++static inline u32 bitbang_txrx_be_cpha1(struct spi_device *spi, unsigned nsecs,
++                                        unsigned cpol,	u32 word, u8 bits)
++{
++	/* if (cpol == 0) this is SPI_MODE_1; else this is SPI_MODE_3
++	 * clock starts at inactive polarity
++	 */
++
++	for (word <<= (32 - bits); likely(bits); bits--) {
++		/* setup MSB (to slave) on leading edge */
++		setsck(spi, !cpol);
++		setmosi(spi, word & (1 << 31));
++		spidelay(nsecs); /* T(setup) */
++
++		setsck(spi, cpol);
++		spidelay(nsecs);
++
++		/* sample MSB (from slave) on trailing edge */
++		word <<= 1;
++		word |= getmiso(spi);
++	}
++	return word;
++}
++
++#endif	/* EXPAND_BITBANG_TXRX */
+diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
+--- a/drivers/spi/spi.c
++++ b/drivers/spi/spi.c
+@@ -682,6 +682,13 @@ static int spi_init_queue(struct spi_mas
+ 		sched_setscheduler(master->kworker_task, SCHED_FIFO, &param);
+ 	}
+ 
++#if defined (CONFIG_SPI_TI_CODEC)
++    param.sched_priority = 95 ;
++    dev_info(&master->dev,
++        "will run message pump with RR %d priority\n", param.sched_priority);
++    sched_setscheduler(master->kworker_task, SCHED_RR, &param);
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/spi/spi_ticodec.c b/drivers/spi/spi_ticodec.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/spi/spi_ticodec.c
+@@ -0,0 +1,911 @@
++/*
++ *
++ * spi_ticodec.c
++ * Description:
++ * codec spi master driver
++ *
++ *
++ * Copyright (C) 2008, Texas Instruments, Incorporated
++ *
++ *  This program is free software; you can distribute it and/or modify it
++ *  under the terms of the GNU General Public License (Version 2) as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope it will be useful, but WITHOUT
++ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ *  for more details.
++ *
++ *  You should have received a copy of the GNU General Public License along
++ *  with this program; if not, write to the Free Software Foundation, Inc.,
++ *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
++ *
++ */
++/*
++Includes Intel Corporation's changes/modifications dated: 2014.
++Changed/modified portions - Copyright © 2014, Intel Corporation.
++*/
++
++
++/*
++ * TI Avalanche Codec SPI controller driver.
++ */
++
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/types.h>
++#include <linux/kernel.h>
++#include <linux/completion.h>
++#include <linux/interrupt.h>
++#include <linux/delay.h>
++#include <linux/irq.h>
++#include <linux/device.h>
++#include <linux/spinlock.h>
++#include <asm/irq.h>
++#include <asm/io.h>
++#include <linux/avalanche/generic/pal.h>
++#include<linux/device.h>
++#include<linux/platform_device.h>
++#include <linux/spi/spi.h>
++#include <linux/avalanche/puma7/spi_ticodec.h>
++#include "avalanche_spi_bitbang.h"
++#include <linux/avalanche/puma7/puma7_spi.h>
++
++
++/* missing symbol, added for compatibility */
++#define PAL_sysClkcGetFreq(a)     (120000000U)
++
++//#define DEBUG_TI(fmt,arg...)  printk(KERN_EMERG fmt , ##arg);
++#define DEBUG_TI(fmt,arg...)
++
++#define ENTER DEBUG_TI("TI CODEC SPI [%s->line %d] \n", __FUNCTION__, __LINE__);
++#define EXIT  DEBUG_TI("TI CODEC SPI [%s->line %d] \n", __FUNCTION__, __LINE__);
++
++
++/************************************************
++* CONTROLLER REGISTER BITS
++************************************************/
++#define SPI_DEF_FREQ 							(5000000)
++#define SPI_CLK_EN								(1 << 24)
++#define SPI_BPW_TO_CMD(word_len)				((word_len & 0x1F) << 16)
++#define SPI_CMD_TO_BPW(cmd) 					((cmd >> 16) & 0x1F)
++
++#define SPI_CMD_READ 							(0x01 << 21)
++#define SPI_CMD_WRITE 							(0x01 << 22)
++#define SPI_INT_ENABLE 							(0x01 << 25)
++
++#if (CONFIG_SPI_TI_CODEC_3_WIRE_MODE)
++#define SPI_DOUT_DIR							(0x80000000) // 3 wire mode
++#else
++#define SPI_DOUT_DIR							(0x00000000) // 4 wire mode
++#endif
++
++
++/**********************************************
++* SPI write data register
++**********************************************/
++#define SPI_COMPLETE								(0x80000000)
++
++/* operating mode selection from kconfig */
++#ifdef CONFIG_SPI_INTERRUPT_MODE
++#define SPI_INTERRUPT_MODE 							(1)
++#endif
++/* worst case 2 seconds delay */
++#define AVALANCHE_TI_CODEC_SPI_DELAY				(msecs_to_jiffies(2000))
++#ifdef CONFIG_SPI_TASKLET_MODE
++#define SPI_INTERRUPT_MODE 							(1)
++#define SPI_INT_TASKLET 							(1)
++#endif
++
++#ifdef SPI_POLLING_MODE
++#undef SPI_INTERRUPT_MODE
++#undef SPI_INT_TASKLET
++#endif
++
++#define BIT_CLEAR_TIME_OUT						(0x0FFFFF)
++#define SPI_RW_CMD_MASK							(~0xE00000)
++
++/* SPI Controller registers */
++struct ti_codec_spi_reg {
++	volatile u32 spcr1;
++	volatile u32 spdr;
++	volatile u32 spbr;
++};
++
++struct ti_codec_spi_slave {
++	u32 cmd_to_write;
++    u32 bytes_per_word;
++    u32 frame_len;
++    u8 active_cs;
++};
++
++/* SPI Controller driver's private data. */
++struct ti_codec_spi {
++	/* bitbang has to be first */
++	struct spi_bitbang bitbang;
++	struct completion done;
++	struct ti_codec_spi_reg __iomem *base;
++	/* rx & tx bufs from the spi_transfer */
++	const void *tx;
++	void *rx;
++	/* functions to deal with different sized buffers */
++	void (*get_rx) (u32 rx_data, struct ti_codec_spi *);
++	u32(*get_tx) (struct ti_codec_spi *);
++	int count;
++	u32 irq;
++	u32 sysclk;
++	u32 ref_freq;
++	/* chip select activation deactivation */
++	int	(*activate_cs)(u8 cs, u8 polarity,struct ti_ctlr_cs_sel_t *ctlr_cs_sel);
++	int	(*deactivate_cs)(u8 cs, u8 polarity,struct ti_ctlr_cs_sel_t *ctlr_cs_sel);
++	struct ti_codec_spi_slave slave[ AVALANCHE_SPI_MAX_CHIPSELECT ];
++	struct spi_device *spi;
++#ifdef SPI_INT_TASKLET
++	struct tasklet_struct tasklet;
++	u8 have_interrupt;
++#endif
++};
++
++#define ti_codec_SPI_RX_BUF(type) 	  \
++static inline void ti_codec_spi_rx_buf_##type(u32 data, \
++                                        struct ti_codec_spi *ti_codec_spi) \
++{									  \
++	type * rx = ti_codec_spi->rx;	  \
++	*rx++ = (type)data;				  \
++	ti_codec_spi->rx = rx;			  \
++}
++
++#define ti_codec_SPI_TX_BUF(type)	 \
++static inline u32 ti_codec_spi_tx_buf_##type(\
++                                        struct ti_codec_spi *ti_codec_spi)	\
++{								           \
++	u32 data;				        	   \
++	const type * tx = ti_codec_spi->tx;   \
++	data = *tx++;						   \
++	ti_codec_spi->tx = tx;				   \
++	return data;						   \
++}
++
++ti_codec_SPI_RX_BUF(u8)
++ti_codec_SPI_RX_BUF(u16)
++ti_codec_SPI_RX_BUF(u32)
++ti_codec_SPI_TX_BUF(u8)
++ti_codec_SPI_TX_BUF(u16)
++ti_codec_SPI_TX_BUF(u32)
++
++#ifdef DEBUG
++static int ti_codec_spi_reg_dump(unsigned long base)
++{
++	volatile struct ti_codec_spi_reg *regs = (volatile struct ti_codec_spi_reg *)base;
++	printk("Spi register dump\n");
++	printk("spcr1 addr = 0x%08x  spcr1 = 0x%08x\n", &(regs->spcr1), regs->spcr1);
++	printk("spdr  addr = 0x%08x  spdr  = 0x%08x\n", &(regs->spdr), regs->spdr);
++	printk("spbr  addr = 0x%08x  spbr  = 0x%08x\n", &(regs->spbr), regs->spbr);
++    return 0;
++};
++#endif
++
++/*
++ * Bitbang layer uses this interface to set the framelength
++ * for the slave device for current transfer in progress
++ */
++void ti_codec_spi_set_flen(struct spi_device *spi, u32 flen)
++{
++	struct ti_codec_spi *ti_codec_spi;
++	ENTER
++	ti_codec_spi = spi_master_get_devdata(spi->master);
++	ti_codec_spi->slave[spi->chip_select].frame_len = (flen-1);
++	DEBUG_TI("flen = %d, frame_len = %d\n", flen,
++		  ti_codec_spi->slave[spi->chip_select].frame_len);
++	EXIT
++}
++
++/*
++ * Interface to control the chip select signal
++ */
++static void ti_codec_spi_chipselect(struct spi_device *spi, int value)
++{
++	struct ti_codec_spi *ti_codec_spi;
++    /* determine - active high or active low */
++	u8 pol = spi->mode & SPI_CS_HIGH ? 1 : 0;
++	struct ti_ctlr_cs_sel_t ctlr_cs_sel;
++	u8 cs;
++	ENTER
++	ti_codec_spi = spi_master_get_devdata(spi->master);
++    ctlr_cs_sel.cs = spi->chip_select;
++	ti_codec_spi->slave[spi->chip_select].active_cs = ctlr_cs_sel.cs;
++	ctlr_cs_sel.pol = pol;
++
++	/* board specific chip select logic decides the polarity and cs line for
++     * the controller
++     */
++	if ( value == BITBANG_CS_ACTIVE) {
++		if (ti_codec_spi->activate_cs)
++            /* Activate the chip select signal in the board */
++			ti_codec_spi->activate_cs(spi->chip_select, pol , &ctlr_cs_sel);
++	}
++	else {
++		return;
++	}
++	pol = ctlr_cs_sel.pol;
++	ti_codec_spi->slave[spi->chip_select].active_cs = cs = ctlr_cs_sel.cs;
++	EXIT
++}
++
++/**
++ * ti_codec_spi_setup_transfer - This functions will determine transfer method
++ * @spi: spi device on which data transfer to be done
++ * @t: spi transfer in which transfer info is filled
++ *
++ * This function determines data transfer method (8/16/32 bit transfer).
++ * It will also set the SPI Clock Control register according to
++ * SPI slave device freq.
++ */
++static int ti_codec_spi_setup_transfer( struct spi_device *spi,
++                                         struct spi_transfer *t )
++{
++	struct ti_codec_spi *ti_codec_spi;
++	struct ti_ctlr_cs_sel_t ctlr_cs_sel;
++	u32 cmd_to_write = 0;
++	u8 bits_per_word = 0;
++	u32 hz = 0;
++	u32 clk_div;
++	ENTER
++	ti_codec_spi = spi_master_get_devdata(spi->master);
++	if (t) {
++		bits_per_word = t->bits_per_word;
++		hz = t->speed_hz;
++	}
++	/* if bits_per_word is not set then set it default */
++	if (!bits_per_word)
++		bits_per_word = spi->bits_per_word;
++	/* Assign function pointer to appropriate transfer method 8bit/16bit or
++     * 32bit transfer
++     */
++	if (bits_per_word <= 8)
++	{
++		ti_codec_spi->get_rx = ti_codec_spi_rx_buf_u8;
++		ti_codec_spi->get_tx = ti_codec_spi_tx_buf_u8;
++		ti_codec_spi->slave[spi->chip_select].bytes_per_word = 1;
++	} else if (bits_per_word <= 16) {
++		ti_codec_spi->get_rx = ti_codec_spi_rx_buf_u16;
++		ti_codec_spi->get_tx = ti_codec_spi_tx_buf_u16;
++		ti_codec_spi->slave[spi->chip_select].bytes_per_word = 2;
++	} else if (bits_per_word <= 32) {
++		ti_codec_spi->get_rx = ti_codec_spi_rx_buf_u32;
++		ti_codec_spi->get_tx = ti_codec_spi_tx_buf_u32;
++		ti_codec_spi->slave[spi->chip_select].bytes_per_word = 4;
++	}else {
++		return -1;
++	}
++	/* Current transfer not interested in overriding the existing frequency */
++	if(t && !hz) {
++		goto no_freq;
++	}
++	if(!hz)  {
++		hz = spi->max_speed_hz;
++		if(!hz)  {
++			hz = SPI_DEF_FREQ; /* defaulting to 2Mhz*/
++			printk("[SPI] -> Slave device speed not set correctly.\
++					 Trying with %dHz\n", hz);
++		}
++	}
++	/* requested freq can't be more than ref_clk */
++	if(hz > ti_codec_spi->ref_freq)
++		hz = ti_codec_spi->ref_freq;
++	clk_div = (ti_codec_spi->ref_freq/hz) - 1;
++	cmd_to_write =	SPI_CLK_EN	| (clk_div & 0xFFFF);
++/**************************************************************************/
++no_freq:
++	cmd_to_write |= SPI_BPW_TO_CMD((bits_per_word));
++	/* Determine the slave device to operate on */
++ 	if (ti_codec_spi->activate_cs)
++		/* Activate the chip select signal in the board */
++		ti_codec_spi->activate_cs(spi->chip_select,
++							((spi->mode & SPI_CS_HIGH) ? 1 : 0), &ctlr_cs_sel);
++#ifdef SPI_INTERRUPT_MODE
++	 /* enable word complete interrupt */
++	cmd_to_write |= SPI_INT_ENABLE;
++#endif
++	if(spi->mode & SPI_3_WIRE)
++		cmd_to_write |= SPI_DOUT_DIR;
++	ti_codec_spi->slave[spi->chip_select].cmd_to_write = cmd_to_write;
++	DEBUG_TI("[C2W=%x]\n", ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++	EXIT
++	return 0;
++}
++
++
++/**
++ * ti_codec_spi_setup - This functions will set default transfer method
++ * @spi: spi device on which data transfer to be done
++ *
++ * This functions sets the default transfer method.
++ */
++
++static int ti_codec_spi_setup(struct spi_device *spi)
++{
++	int retval =0;
++	struct ti_codec_spi *ti_codec_spi;
++	ENTER
++	ti_codec_spi = spi_master_get_devdata(spi->master);
++	/*if bits per word length is zero then set it default 8*/
++	if (!spi->bits_per_word)
++		spi->bits_per_word = 8;
++	ti_codec_spi->slave[spi->chip_select].cmd_to_write = 0;
++	retval = ti_codec_spi_setup_transfer(spi, NULL);
++	EXIT
++	return retval;
++}
++
++
++/**
++ * ti_codec_spi_transfer - functions which will handle transfer data
++ * @spi: spi device on which data transfer to be done
++ * @t: spi transfer in which transfer info is filled
++ *
++ * This function will put data to be transferred into data register
++ * of SPI controller and then wait untill the completion will be marked
++ * by the IRQ Handler.
++ */
++static int ti_codec_spi_transfer(struct spi_device *spi,struct spi_transfer *t)
++{
++	struct ti_codec_spi *ti_codec_spi;
++	u8 conv = 1, bits_per_word = 0;
++	u32 word = 0, cmd_to_write = 0;
++#ifndef SPI_INTERRUPT_MODE
++	unsigned long timeout;
++	volatile u32 event = 0x0;
++	u32 rx_data=0;
++#endif
++	ENTER
++
++	ti_codec_spi = spi_master_get_devdata(spi->master);
++	ti_codec_spi->tx = t->tx_buf;
++	ti_codec_spi->rx = t->rx_buf;
++	/* convert len to words bbased on bits_per_word */
++	bits_per_word =
++			SPI_CMD_TO_BPW(ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++	if(t)
++		bits_per_word = t->bits_per_word;
++	/* if bits_per_word is not set then set it default */
++	if (!bits_per_word)
++		bits_per_word = spi->bits_per_word;
++	/* Assign function pointer to appropriate transfer method 8bit/16bit or
++     * 32bit transfer
++     */
++	if( bits_per_word <= 8 ){
++		ti_codec_spi->slave[spi->chip_select].bytes_per_word = 1;
++	}else if( bits_per_word <= 16 ){
++		ti_codec_spi->slave[spi->chip_select].bytes_per_word = 2;
++	}else if( bits_per_word <= 32 ){
++		ti_codec_spi->slave[spi->chip_select].bytes_per_word = 4;
++	} else {
++		return -1;
++    }
++	conv  = ti_codec_spi->slave[spi->chip_select].bytes_per_word;
++	ti_codec_spi->count = t->len / conv;
++	DEBUG_TI("chipselect=%d, bytes_per_word=%d, t->len=%d, conv=%d\n",
++				spi->chip_select,
++				ti_codec_spi->slave[spi->chip_select].bytes_per_word,
++				t->len, conv);
++	INIT_COMPLETION(ti_codec_spi->done);
++	/* Determine the command to execute READ or WRITE */
++	if( t->tx_buf ){
++		cmd_to_write = SPI_CMD_WRITE;
++		DEBUG_TI("Settng WRITE cmd\n");
++	}
++	else{
++		cmd_to_write = SPI_CMD_READ;
++		DEBUG_TI("Settng READ cmd\n");
++	}
++#ifdef SPI_INTERRUPT_MODE
++	/* clean the r/w cmd bits */
++	ti_codec_spi->slave[spi->chip_select].cmd_to_write &= SPI_RW_CMD_MASK;
++
++	/* update command */
++	ti_codec_spi->slave[spi->chip_select].cmd_to_write |= cmd_to_write;
++	DEBUG_TI("ti_codec_spi->count=%d \n",ti_codec_spi->count);
++	/* The ISR needs the information about current slave device whose
++     * transmission is in progress
++     */
++	ti_codec_spi->spi = spi;
++	/* Are we going to write data to the slave device? */
++	if (ti_codec_spi->tx)
++	{
++		word = ti_codec_spi->get_tx(ti_codec_spi);
++		#ifdef AVALANCHE_TI_CODEC_SPI_IP_FIX
++		word <<= (32- bits_per_word);
++		#endif
++		ti_codec_spi->base->spdr = cpu_to_be32(word);
++	}
++	/* Start the transfer */
++	ti_codec_spi->base->spcr1 = cpu_to_be32(((ti_codec_spi->slave[spi->chip_select].cmd_to_write) | SPI_DOUT_DIR));
++	enable_irq(LNXINTNUM(ti_codec_spi->irq));
++	DEBUG_TI("[C_WRITTEN=%x]\n",
++		ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++	DEBUG_TI("B4 wait_for_completion\n");
++	/* wait for completion signal from ISR */
++	wait_for_completion(&ti_codec_spi->done);
++	/* If we are working in polling mode */
++#else
++	/* clean the bits */
++	ti_codec_spi->slave[spi->chip_select].cmd_to_write &= SPI_RW_CMD_MASK;
++	/* update command */
++	ti_codec_spi->slave[spi->chip_select].cmd_to_write |= cmd_to_write;
++	DEBUG_TI("reg_val = %x, frm_len=%d, c2w=%x\n", cmd_to_write,
++		ti_codec_spi->slave[spi->chip_select].frame_len,
++		ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++	DEBUG_TI("ti_codec_spi->count=%d \n",ti_codec_spi->count);
++	/* start dispatching the words */
++ 	while(ti_codec_spi->count > 0)
++	{
++		if (ti_codec_spi->tx)
++       	{
++			/* write the word to be transmitted into the data register */
++			word = ti_codec_spi->get_tx(ti_codec_spi);
++			#ifdef AVALANCHE_TI_CODEC_SPI_IP_FIX
++			word <<= (32- bits_per_word);
++			#endif
++			ti_codec_spi->base->spdr = cpu_to_be32(word);
++			DEBUG_TI("[D_wr=0x%08x]\n", word);
++		}
++		/* issue the command */
++		DEBUG_TI("[C=%x]\n",ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++		ti_codec_spi->base->spcr1 =
++	                  cpu_to_be32(((ti_codec_spi->slave[spi->chip_select].cmd_to_write)  | SPI_DOUT_DIR));
++			DEBUG_TI("[C_wr_cmd=0x%08x]\n", ((ti_codec_spi->slave[spi->chip_select].cmd_to_write)  | SPI_DOUT_DIR));
++		/* Wait for busy bit/word complete to clear */
++		timeout = jiffies + AVALANCHE_TI_CODEC_SPI_DELAY;
++		do
++		{
++			event = 0;
++			/* tx */
++			if(ti_codec_spi->tx)
++			{
++				event = be32_to_cpu(ti_codec_spi->base->spdr);
++				if(!(event & SPI_COMPLETE))
++					break;
++			}
++			/* rx */
++			else
++			{
++				event = be32_to_cpu(ti_codec_spi->base->spbr);
++				if(event & SPI_COMPLETE)
++					break;
++			}
++			if(time_after(jiffies, timeout))
++    	        printk("[SPI] -> Word complete not set for a long time even after busy bit is cleared, status=%x\n", event);
++		}while(time_after(timeout, jiffies));
++		udelay(1);
++		DEBUG_TI("SPI status_reg_val=%x\n", event);
++		/* do we have something to read from the slave device */
++		if (ti_codec_spi->rx)
++		{
++           	rx_data = be32_to_cpu(ti_codec_spi->base->spbr) & ~(SPI_COMPLETE);
++			DEBUG_TI("data read %x \n",rx_data);
++			/* place the read data in the driver buffer */
++			ti_codec_spi->get_rx(rx_data, ti_codec_spi);
++		}
++		ti_codec_spi->count--;
++	}
++#endif
++	/* SPI Framework maintains the count only in bytes so convert
++     * back to bytes
++     */
++	ti_codec_spi->count *= conv;
++	EXIT
++	return t->len;
++}
++
++#ifdef SPI_INTERRUPT_MODE
++
++/**
++ * ti_codec_spi_irq - probe function for SPI Master Controller
++ * @irq: IRQ number for this SPI Master
++ * @context_data: structure for SPI Master controller ti_codec_spi
++ * @ptregs:
++ *
++ * ISR will determine that interrupt arrives either for READ or WRITE command.
++ * According to command it will do the appropriate action. It will check
++ * transfer length and if it is not zero then dispatch transfer command again.
++ * If transfer length is zero then it will indicate the COMPLETION so that
++ * ti_codec_spi_transfer function can go ahead.
++ */
++irqreturn_t ti_codec_spi_irq( s32 irq, void *context_data,
++							   struct pt_regs * ptregs)
++{
++
++	struct ti_codec_spi *ti_codec_spi = context_data;
++#ifdef SPI_INTERRUPT_MODE
++	volatile u32 event = 0x1,word_complete, cmd;
++	u32 bits_per_word;
++	u32 rx_data;
++	unsigned long timeout;
++	irqreturn_t ret = IRQ_NONE;
++	struct spi_device *spi = ti_codec_spi->spi;
++#endif
++#ifdef SPI_INT_TASKLET
++	DEBUG_TI("IN_IRQ\n");
++	ti_codec_spi->have_interrupt = 1;
++	disable_irq(LNXINTNUM(ti_codec_spi->irq));
++	DEBUG_TI("Further SPI interrupts disabled\n");
++	/* invoke the tasklet */
++	tasklet_hi_schedule(&(ti_codec_spi->tasklet));
++	DEBUG_TI("SPI tasklet re-scheduled\n");
++	return IRQ_HANDLED;
++#else /* SPI_INT_TASKLET */
++	DEBUG_TI("IN_IRQ\n");
++    /* Busy bit should not be set */
++	timeout = jiffies + AVALANCHE_TI_CODEC_SPI_DELAY;
++	word_complete = 0;
++	do
++	{
++		event = 0;
++		/* tx */
++		if(ti_codec_spi->tx)
++		{
++			event = be32_to_cpu(ti_codec_spi->base->spdr);
++			if(!(event & SPI_COMPLETE))
++			{
++				word_complete = 1;
++				break;
++			}
++		}
++		/* rx */
++		else
++		{
++			event = be32_to_cpu(ti_codec_spi->base->spbr);
++			if(event & SPI_COMPLETE)
++			{
++				word_complete = 1;
++				break;
++			}
++		}
++
++		if(time_after(jiffies, timeout)){
++   	        printk("[SPI] ->Busy bit not cleared for a long time, status=%x\n", event);
++        }
++	}while(time_after(timeout, jiffies));
++	ret = IRQ_HANDLED;
++	/* IRQ_HANDLED = 1 defined in linux_interrupt.h */
++	if( word_complete )
++	{
++		/* what command invoked this spi interrupt ? */
++		cmd = be32_to_cpu(ti_codec_spi->base->spcr1);
++		bits_per_word = SPI_CMD_TO_BPW(cmd) + 1;
++		/* is this interrupt for any data from the slave device? */
++		if( ti_codec_spi->rx ){
++			/* Read the received data */
++			rx_data = be32_to_cpu(ti_codec_spi->base->spbr) & (~SPI_COMPLETE);
++			DEBUG_TI("data received %x\n",rx_data);
++			/* put the read data in the driver buffer */
++			ti_codec_spi->get_rx(rx_data, ti_codec_spi);
++		}
++		ti_codec_spi->count -= 1;
++		/* If the number of words to be transmitted is not zero
++    	 * then dispatch transfer command again
++         */
++		if( ti_codec_spi->count > 0 )
++		{
++			if( ti_codec_spi->tx )
++			{
++				u32 word = ti_codec_spi->get_tx(ti_codec_spi);
++				#ifdef AVALANCHE_TI_CODEC_SPI_IP_FIX
++				word <<= (32- bits_per_word);
++				#endif
++				ti_codec_spi->base->spdr = cpu_to_be32(word);
++				DEBUG_TI("DIRQ=%x\n", word);
++			}
++			DEBUG_TI("CONT_IRQ = %x\n",
++                  ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++			/* issue the continue command */
++			ti_codec_spi->base->spcr1 =
++                   cpu_to_be32(((ti_codec_spi->slave[spi->chip_select].cmd_to_write) | SPI_DOUT_DIR));
++		}
++		else
++		{
++			/* disab?le interrupt after frame completion */
++			disable_irq(LNXINTNUM(ti_codec_spi->irq));
++			/* Notify the completion. ti_codec_spi_transfer can now go ahead*/
++			complete (&ti_codec_spi->done);
++		}
++	}
++	return ret;
++#endif
++}
++
++
++#endif /* SPI_INTERRUPT_MODE */
++
++#ifdef SPI_INT_TASKLET
++void ti_codec_spi_tasklet_func(unsigned long data)
++{
++	struct ti_codec_spi *ti_codec_spi = (struct ti_codec_spi *)(data);
++	volatile u32 event = 0x1, cmd;
++	u32 bits_per_word, word_complete;
++	u32 rx_data;
++	struct spi_device *spi = ti_codec_spi->spi;
++	static int tasklet_timeout = BIT_CLEAR_TIME_OUT;
++	ENTER
++	if( !(ti_codec_spi->have_interrupt) ){
++		DEBUG_TI("SPI Tasklet need not be invoked, since there is no interrupt \
++               from SPI\n");
++		return;
++	}
++spi_tasklet_soft_schedule:
++    /* Busy bit should not be set */
++    /* Get interrupt events (tx/rx) and clear the interrupt bit
++       Word Complete or Frame Complete*/
++	word_complete = 0;
++	event = 0;
++	/* tx */
++	if(ti_codec_spi->tx)
++	{
++		event = be32_to_cpu(ti_codec_spi->base->spdr);
++		if(!(event & SPI_COMPLETE))
++		{
++			word_complete = 1;
++			break;
++		}
++	}
++	/* rx */
++	else
++	{
++		event = be32_to_cpu(ti_codec_spi->base->spbr);
++		if(event & SPI_COMPLETE)
++		{
++			word_complete = 1;
++			break;
++		}
++	}
++
++	/* check for word complete */
++	if(!word_complete) {
++        DEBUG_TI("{SPI] Word complete not set (status=%x]\n", event);
++		if( !tasklet_timeout-- ){
++			printk("{SPI] Word complete not set for a long time (status=%x]\n",
++                     event);
++            ti_codec_spi->have_interrupt = 0;
++			tasklet_timeout = 0;
++            complete (&ti_codec_spi->done);
++            EXIT
++            return;
++		}
++        /* don't waste any time in checking for busy, instead reschedule
++		 * ourself
++         */
++        tasklet_hi_schedule(&(ti_codec_spi->tasklet));
++        EXIT
++        return;
++	}
++	tasklet_timeout = BIT_CLEAR_TIME_OUT;
++	/* what command invoked this spi interrupt ? */
++	cmd = be32_to_cpu(ti_codec_spi->base->spcr1);
++	bits_per_word = SPI_CMD_TO_BPW(cmd) + 1;
++	/* is this interrupt for any data from the slave device? */
++	if( ti_codec_spi->rx ){
++		/* Read the received data */
++		rx_data = be32_to_cpu(ti_codec_spi->base->spbr) & (~SPI_COMPLETE);
++		DEBUG_TI("data received %x\n",rx_data);
++		/* put the read data in the driver buffer */
++		ti_codec_spi->get_rx(rx_data, ti_codec_spi);
++	}
++	ti_codec_spi->count -= 1;
++	/* If the number of words to be transmitted is not zero  then dispatch
++     * transfer command again
++     */
++	if (ti_codec_spi->count > 0)
++	{
++		if (ti_codec_spi->tx)
++		{
++			u32 word = ti_codec_spi->get_tx(ti_codec_spi);
++			#ifdef AVALANCHE_TI_CODEC_SPI_IP_FIX
++			word <<= (32- bits_per_word);
++			#endif
++			ti_codec_spi->base->spdr = cpu_to_be32(word);
++			DEBUG_TI("DIRQ=%x\n", word);
++		}
++		DEBUG_TI("CONT_IRQ = %x\n",
++               ti_codec_spi->slave[spi->chip_select].cmd_to_write);
++		/* issue the continue command */
++		ti_codec_spi->base->spcr1 =
++                cpu_to_be32(((ti_codec_spi->slave[spi->chip_select].cmd_to_write) | SPI_DOUT_DIR));
++		goto spi_tasklet_soft_schedule;
++	}
++	else
++	{
++		ti_codec_spi->have_interrupt = 0;
++		DEBUG_TI("Sending Completion notification to spi_bufs\n");
++		/* Notify the completion. ti_codec_spi_transfer can now go ahead */
++		complete (&ti_codec_spi->done);
++	}
++	EXIT
++	return;
++}
++
++#endif /* SPI_INT_TASKLET */
++
++
++/**
++ * ti_codec_spi_probe - probe function for SPI Master Controller
++ * @dev: platform_device structure which contains plateform specific data
++ *
++ * According to Linux Deviced Model this function will be invoked by Linux
++ * with plateform_device struct which contains the device specific info
++ * like bus_num, max_chipselect (how many slave devices can be connected),
++ * clock freq. of SPI controller, SPI controller's memory range, IRQ number etc.
++ *
++ * According to Linux Deviced Model this function will be invoked by Linux
++ * with plateform_device struct which contains the device specific info
++ * like bus_num, max_chipselect (how many slave devices can be connected),
++ * clock freq. of SPI controller, SPI controller's memory range, IRQ number etc.
++ * This info will be provided by board specific code which will reside in
++ * linux-2.6.10/arch/mips/mips-boards/avalanche_avalanche/avalanche_yamuna code.
++ * This function will map the SPI controller's memory, register IRQ,
++ * Reset SPI controller and setting its registers to default value.
++ * It will invoke spi_bitbang_start to create work queue so that client driver
++ * can register transfer method to work queue.
++ */
++
++static int __init ti_codec_spi_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct spi_master *master;
++	struct ti_codec_spi *ti_codec_spi;
++	struct ti_codec_spi_platform_data *pdata;
++	struct resource *r;
++	int ret = 0;
++	ENTER
++	/* Get resources(memory, IRQ) associated with the device */
++	master = spi_alloc_master(dev, sizeof(struct ti_codec_spi));
++	if( master == NULL ){
++		ret = -ENOMEM;
++		goto err;
++	}
++	dev_set_drvdata(dev, (master));
++	pdata = dev->platform_data;
++	if( pdata == NULL ){
++		ret = -ENODEV;
++		goto free_master;
++	}
++	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if( r == NULL ){
++		ret = -ENODEV;
++		goto free_master;
++	}
++	ti_codec_spi = spi_master_get_devdata(master);
++	/*Call function to get VBUS freq on Yamuna and decide CLK_DIV value*/
++	ti_codec_spi->ref_freq = PAL_sysClkcGetFreq(AVALANCHE_CODEC_SPI_REF_CLOCK);
++#ifdef SPI_INT_TASKLET
++	ti_codec_spi->have_interrupt = 0;
++	/* tasklet for transferring data */
++	tasklet_init( &(ti_codec_spi->tasklet), ti_codec_spi_tasklet_func,
++                  (unsigned long)ti_codec_spi);
++#endif
++	ti_codec_spi->bitbang.master         = spi_master_get(master);
++	ti_codec_spi->bitbang.chipselect     = ti_codec_spi_chipselect;
++	ti_codec_spi->bitbang.set_flen       = ti_codec_spi_set_flen;
++	ti_codec_spi->bitbang.setup_transfer = ti_codec_spi_setup_transfer;
++	ti_codec_spi->bitbang.txrx_bufs      = ti_codec_spi_transfer;
++	ti_codec_spi->sysclk                 = pdata->sysclk;
++	ti_codec_spi->activate_cs            = pdata->activate_cs;
++	ti_codec_spi->deactivate_cs          = pdata->deactivate_cs;
++	ti_codec_spi->get_rx                 = ti_codec_spi_rx_buf_u8;
++	ti_codec_spi->get_tx                 = ti_codec_spi_tx_buf_u8;
++	if (ti_codec_spi->bitbang.master)
++            ti_codec_spi->bitbang.master->setup  = ti_codec_spi_setup;
++	init_completion(&ti_codec_spi->done);
++	ti_codec_spi->base = (struct ti_codec_spi_reg __iomem *)(r->start);
++	if (ti_codec_spi->base == NULL) {
++		ret = -ENOMEM;
++		goto put_master;
++	}
++#ifdef SPI_INTERRUPT_MODE
++	ti_codec_spi->irq = platform_get_irq(pdev, 0);
++	if( ti_codec_spi->irq < 0 ){
++		ret = -ENXIO;
++		goto unmap_io;
++	}
++	ret = avalanche_intc_set_interrupt_type(LNXINTNUM(ti_codec_spi->irq), 0);
++    if( ret != 0 )
++    {
++        DEBUG_TI("irq type set fails\n");
++        goto unmap_io;
++    }
++	/* Register for SPI Interrupt */
++	ret = request_irq(LNXINTNUM( ti_codec_spi->irq), ti_codec_spi_irq,
++								 SA_INTERRUPT , "ti_codec_spi", ti_codec_spi );
++	if( ret != 0 )
++	{
++		DEBUG_TI("request_irq fails\n");
++		goto unmap_io;
++	}
++	disable_irq(LNXINTNUM(ti_codec_spi->irq));
++#endif /* SPI_INTERRUPT_MODE */
++	master->bus_num = pdata->bus_num;
++	master->num_chipselect = pdata->max_chipselect;
++	ENTER
++
++	/* SPI controller initializations */
++	ti_codec_spi->base->spcr1 	= cpu_to_be32(TI_CODEC_SPI_DEF_SPCR1); /* Bi-Directional, Data Clock Enable, Datalen = 8 bits, Div clock =1*/
++	/* Put the controller in Core SPI mode by default */
++	ret = avalanche_spi_bitbang_start(&ti_codec_spi->bitbang);
++	if (ret != 0)
++		goto free_irq;
++	printk(KERN_INFO "%s: TI Codec SPI Controller driver at 0x%p \
++          (irq = %d)\n",dev_name(ti_codec_spi->bitbang.master->dev.parent), ti_codec_spi->base, ti_codec_spi->irq);
++	return ret;
++free_irq:
++#ifdef SPI_INTERRUPT_MODE
++	free_irq(ti_codec_spi->irq, ti_codec_spi);
++unmap_io:
++#endif
++put_master:
++	spi_master_put(master);
++free_master:
++	kfree(master);
++err:
++	return ret;
++}
++
++
++
++/**
++ * ti_codec_spi_remove - remove function for SPI Master Controller
++ * @dev: platform_device structure which contains plateform specific data
++ *
++ * This function will do the reverse action of ti_codec_spi_probe function
++ * It will free the IRQ and SPI controller's memory region.
++ * It will also call spi_bitbang_stop to destroy the work queue which was
++ * created by spi_bitbang_start.
++ */
++static int ti_codec_spi_remove(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct ti_codec_spi *ti_codec_spi;
++	struct spi_master *master;
++	ENTER
++	master = dev_get_drvdata(dev);
++	ti_codec_spi = spi_master_get_devdata(master);
++	avalanche_spi_bitbang_stop(&ti_codec_spi->bitbang);
++#ifdef SPI_INTERRUPT_MODE
++	free_irq(ti_codec_spi->irq, ti_codec_spi);
++#endif
++	spi_master_put(ti_codec_spi->bitbang.master);
++	EXIT
++	return 0;
++}
++
++static struct platform_driver ti_codec_spi_driver = {
++	.driver = {
++		.name  = "ti_codec_spi",
++		.bus   = &platform_bus_type,
++		.owner = THIS_MODULE,
++	},
++	.probe     = ti_codec_spi_probe,
++	.remove    = ti_codec_spi_remove,
++	.shutdown  = NULL,
++	.suspend   = NULL,
++	.resume    = NULL,
++};
++
++
++static int __init ti_codec_spi_init(void)
++{
++	ENTER
++	return platform_driver_register(&ti_codec_spi_driver);
++	EXIT
++}
++
++static void __exit ti_codec_spi_exit(void)
++{
++	platform_driver_unregister(&ti_codec_spi_driver);
++}
++
++module_init(ti_codec_spi_init);
++module_exit(ti_codec_spi_exit);
++
++MODULE_AUTHOR("Texas Instruments");
++MODULE_DESCRIPTION("TI CODEC SPI Master Driver");
++MODULE_LICENSE("GPL");
+diff --git a/include/linux/avalanche/puma7/avalanche_spi.h b/include/linux/avalanche/puma7/avalanche_spi.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/avalanche/puma7/avalanche_spi.h
+@@ -0,0 +1,94 @@
++/*
++ *
++ * avalanche_spi.h
++ * Description:
++ * avalanche sppi controller header file
++ *
++ *
++ * Copyright (C) 2008, Texas Instruments, Incorporated
++ *
++ *  This program is free software; you can distribute it and/or modify it
++ *  under the terms of the GNU General Public License (Version 2) as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope it will be useful, but WITHOUT
++ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ *  for more details.
++ *
++ *  You should have received a copy of the GNU General Public License along
++ *  with this program; if not, write to the Free Software Foundation, Inc.,
++ *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
++ *
++ */
++
++
++#ifndef __AVALANCHE_SPI_H_
++#define __AVALANCHE_SPI_H_
++
++#define AVALANCHE_SPI_INIT_SPMODE	0
++#define AVALANCHE_SPI_SIZE			0xFF
++
++/* Chip selects available on the spi IP */
++#define AVALANCHE_SPI_CS0			0
++#define AVALANCHE_SPI_CS1			1
++#define AVALANCHE_SPI_CS2			2
++#define AVALANCHE_SPI_CS3			3
++
++#define AVALANCHE_SFI_MODE			0x01
++#define AVALANCHE_CORE_SPI_MODE		0x00
++
++#define  AVALANCHE_SPI_4_BYTE_ADDR_MODE 4
++#define  AVALANCHE_SPI_3_BYTE_ADDR_MODE 3
++/* Interrupt not used in MMSPI mode i,e each word transfer generates interrupt
++ *  and it will degrade the performance
++ */
++
++struct ctlr_cs_sel_t
++{
++	u8 cs;
++	u8 pol;
++};
++
++struct avalanche_spi_platform_data {
++	/* board specific information */
++	u16 	initial_spmode;
++	u16		bus_num; /* id for controller */
++	u16		max_chipselect;
++	int		(*activate_cs)( u8 cs, u8 polarity,
++                            struct ctlr_cs_sel_t *ctlr_cs_sel);
++	int		(*deactivate_cs)( u8 cs, u8 polarity,
++                              struct ctlr_cs_sel_t *ctlr_cs_sel);
++	u32		sysclk;
++
++    u16     addr_mode;
++};
++
++/* This structure captures the data required for SFI mode of operation,
++ * infomation required by memory mapped set up registers
++ */
++struct avalanche_sfi_dev_info_t
++{
++	u8 write_cmd;			/* Flash Specific WRITE CMD */
++	u8 read_cmd;			/* Flash Specific READ/FAST_READ/DUAL_READ CMD */
++	u16 mode; 				/* AVALANCHE_SFI_MODE or AVALANCHE_CORE_SPI_MODE */
++	u16 dual_read;			/* 0 for Normal & Fast Read  1 for Dual read  */
++	u16 num_dummy_bytes; 	/* 0 for Normal read 1 for Fast & Dual Read */
++	u16 num_addr_bytes;     /* 3 bytes for most flashes */
++	u32 sfi_base;           /* Memory Mapped address for givn CS */
++	u16 initialized;        /* Used to avoid CMD initilization repetation */
++	int (*sfi_transfer)(struct spi_device *spi, struct spi_transfer *t);
++							/* Clinet Specific transfer function */
++};
++
++#define SFI_SET_MODE(spi, new_mode,old_mode)  {\
++	struct avalanche_sfi_dev_info_t *sfi = \
++                     (struct avalanche_sfi_dev_info_t*)(spi->controller_data);\
++	old_mode = sfi->mode; \
++	sfi->mode 	= new_mode;	\
++}
++
++/* Workaround for flash endless busy state */
++void avalanche_spi_unlock_flash_busy_state( struct spi_device *spi );
++
++#endif /* __AVALANCHE_SPI_H_ */
+diff --git a/include/linux/avalanche/puma7/puma7_spi.h b/include/linux/avalanche/puma7/puma7_spi.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/avalanche/puma7/puma7_spi.h
+@@ -0,0 +1,89 @@
++/*
++ *
++ * puma7_spi.h
++ * Description:
++ * puma7 spi platform data
++ *
++ *
++   This file is provided under a dual BSD/GPLv2 license.  When using or
++  redistributing this file, you may do so under either license.
++
++  GPL LICENSE SUMMARY
++
++  Copyright(c) 2014 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License as
++  published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful, but
++  WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++  General Public License for more details.
++
++  You should have received a copy of the GNU General Public License
++  along with this program; if not, write to the Free Software
++  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++  The full GNU General Public License is included in this distribution
++  in the file called LICENSE.GPL.
++
++
++  Contact Information:
++  Intel Corporation
++  2200 Mission College Blvd.
++  Santa Clara, CA  97052
++
++  BSD LICENSE
++
++  Copyright(c) 2014 Intel Corporation. All rights reserved.
++
++  Redistribution and use in source and binary forms, with or without
++  modification, are permitted provided that the following conditions
++  are met:
++
++    * Redistributions of source code must retain the above copyright
++      notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above copyright
++      notice, this list of conditions and the following disclaimer in
++      the documentation and/or other materials provided with the
++      distribution.
++
++    * Neither the name of Intel Corporation nor the names of its
++      contributors may be used to endorse or promote products derived
++      from this software without specific prior written permission.
++
++  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++#ifndef __PUMA7_SPI__
++#define __PUMA7_SPI___
++
++
++#define AVALANCHE_SPI_BUS_NUM				(0)
++#define AVALANCHE_SPI_MAX_CHIPSELECT		(2)
++
++#ifdef CONFIG_SPI_TI_CODEC
++#define AVALANCHE_DEFAULT_SYS_CLK			(8*1000*1000)
++#if 0
++#define AVALANCHE_CODEC_SPI_BUS_NUM			(1)
++#else
++#define AVALANCHE_CODEC_SPI_BUS_NUM			(3)
++#endif
++#define AVALANCHE_CODEC_SPI_MAX_CHIPSELECT	(2)
++
++#define TI_CODEC_SPI_DEF_SPCR1				(0x81080001)
++#endif /* CONFIG_SPI_TI_CODEC */
++
++
++#endif /*__PUMA7_SPI___ */
+diff --git a/include/linux/avalanche/puma7/spi_ticodec.h b/include/linux/avalanche/puma7/spi_ticodec.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/avalanche/puma7/spi_ticodec.h
+@@ -0,0 +1,49 @@
++/*
++ *
++ * spi_ticodec.h
++ * Description:
++ * code spi header file
++ *
++ *
++ * Copyright (C) 2008, Texas Instruments, Incorporated
++ *
++ *  This program is free software; you can distribute it and/or modify it
++ *  under the terms of the GNU General Public License (Version 2) as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope it will be useful, but WITHOUT
++ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ *  for more details.
++ *
++ *  You should have received a copy of the GNU General Public License along
++ *  with this program; if not, write to the Free Software Foundation, Inc.,
++ *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
++ *
++ */
++
++
++#ifndef __TI_CODEC_SPI_H_
++#define __TI_CODEC_SPI_H_
++
++struct ti_ctlr_cs_sel_t
++{
++	u8 cs;
++	u8 pol;
++};
++
++#define SPI_3_WIRE 0x40
++
++struct ti_codec_spi_platform_data {
++	/* board specific information */
++	u16 	initial_spmode;
++	u16		bus_num; /* id for controller */
++	u16		max_chipselect;
++	int		(*activate_cs)( u8 cs, u8 polarity,
++                            struct ti_ctlr_cs_sel_t *ctlr_cs_sel);
++	int		(*deactivate_cs)( u8 cs, u8 polarity,
++                              struct ti_ctlr_cs_sel_t *ctlr_cs_sel);
++	u32		sysclk;
++};
++
++#endif /* __TI_CODEC_SPI_H_ */

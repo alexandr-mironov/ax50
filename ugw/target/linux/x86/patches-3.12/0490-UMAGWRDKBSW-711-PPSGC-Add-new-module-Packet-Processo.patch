@@ -1,0 +1,1205 @@
+From 21ef1c01677da77bddc01a5c24509673cc50f390 Mon Sep 17 00:00:00 2001
+From: avnerlam <avner.lamy@intel.com>
+Date: Thu, 29 Sep 2016 11:28:10 +0300
+Subject: [PATCH 490/639] UMAGWRDKBSW-711-PPSGC: Add new module - Packet
+ Processor Sessions Group Counters
+
+One of the packet processor capabilities is to provide traffic counters statistics per session.
+The new module gives the ability to associate different sessions into one group and to retreive traffic counters of all sessions in specific group.
+The module registers HIL callback functions of session create/delete indication.
+When session create indication is called the module associate the new session to all group counters in its socket buffer (SKB) if any.
+The module contains APIs to allocate uniqe group counter ID, release group counter ID, and get sessions traffic counters of specific group counter ID.
+This module run on same CPU where the packet processor is.
+This commit contains the new module kernel header files, changes needed in the SKB structure to support it and MRPC mechanizm to transfer messages from Arm CPU to Atom CPU ans vice versa for requests from PPSGC module.
+
+Signed-off-by: Lamy Avner <avner.lamy@intel.com>
+---
+ drivers/mrpc/Kconfig                       |   7 +
+ drivers/mrpc/Makefile                      |   1 +
+ drivers/mrpc/sgc_server.c                  | 643 +++++++++++++++++++++++++++++
+ include/linux/avalanche/puma7/ppsgc_db.h   | 198 +++++++++
+ include/linux/avalanche/puma7/ppsgc_defs.h | 136 ++++++
+ include/linux/mrpc.h                       |   1 +
+ include/linux/sgc_server.h                 |  55 +++
+ include/linux/skbuff.h                     |  11 +-
+ net/core/skbuff.c                          |  22 -
+ 9 files changed, 1045 insertions(+), 29 deletions(-)
+ create mode 100644 drivers/mrpc/sgc_server.c
+ create mode 100644 include/linux/avalanche/puma7/ppsgc_db.h
+ create mode 100644 include/linux/avalanche/puma7/ppsgc_defs.h
+ create mode 100644 include/linux/sgc_server.h
+
+diff --git a/drivers/mrpc/Kconfig b/drivers/mrpc/Kconfig
+index 812b652..35e74ce 100755
+--- a/drivers/mrpc/Kconfig
++++ b/drivers/mrpc/Kconfig
+@@ -69,3 +69,10 @@
+        CPPI MRPC client provides CPPI related operations that are implemented
+        on ARM side over MRPC interface.
+ 
++config MRPC_SGC_SERVER
++    bool "Session Group Counter server"
++    depends on MRPC
++    default n
++    help
++       Session Group Counter MRPC server driver support
++
+diff --git a/drivers/mrpc/Makefile b/drivers/mrpc/Makefile
+index f20e0cd..20c5ea43 100755
+--- a/drivers/mrpc/Makefile
++++ b/drivers/mrpc/Makefile
+@@ -3,3 +3,4 @@
+ obj-$(CONFIG_MRPC_MODPHY_CLIENT) += modphy_client.o
+ obj-$(CONFIG_MRPC_HANDSHAKE)	 += handshake_client.o
+ obj-$(CONFIG_MRPC_CPPI_CLIENT)	 += cppi_client.o
++obj-$(CONFIG_MRPC_SGC_SERVER)    += sgc_server.o
+diff --git a/drivers/mrpc/sgc_server.c b/drivers/mrpc/sgc_server.c
+new file mode 100644
+index 0000000..2d073ce
+--- /dev/null
++++ b/drivers/mrpc/sgc_server.c
+@@ -0,0 +1,643 @@
++/*
++ *
++ * sgc_server.c
++ * Description:
++ * PP Sessions Group Counter over MRPC server driver
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++#define pr_fmt(fmt) KBUILD_MODNAME ":%s:%d " fmt "\n", __func__, __LINE__
++
++/**************************************************************************/
++/*      INCLUDES:                                                         */
++/**************************************************************************/
++#include <linux/platform_device.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
++#include <linux/byteorder/generic.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/mutex.h>
++#include <linux/workqueue.h>
++#include <linux/err.h>
++#include <linux/netdevice.h>
++#include <linux/ethtool.h>
++#include <linux/mrpc.h>
++#include <linux/avalanche/puma7/ppsgc_db.h>
++#include <linux/sgc_server.h>
++
++
++/**************************************************************************/
++/*      EXTERNS Declaration:                                              */
++/**************************************************************************/
++
++
++/**************************************************************************/
++/*      DEFINES:                                                          */
++/**************************************************************************/
++#ifdef DEBUG
++#define DBG(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
++#else
++#define DBG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
++#endif
++
++#define sgc_htonll(x) cpu_to_be64(x)
++
++#define SGC_PROC(proc, func, arglen, replen)            \
++[proc] = {                                              \
++        .procid   = proc,                               \
++        .p_func   = func,                               \
++        .p_arglen = arglen,                             \
++        .p_replen = replen,                             \
++        .p_name   = #func,                              \
++}
++
++
++/**************************************************************************/
++/*      LOCAL DECLARATIONS:                                               */
++/**************************************************************************/
++/* driver private database */
++typedef struct SgcServerPrivate
++{
++    struct platform_device  *pdev;      /* platform device */
++    struct mrpc_server      *mrpc;      /* mrpc server handle */
++    struct sgc_funcs        *callbacks;
++} SgcServerPrivate_t;
++
++enum
++{
++    SGC_ALLOC_GROUP_COUNTER_ID_PROC = 0,
++    SGC_RELEASE_GROUP_COUNTER_ID_PROC,
++    SGC_DEL_GROUP_COUNTER_SESSIONS_PROC,
++    SGC_GET_GROUP_COUNTER_AMOUNT_PROC,
++    SGC_GET_IF_COUNTERS_PROC,
++    SGC_GET_TP_PORT_COUNTERS_PROC,
++    SGC_GET_SF_COUNTERS_PROC,
++    SGC_PRINT_TPPORT_COUNTERS_PROC,
++    SGC_PRINT_IF_COUNTERS_PROC,
++    SGC_PRINT_GROUP_COUNTERS_PROC,
++};
++
++
++/**************************************************************************/
++/*      LOCAL FUNCTIONS DECLARATIONS:                                     */
++/**************************************************************************/
++static ssize_t status_show(struct device *dev, struct device_attribute *attr, char *buf);
++static int sgc_probe(struct platform_device *pdev);
++static int sgc_remove(struct platform_device *pdev);
++static int mrpc_sgc_AllocGroupCounter(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_ReleaseGroupCounter(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_DelGroupCounterSessions(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_GetGroupCounterAmount(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_GetIfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_GetTpPortCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_GetSfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_PrintTpPortCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_PrintIfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++static int mrpc_sgc_PrintGroupCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen);
++
++
++/**************************************************************************/
++/*      LOCAL VARIABLES:                                                  */
++/**************************************************************************/
++static SgcServerPrivate_t       *this;
++static struct platform_device   *sgc_device;
++static DEVICE_ATTR(status, S_IRUGO, status_show, NULL);
++
++static struct attribute         *sgc_attrs[] =
++{
++    &dev_attr_status.attr,
++    NULL
++};
++
++static struct attribute_group   sgc_attrs_group =
++{
++    .attrs = sgc_attrs,
++};
++
++static struct platform_driver   sgc_driver =
++{
++    .driver =
++    {
++        .name = "sgc_mrpc_server",
++    },
++    .probe = sgc_probe,
++    .remove = sgc_remove,
++};
++
++static struct mrpc_procinfo sgc_server_procs[] =
++{
++    /* Request                                    Handle function                   Argument length                Reply length */
++    SGC_PROC(SGC_ALLOC_GROUP_COUNTER_ID_PROC,     mrpc_sgc_AllocGroupCounter,       0,                             sizeof(Uint32)),
++    SGC_PROC(SGC_RELEASE_GROUP_COUNTER_ID_PROC,   mrpc_sgc_ReleaseGroupCounter,     sizeof(Uint32),                0),
++    SGC_PROC(SGC_DEL_GROUP_COUNTER_SESSIONS_PROC, mrpc_sgc_DelGroupCounterSessions, sizeof(Uint32),                0),
++    SGC_PROC(SGC_GET_GROUP_COUNTER_AMOUNT_PROC,   mrpc_sgc_GetGroupCounterAmount,   sizeof(Uint32),                sizeof(PpsgcPpCounters_t)),
++    SGC_PROC(SGC_GET_IF_COUNTERS_PROC,            mrpc_sgc_GetIfCounters,           sizeof(PpsgcIfCounters_t),     sizeof(PpsgcIfCounters_t)),
++    SGC_PROC(SGC_GET_TP_PORT_COUNTERS_PROC,       mrpc_sgc_GetTpPortCounters,       sizeof(PpsgcTpPortCounters_t), sizeof(PpsgcTpPortCounters_t)),
++    SGC_PROC(SGC_GET_SF_COUNTERS_PROC,            mrpc_sgc_GetSfCounters,           sizeof(PpsgcSfCounters_t),     sizeof(PpsgcSfCounters_t)),
++    SGC_PROC(SGC_PRINT_TPPORT_COUNTERS_PROC,      mrpc_sgc_PrintTpPortCounters,     0,                             0),
++    SGC_PROC(SGC_PRINT_IF_COUNTERS_PROC,          mrpc_sgc_PrintIfCounters,         0,                             0),
++    SGC_PROC(SGC_PRINT_GROUP_COUNTERS_PROC,       mrpc_sgc_PrintGroupCounters,      0,                             0),
++};
++
++
++/**************************************************************************/
++/*      INTERFACE FUNCTIONS Implementation:                               */
++/**************************************************************************/
++
++/**************************************************************************/
++/*! \fn void mrpc_sgc_server_unregister(void)
++ **************************************************************************
++ *  \brief unregister sgc callbacks
++ *  \param[in] None
++ *  \param[out] None
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++void mrpc_sgc_server_unregister(void)
++{
++    BUG_ON(!this);
++    BUG_ON(!this->callbacks);
++
++    kfree(this->callbacks);
++    this->callbacks = NULL;
++
++    pr_info("callback functions unregistered\n");
++}
++EXPORT_SYMBOL(mrpc_sgc_server_unregister);
++
++/**************************************************************************/
++/*! \fn int mrpc_sgc_server_register(struct sgc_funcs *callbacks)
++ **************************************************************************
++ *  \brief register sgc callbacks
++ *  \param[in] sgc_funcs - Pointer to callback functions structure/
++ *  \param[out] None
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++int mrpc_sgc_server_register(struct sgc_funcs *callbacks)
++{
++    SgcServerPrivate_t  *priv = this;
++
++    BUG_ON(!this);
++    BUG_ON(!callbacks);
++    BUG_ON(this->callbacks);
++
++    this->callbacks = kzalloc(sizeof(*callbacks), GFP_KERNEL);
++    if (!this->callbacks)
++    {
++        pr_err("Failed to allocate memory\n");
++        return -ENOMEM;
++    }
++
++    memcpy(this->callbacks, callbacks, sizeof(*callbacks));
++
++    pr_info("callback functions registered\n");
++    return 0;
++}
++EXPORT_SYMBOL(mrpc_sgc_server_register);
++
++
++/**************************************************************************/
++/*      LOCAL FUNCTIONS                                                   */
++/**************************************************************************/
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_AllocGroupCounter(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Allocate group counter.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_AllocGroupCounter(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    int                     ret;
++    PpsgcGroupCounterId_t   allocGroupCounterId;
++    Uint32                  tmpGroupCounterId;
++    Uint32                  *repGroupCounterId = (Uint32*)rep;
++    SgcServerPrivate_t      *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    ret = priv->callbacks->PPSGC_Db_AllocGroupCounterId(&allocGroupCounterId);
++    tmpGroupCounterId = allocGroupCounterId;
++    tmpGroupCounterId = htonl(tmpGroupCounterId);
++    *repGroupCounterId = tmpGroupCounterId;
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_ReleaseGroupCounter(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Release group counter.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_ReleaseGroupCounter(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    Uint32                  *argGroupCounterId = (Uint32*)arg;
++    Uint32                  tmpGroupCounterId;
++    PpsgcGroupCounterId_t   relGroupCounterId;
++    SgcServerPrivate_t      *priv = this;
++
++    tmpGroupCounterId = *argGroupCounterId;
++    tmpGroupCounterId = ntohl(tmpGroupCounterId);
++    relGroupCounterId = tmpGroupCounterId;
++
++    BUG_ON(!priv->callbacks);
++    return priv->callbacks->PPSGC_Db_ReleaseGroupCounterId(relGroupCounterId);
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_DelGroupCounterSessions(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Delete group counter sessions.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_DelGroupCounterSessions(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    Uint32                  *argGroupCounterId = (Uint32*)arg;
++    Uint32                  tmpGroupCounterId;
++    PpsgcGroupCounterId_t   delGroupCounterId;
++    SgcServerPrivate_t      *priv = this;
++
++    tmpGroupCounterId = *argGroupCounterId;
++    tmpGroupCounterId = ntohl(tmpGroupCounterId);
++    delGroupCounterId = tmpGroupCounterId;
++
++    BUG_ON(!priv->callbacks);
++    return priv->callbacks->PPSGC_Db_DeleteGroupCounterSessions(delGroupCounterId);
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_GetGroupCounterAmount(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Get group counter sessions traffic amount.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_GetGroupCounterAmount(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    int                     ret;
++    Uint32                  *argGroupCounterId = (Uint32*)arg;
++    Uint32                  tmpGroupCounterId;
++    PpsgcPpCounters_t       *repPpCounters = (PpsgcPpCounters_t*)rep;
++    PpsgcGroupCounters_t    groupCounters;
++    SgcServerPrivate_t      *priv = this;
++
++    tmpGroupCounterId = *argGroupCounterId;
++    tmpGroupCounterId = ntohl(tmpGroupCounterId);
++    groupCounters.groupCounterId = tmpGroupCounterId;
++
++    BUG_ON(!priv->callbacks);
++    ret = priv->callbacks->PPSGC_Db_GetGroupCounterAmount(&groupCounters);
++
++    repPpCounters->totalBytesFwd    = sgc_htonll(groupCounters.ppCounters.totalBytesFwd);
++    repPpCounters->totalPktsFwd     = sgc_htonll(groupCounters.ppCounters.totalPktsFwd);
++    repPpCounters->multicastPktsFwd = sgc_htonll(groupCounters.ppCounters.multicastPktsFwd);
++    repPpCounters->unicastPktsFwd   = sgc_htonll(groupCounters.ppCounters.unicastPktsFwd);
++
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_GetIfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Get IF counters.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_GetIfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    int                 ret;
++    PpsgcIfCounters_t   ppsgcIfCounters = {0};
++    PpsgcIfCounters_t   *argPpsgcIfCounters = (PpsgcIfCounters_t*)arg;
++    PpsgcIfCounters_t   *repPpsgcIfCounter  = (PpsgcIfCounters_t*)rep;
++    SgcServerPrivate_t  *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    strncpy(ppsgcIfCounters.ifName, argPpsgcIfCounters->ifName, sizeof(ppsgcIfCounters.ifName)-1);
++    ppsgcIfCounters.includeQosDrops = argPpsgcIfCounters->includeQosDrops;
++
++    ret = priv->callbacks->PPSGC_Db_GetIfCounters(&ppsgcIfCounters);
++
++    repPpsgcIfCounter->ifCounters.rx_byte          = sgc_htonll(ppsgcIfCounters.ifCounters.rx_byte);
++    repPpsgcIfCounter->ifCounters.rx_unicast_pkt   = sgc_htonll(ppsgcIfCounters.ifCounters.rx_unicast_pkt);
++    repPpsgcIfCounter->ifCounters.rx_broadcast_pkt = sgc_htonll(ppsgcIfCounters.ifCounters.rx_broadcast_pkt);
++    repPpsgcIfCounter->ifCounters.rx_multicast_pkt = sgc_htonll(ppsgcIfCounters.ifCounters.rx_multicast_pkt);
++    repPpsgcIfCounter->ifCounters.rx_discard_pkt   = sgc_htonll(ppsgcIfCounters.ifCounters.rx_discard_pkt);
++
++    repPpsgcIfCounter->ifCounters.tx_byte          = sgc_htonll(ppsgcIfCounters.ifCounters.tx_byte);
++    repPpsgcIfCounter->ifCounters.tx_unicast_pkt   = sgc_htonll(ppsgcIfCounters.ifCounters.tx_unicast_pkt);
++    repPpsgcIfCounter->ifCounters.tx_broadcast_pkt = sgc_htonll(ppsgcIfCounters.ifCounters.tx_broadcast_pkt);
++    repPpsgcIfCounter->ifCounters.tx_multicast_pkt = sgc_htonll(ppsgcIfCounters.ifCounters.tx_multicast_pkt);
++    repPpsgcIfCounter->ifCounters.tx_discard_pkt   = sgc_htonll(ppsgcIfCounters.ifCounters.tx_discard_pkt);
++
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_GetTpPortCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Get TP counters.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_GetTpPortCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    int                     ret;
++    PpsgcTpPortCounters_t   ppsgcTpPortCounters = {0};
++    PpsgcTpPortCounters_t   *argPpsgcTpPortCounters = (PpsgcTpPortCounters_t*)arg;
++    PpsgcTpPortCounters_t   *repPpsgcTpPortCounters = (PpsgcTpPortCounters_t*)rep;
++    SgcServerPrivate_t      *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    strncpy(ppsgcTpPortCounters.ifName, argPpsgcTpPortCounters->ifName, sizeof(ppsgcTpPortCounters.ifName)-1);
++    ret = priv->callbacks->PPSGC_Db_GetTpPortCounters(&ppsgcTpPortCounters);
++
++    repPpsgcTpPortCounters->inFrames      = htonl(ppsgcTpPortCounters.inFrames);
++    repPpsgcTpPortCounters->outFrames     = htonl(ppsgcTpPortCounters.outFrames);
++    repPpsgcTpPortCounters->discardFrames = htonl(ppsgcTpPortCounters.discardFrames);
++
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_GetSfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Get SF counters.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_GetSfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    int                     ret;
++    PpsgcSfCounters_t       ppsgcSfCounters = {0};
++    PpsgcSfCounters_t       *argPpsgcSfCounters = (PpsgcSfCounters_t*)arg;
++    PpsgcSfCounters_t       *repPpsgcSfCounters = (PpsgcSfCounters_t*)rep;
++    SgcServerPrivate_t      *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    strncpy(ppsgcSfCounters.ifName, argPpsgcSfCounters->ifName, sizeof(ppsgcSfCounters.ifName)-1);
++    ppsgcSfCounters.sfIndex = ntohl(argPpsgcSfCounters->sfIndex);
++    ppsgcSfCounters.clearFlag = ntohl(argPpsgcSfCounters->clearFlag);
++
++    ret = priv->callbacks->PPSGC_Db_GetSfCounters(&ppsgcSfCounters);
++
++    repPpsgcSfCounters->sfCounters.fwd_pkts = htonl(ppsgcSfCounters.sfCounters.fwd_pkts);
++    repPpsgcSfCounters->sfCounters.drp_cnt  = htonl(ppsgcSfCounters.sfCounters.drp_cnt);
++
++    return ret;
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_PrintTpPortCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Print TP port counters.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_PrintTpPortCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    SgcServerPrivate_t      *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    return priv->callbacks->PPSGC_Db_PrintTpPortCounters();
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_PrintIfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Print IF counters.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_PrintIfCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    SgcServerPrivate_t      *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    return priv->callbacks->PPSGC_Db_PrintIfCounters();
++}
++
++/**************************************************************************/
++/*! \fn static int mrpc_sgc_PrintGroupCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++ **************************************************************************
++ *  \brief Print group counters statistics.
++ *  \param[in] arg - Pointer to arguments buffer.
++ *  \param[in] arglen - Arguments length.
++ *  \param[out] rep - Pointer to reply buffer.
++ *  \param[out] replen - Reply length.
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static int mrpc_sgc_PrintGroupCounters(void *arg, ssize_t arglen, void *rep, ssize_t replen)
++{
++    SgcServerPrivate_t      *priv = this;
++
++    BUG_ON(!priv->callbacks);
++    return priv->callbacks->PPSGC_Db_PrintGroupCounters();
++}
++
++
++/**************************************************************************/
++/*! \fn static ssize_t status_show(struct device *dev, struct device_attribute *attr, char *buf)
++ **************************************************************************
++ *  \brief 
++ *  \param[in] 
++ *  \param[out] 
++ *  \return 0 for success, error code otherwise.
++ **************************************************************************/
++static ssize_t status_show(struct device *dev, struct device_attribute *attr, char *buf)
++{
++    SgcServerPrivate_t *priv = dev_get_drvdata(dev);
++
++    if (!priv)
++    {
++        return -EINVAL;
++    }
++
++    return scnprintf(buf, PAGE_SIZE, "status ok");
++}
++
++/**************************************************************************/
++/*! \fn static int sgc_probe(struct platform_device *pdev)
++ **************************************************************************
++ *  \brief 
++ *  \param[in]  pdev - platform device.
++ *  \param[out] None
++ *  \0 for success, error code otherwise.
++ **************************************************************************/
++static int sgc_probe(struct platform_device *pdev)
++{
++    SgcServerPrivate_t  *priv;
++    int                 ret;
++
++    priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
++    if (!priv)
++    {
++        pr_err("memory allocation failed\n");
++        return -ENOMEM;
++    }
++
++    dev_set_drvdata(&pdev->dev, priv);
++    priv->pdev = pdev;
++
++    ret = sysfs_create_group(&priv->pdev->dev.kobj, &sgc_attrs_group);
++    if (ret)
++    {
++        pr_err("sysfs_create_group failed (ret=%d)\n", ret);
++        return ret;
++    }
++
++    priv->mrpc = mrpc_server_register(MRPC_RESERVED_ID_SGC,
++                                      "Session Group Counter",
++                                      sgc_server_procs,
++                                      ARRAY_SIZE(sgc_server_procs));
++    if (!priv->mrpc)
++    {
++        pr_err("failed to register sgc\n");
++        ret = -ENODEV;
++        goto out_remove_group;
++    }
++
++    this = priv;
++    return 0;
++
++out_remove_group:
++    sysfs_remove_group(&priv->pdev->dev.kobj, &sgc_attrs_group);
++    return 0;
++}
++
++/**************************************************************************/
++/*! \fn static int sgc_remove(struct platform_device *pdev)
++ **************************************************************************
++ *  \brief This function is called when the sgc driver is removed.
++ *  \param[in]  pdev - platform device.
++ *  \param[out] None
++ *  \0 for success, error code otherwise.
++ **************************************************************************/
++static int sgc_remove(struct platform_device *pdev)
++{
++    SgcServerPrivate_t *priv = platform_get_drvdata(pdev);
++
++    if (priv->callbacks)
++    {
++        kfree(priv->callbacks);
++    }
++    mrpc_server_unregister(priv->mrpc);
++    sysfs_remove_group(&priv->pdev->dev.kobj, &sgc_attrs_group);
++    dev_set_drvdata(&pdev->dev, NULL);
++    this = NULL;
++
++    return 0;
++}
++
++/**************************************************************************/
++/*! \fn static int __init sgc_server_init(void)
++ **************************************************************************
++ *  \brief Init function.
++ *  \param[in] None
++ *  \param[out] None
++ *  \0 for success, error code otherwise.
++ **************************************************************************/
++static int __init sgc_server_init(void)
++{
++    int ret;
++
++    ret = platform_driver_register(&sgc_driver);
++    if (ret < 0)
++    {
++        pr_err("Failed to register sgc platform driver: %d\n", ret);
++        return ret;
++    }
++
++    sgc_device = platform_device_register_simple("sgc_mrpc_server", -1, NULL, 0);
++    if (IS_ERR(sgc_device))
++    {
++        pr_err("Failed to register sgc platform device\n");
++        platform_driver_unregister(&sgc_driver);
++        return PTR_ERR(sgc_device);
++    }
++
++    pr_info("Successfuly registered sgc platform driver\n");
++    return 0;
++}
++
++/**************************************************************************/
++/*! \fn static void __exit sgc_server_exit(void)
++ **************************************************************************
++ *  \brief Exit function.
++ *  \param[in] None
++ *  \param[out] None
++ *  \0 for success, error code otherwise.
++ **************************************************************************/
++static void __exit sgc_server_exit(void)
++{
++    platform_device_unregister(sgc_device);
++    platform_driver_unregister(&sgc_driver);
++}
++
++
++/**************************************************************************/
++/*     Module Declarations                                                */
++/**************************************************************************/
++module_init(sgc_server_init);
++module_exit(sgc_server_exit);
++
++MODULE_AUTHOR("Intel Corporation");
++MODULE_DESCRIPTION("PPSGC mrpc server");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.0");
++
+diff --git a/include/linux/avalanche/puma7/ppsgc_db.h b/include/linux/avalanche/puma7/ppsgc_db.h
+new file mode 100644
+index 0000000..0b95290
+--- /dev/null
++++ b/include/linux/avalanche/puma7/ppsgc_db.h
+@@ -0,0 +1,198 @@
++/*
++  GPL LICENSE SUMMARY
++
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License as
++  published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful, but
++  WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++  General Public License for more details.
++
++  You should have received a copy of the GNU General Public License
++  along with this program; if not, write to the Free Software
++  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++  The full GNU General Public License is included in this distribution
++  in the file called LICENSE.GPL.
++
++  Contact Information:
++    Intel Corporation
++    2200 Mission College Blvd.
++    Santa Clara, CA  97052
++*/
++
++#ifndef _PPSGC_DB_H_
++#define _PPSGC_DB_H_
++
++/**************************************************************************/
++/*      INCLUDES                                                          */
++/**************************************************************************/
++#include "ppsgc_defs.h"
++
++
++/**************************************************************************/
++/*  Various defines                                                       */
++/**************************************************************************/
++#define PPSGC_GROUP_COUNTER_UNASSIGNED      (0) /* Must be zero for default value */
++
++#if defined(CONFIG_INTEL_KERNEL_PP_DRIVER_LOCAL)
++/* When Packet Processor is not local convert Group Counter ID to network format */
++#define PPSGC_GROUP_COUNTER_HTON(_groupCounterId)   _groupCounterId
++#else
++#define PPSGC_GROUP_COUNTER_HTON(_groupCounterId)   htons(_groupCounterId)
++#endif
++#ifdef CONFIG_ARM_AVALANCHE_SOC
++/* When PPSGC is on Arm no need to convert Group Counter ID from network format */
++#define PPSGC_GROUP_COUNTER_NTOH(_groupCounterId)   _groupCounterId
++#else
++/* When PPSGC is on Atom convert Group Counter ID from network format */
++#define PPSGC_GROUP_COUNTER_NTOH(_groupCounterId)   ntohs(_groupCounterId)
++#endif
++
++
++/**************************************************************************/
++/*      INTERFACE FUNCTIONS Prototypes:                                   */
++/**************************************************************************/
++/*! \fn static inline PPSGC_RET_e PPSGC_Db_AssignGroupCounterId(
++ *          PpsgcAssignedGroupCounters_t *assignedGroupCounters, PpsgcGroupCounterId_t groupCounterId)
++ *  \brief Assign group counter ID to group counters IDs table if not all table assigned.
++ *  \param[in/out] assignedGroupCounters - Pointer to assigned group counters structure to assign new
++ *          group counter ID in. Not assigned entry must have the value PPSGC_GROUP_COUNTER_UNASSIGNED.
++ *  \param[in] groupCounterId - Group counter ID to assign in table.
++ *  \param[out] 
++ *  \return OK or error status.
++ */
++static inline PPSGC_RET_e PPSGC_Db_AssignGroupCounterId(
++    PpsgcAssignedGroupCounters_t *assignedGroupCounters, PpsgcGroupCounterId_t groupCounterId)
++{
++    /* Validate group counter ID range */
++    if (groupCounterId >= PPSGC_NUM_OF_GROUP_COUNTERS)
++    {
++        return PPSGC_RC_FAILURE;
++    }
++
++    if (assignedGroupCounters->numAssignedGroupCounters >= PPSGC_GROUP_COUNTERS_PER_SESSION)
++    {
++        /* Assigned group counter IDs table is full */
++        return PPSGC_RC_FAILURE;
++    }
++
++    /* Assign new group counter ID and update assigned group counters number */
++    assignedGroupCounters->groupCounterIds[assignedGroupCounters->numAssignedGroupCounters] = groupCounterId;
++    assignedGroupCounters->numAssignedGroupCounters++;
++    return PPSGC_RC_SUCCESS;
++}
++
++/*! \fn PPSGC_RET_e PPSGC_Db_Init(void)
++ *  \brief Packet Processor Session Group Counters data base initialization.
++ *  \param[in] no input.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_Init(void);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_AllocGroupCounterId(PpsgcGroupCounterId_t *groupCounterId)
++ *  \brief Allocate Group Counter ID.
++ *  \param[in/out] groupCounterId - Pointer to group counter ID value.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_AllocGroupCounterId(PpsgcGroupCounterId_t *groupCounterId);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_ReleaseGroupCounterId(PpsgcGroupCounterId_t groupCounterId)
++ *  \brief Release Group Counter ID.
++ *  \param[in] groupCounterId - Group Counter ID to release.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_ReleaseGroupCounterId(PpsgcGroupCounterId_t groupCounterId);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_DeleteGroupCounterSessions(PpsgcGroupCounterId_t groupCounterId)
++ *  \brief Send request to PP to delete sessions list of Group Counter ID.
++ *  \param[in] groupCounterId - Group Counter ID to delete sessions.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_DeleteGroupCounterSessions(PpsgcGroupCounterId_t groupCounterId);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_GetGroupCounterAmount(PpsgcGroupCounters_t *totalPpCounters)
++ *  \brief Retreives the total counters amount of all session is specified Group Counter.
++ *  \param[in,out] totalPpCounters - Total Group Counter counters amount.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_GetGroupCounterAmount(PpsgcGroupCounters_t *totalPpCounters);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_CreateSession(Uint32 sessionHandle, Uint8 sessionType, Bool multicast,
++ *                                         Uint32 ingressPortId, PpsgcAssignedGroupCounters_t *assignedGroupCounters)
++ *  \brief Handle session creation indication from Packet Processor.
++ *   Assign session to all relevant Group Counters in assigned Group Counters table.
++ *  \param[in] sessionHandle - PP session handle number.
++ *  \param[in] sessionType - PP session type.
++ *  \param[in] multicast - Is session multicast or unicast.
++ *  \param[in] ingressPortId - input device interface index.
++ *  \param[in] assignedGroupCounters - Pointer to assigned group counters IDs structure.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_CreateSession(Uint32 sessionHandle, Uint8 sessionType, Bool multicast,
++                                   Uint32 ingressPortId, PpsgcAssignedGroupCounters_t *assignedGroupCounters);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_DeleteSession(Uint32 sessionHandle, Uint32 sessionPacketsFw)
++ *  \brief Handle session deletion indication from Packet Processor.
++ *   Add session counter to Group Counter dead sessions counter.
++ *  \param[in] sessionHandle - PP session handle number.
++ *  \param[in] sessionPacketsFw - PP session forwarded packets number.
++ *  \param[in] sessionOctetsFw - PP session forwarded bytes number.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_DeleteSession(Uint32 sessionHandle, Uint32 sessionPacketsFw, Uint64 sessionOctetsFw);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_GetIfCounters(PpsgcIfCounters_t *ppsgcIfCounters)
++ *  \brief Get packet processor interface device counters according to interface name.
++ *  \param[in,out] ppsgcIfCounters - Packet processor interface device counters structure.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_GetIfCounters(PpsgcIfCounters_t *ppsgcIfCounters);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_GetSfCounters(PpsgcSfCounters_t *ppsgcSfCounters)
++ *  \brief Get packet processor service flow counters according to interface name.
++ *  \param[in,out] ppsgcSfCounters - Packet processor service flow counters structure.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_GetSfCounters(PpsgcSfCounters_t *ppsgcSfCounters);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_GetTpPortCounters(PpsgcTpPortCounters_t* ppsgcTpPortCounters)
++ *  \brief Get packet processor transparent port counters according to interface name.
++ *  \param[in,out] ppsgcTpPortCounters - Packet processor transparent port counters structure.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_GetTpPortCounters(PpsgcTpPortCounters_t *ppsgcTpPortCounters);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_PrintIfCounters(void)
++ *  \brief Print packet processor interface device counters.
++ *  \param[in] no input.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_PrintIfCounters(void);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_PrintTpPortCounters(void)
++ *  \brief Print acket processor transparent port counters.
++ *  \param[in] no input.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_PrintTpPortCounters(void);
++
++/*! \fn PPSGC_RET_e PPSGC_Db_PrintGroupCounters(void)
++ *  \brief Print allocated group counters statistics.
++ *  \param[in] no input.
++ *  \param[out] no output.
++ *  \return OK or error status.
++ */
++PPSGC_RET_e PPSGC_Db_PrintGroupCounters(void);
++#endif
++
+diff --git a/include/linux/avalanche/puma7/ppsgc_defs.h b/include/linux/avalanche/puma7/ppsgc_defs.h
+new file mode 100644
+index 0000000..eb8e577
+--- /dev/null
++++ b/include/linux/avalanche/puma7/ppsgc_defs.h
+@@ -0,0 +1,136 @@
++/*
++  GPL LICENSE SUMMARY
++
++  Copyright(c) 2016 Intel Corporation.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License as
++  published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful, but
++  WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++  General Public License for more details.
++
++  You should have received a copy of the GNU General Public License
++  along with this program; if not, write to the Free Software
++  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++  The full GNU General Public License is included in this distribution
++  in the file called LICENSE.GPL.
++
++  Contact Information:
++    Intel Corporation
++    2200 Mission College Blvd.
++    Santa Clara, CA  97052
++*/
++
++#ifndef _PPSGC_DEFS_H_
++#define _PPSGC_DEFS_H_
++
++/**************************************************************************/
++/*      INCLUDES                                                          */
++/**************************************************************************/
++#ifdef CONFIG_ARM_AVALANCHE_SOC
++#include <asm-arm/arch-avalanche/generic/avalanche_pp_api.h>
++#else
++#include <linux/avalanche/generic/avalanche_pp_api.h>
++#endif
++
++
++/**************************************************************************/
++/*  Various defines                                                       */
++/**************************************************************************/
++#define PPSGC_NUM_OF_GROUP_COUNTERS         (512)
++#define PPSGC_IF_MANE_MAX_LENGTH            (16)
++#define PPSGC_GROUP_COUNTERS_PER_SESSION    (8)
++
++
++/**************************************************************************/
++/*      INTERFACE  Defines and Structs                                    */
++/**************************************************************************/
++/*! \var typedef  PpsgcGroupCounterId_t
++    \brief Group counter ID type.
++*/
++typedef Uint16  PpsgcGroupCounterId_t;
++
++/*! \var typedef enum PPSGC_RET_e
++    \brief Enum defines packet processor sessions group counters return codes.
++*/
++typedef enum
++{
++    PPSGC_RC_FAILURE = -1,
++    PPSGC_RC_SUCCESS = 0,
++
++} PPSGC_RET_e;
++
++/*! \var typedef struct PpsgcAssignedGroupCounters PpsgcAssignedGroupCounters_t
++    \brief Structure defines the assigned session group counter IDs.
++*/
++typedef struct PpsgcAssignedGroupCounters
++{
++    unsigned char                   numAssignedGroupCounters;
++    PpsgcGroupCounterId_t           groupCounterIds[PPSGC_GROUP_COUNTERS_PER_SESSION];
++
++} PpsgcAssignedGroupCounters_t;
++
++/*! \var typedef struct PpsgcPpCounters PpsgcPpCounters_t
++    \brief Structure defines packet processor session counters.
++*/
++typedef struct PpsgcPpCounters
++{
++    Uint64                          totalBytesFwd;
++    Uint64                          totalPktsFwd;
++    Uint64                          multicastPktsFwd;
++    Uint64                          unicastPktsFwd;
++
++} PpsgcPpCounters_t;
++
++/*! \var typedef struct PpsgcGroupCounters PpsgcGroupCounters_t
++    \brief Structure defines packet processor sessions group counters amount.
++*/
++typedef struct PpsgcGroupCounters
++{
++    PpsgcGroupCounterId_t           groupCounterId;
++    PpsgcPpCounters_t               ppCounters;
++
++} PpsgcGroupCounters_t;
++
++/*! \var typedef struct PpsgcIfCounters PpsgcIfCounters_t
++    \brief Structure defines the format of packet processor counters per interface device.
++*/
++typedef struct PpsgcIfCounters
++{
++    Char                            ifName[PPSGC_IF_MANE_MAX_LENGTH];
++    AVALANCHE_PP_VPID_STATS_t       ifCounters;
++    Bool                            includeQosDrops;
++
++} PpsgcIfCounters_t;
++
++
++/*! \var typedef struct PpsgcSfCounters PpsgcSfCounters_t
++    \brief Structure defines the format of packet processor counters per service flow.
++*/
++typedef struct PpsgcSfCounters
++{
++    Uint8                           ifName[PPSGC_IF_MANE_MAX_LENGTH];
++    AVALANCHE_PP_QOS_QUEUE_STATS_t  sfCounters;
++    Uint32                          sfIndex;
++    Uint32                          clearFlag;
++
++} PpsgcSfCounters_t;
++
++
++/*! \var typedef struct PpsgcTpPortCounters PpsgcTpPortCounters_t
++    \brief Structure defines the format of packet processor counters per transparent port.
++*/
++typedef struct PpsgcTpPortCounters
++{
++    Uint8                           ifName[PPSGC_IF_MANE_MAX_LENGTH];
++    Uint32                          inFrames;
++    Uint32                          outFrames;
++    Uint32                          discardFrames;
++
++} PpsgcTpPortCounters_t;
++
++#endif
++
+diff --git a/include/linux/mrpc.h b/include/linux/mrpc.h
+index 9ee1125..9c6fc24 100644
+--- a/include/linux/mrpc.h
++++ b/include/linux/mrpc.h
+@@ -83,6 +83,7 @@ enum {
+     MRPC_RESERVED_ID_CPPI,
+     MRPC_RESERVED_ID_WIFI_PROXY_FUNC_CALL,
+     MRPC_RESERVED_ID_DOCSIS_NETDEV,
++	MRPC_RESERVED_ID_SGC,
+     MRPC_RESERVED_ID_LAST,
+ };
+ 
+diff --git a/include/linux/sgc_server.h b/include/linux/sgc_server.h
+new file mode 100644
+index 0000000..8514f44
+--- /dev/null
++++ b/include/linux/sgc_server.h
+@@ -0,0 +1,55 @@
++/*
++ *
++ * sgc_server.h
++ * Description:
++ * sgc over MRPC
++ *
++ *
++ * GPL LICENSE SUMMARY
++ *
++ *  Copyright(c) 2016 Intel Corporation.
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of version 2 of the GNU General Public License as
++ *  published by the Free Software Foundation.
++ *
++ *  This program is distributed in the hope that it will be useful, but
++ *  WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ *  General Public License for more details.
++ *
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
++ *  The full GNU General Public License is included in this distribution
++ *  in the file called LICENSE.GPL.
++ *
++ *  Contact Information:
++ *  Intel Corporation
++ *  2200 Mission College Blvd.
++ *  Santa Clara, CA  97052
++ */
++
++#ifndef __SGC_SERVER_H__
++#define __SGC_SERVER_H__
++
++struct sgc_funcs
++{
++    PPSGC_RET_e (*PPSGC_Db_AllocGroupCounterId)(PpsgcGroupCounterId_t *);
++    PPSGC_RET_e (*PPSGC_Db_ReleaseGroupCounterId)(PpsgcGroupCounterId_t);
++    PPSGC_RET_e (*PPSGC_Db_DeleteGroupCounterSessions)(PpsgcGroupCounterId_t);
++    PPSGC_RET_e (*PPSGC_Db_GetGroupCounterAmount)(PpsgcGroupCounters_t *);
++    PPSGC_RET_e (*PPSGC_Db_GetIfCounters)(PpsgcIfCounters_t *);
++    PPSGC_RET_e (*PPSGC_Db_GetSfCounters)(PpsgcSfCounters_t *);
++    PPSGC_RET_e (*PPSGC_Db_GetTpPortCounters)(PpsgcTpPortCounters_t *);
++    PPSGC_RET_e (*PPSGC_Db_PrintTpPortCounters)(void);
++    PPSGC_RET_e (*PPSGC_Db_PrintIfCounters)(void);
++    PPSGC_RET_e (*PPSGC_Db_PrintGroupCounters)(void);
++};
++
++int mrpc_sgc_server_register(struct sgc_funcs *callbacks);
++void mrpc_sgc_server_unregister(void);
++
++#endif /* __SGC_SERVER_H__ */
++
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+index 2737cb6..278fad7 100755
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -258,7 +258,9 @@ enum {
+         #include <linux/ti_ppm.h>
+     #endif
+ 
+-    #include <linux/ti_pp_path.h>
++    #ifdef CONFIG_TI_PACKET_PROCESSOR_STATS
++		#include <linux/avalanche/puma7/ppsgc_defs.h>
++    #endif
+ 
+     #include <linux/avalanche/generic/avalanche_pp_api.h>
+ 
+@@ -283,13 +285,8 @@ enum {
+         int                             egress_queue;
+ 
+     #ifdef CONFIG_TI_PACKET_PROCESSOR_STATS
+-        void*               ti_match_llc_filter;
+-        void*               ti_match_inbound_ip_filter;
+-        void*               ti_match_outbound_ip_filter;
+-        void*               ti_match_qos_classifier;
+-        void*               ti_match_dsg_filter;
++		PpsgcAssignedGroupCounters_t    assignedGroupCounters;
+     #endif
+-        TI_PPP_PACKET_INFO   ppp_packet_info; /* PP Path */
+ 
+     }PP_PACKET_INFO_t;
+ 
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+index 72a03c0..b916194 100755
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -297,20 +297,8 @@ int skb_init_intel(struct sk_buff *skb)
+ #ifndef CONFIG_MACH_PUMA5
+     SKB_GET_PP_INFO_P(skb)->pp_session.session_handle = AVALANCHE_PP_MAX_ACCELERATED_SESSIONS; /* Set invalid session */
+ #endif
+-#ifdef PPP_DEBUG
+-#ifdef CONFIG_FTRACE
+-    SKB_GET_PP_INFO_P(skb)->ppp_packet_info.allocTime = sched_clock();
+-#endif
+-#endif
+ #endif  /* CONFIG_TI_PACKET_PROCESSOR */
+ 
+-#ifdef CONFIG_TI_PACKET_PROCESSOR_STATS
+-    SKB_GET_PP_INFO_P(skb)->ti_match_llc_filter = NULL;
+-    SKB_GET_PP_INFO_P(skb)->ti_match_inbound_ip_filter = NULL;
+-    SKB_GET_PP_INFO_P(skb)->ti_match_outbound_ip_filter = NULL;
+-    SKB_GET_PP_INFO_P(skb)->ti_match_qos_classifier = NULL;
+-    SKB_GET_PP_INFO_P(skb)->ti_match_dsg_filter = NULL;
+-#endif  /* CONFIG_TI_PACKET_PROCESSOR_STATS */
+     return 0;
+ }
+ 
+@@ -969,13 +957,6 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
+ #endif /* CONFIG_TI_L2_SELECTIVE_FORWARDER */
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+ memcpy((void *)SKB_GET_PP_INFO_P(n), (void *)SKB_GET_PP_INFO_P(skb), sizeof(*SKB_GET_PP_INFO_P(skb)));
+-#ifdef PPP_DEBUG
+-    SKB_GET_PP_INFO_P(n)->ppp_packet_info.num_clones++;
+-#ifdef CONFIG_FTRACE
+-    if (n->fclone == SKB_FCLONE_UNAVAILABLE)
+-        SKB_GET_PP_INFO_P(n)->ppp_packet_info.allocTime = sched_clock();
+-#endif  /* CONFIG_FTRACE */
+-#endif  /* PPP_DEBUG */
+ #endif  /* CONFIG_TI_PACKET_PROCESSOR */
+ 	return n;
+ #undef C
+@@ -1153,9 +1134,6 @@ static void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+ #endif /* CONFIG_TI_L2_SELECTIVE_FORWARDER */
+ #ifdef CONFIG_TI_PACKET_PROCESSOR
+     memcpy((void *)SKB_GET_PP_INFO_P(new), (void *)SKB_GET_PP_INFO_P(old), sizeof(*SKB_GET_PP_INFO_P(old)));
+-#ifdef PPP_DEBUG
+-    SKB_GET_PP_INFO_P(new)->ppp_packet_info.num_copies++;
+-#endif
+ #endif  /* CONFIG_TI_PACKET_PROCESSOR */
+ }
+ 
+-- 
+2.10.1
+
