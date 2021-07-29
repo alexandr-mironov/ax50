@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/luci/luci-mod-admin-full/Makefile
+Package: luci-mod-admin-full
+Submenu: 2. Modules
+Version: x-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +luci-base +libubus-lua
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: iwinfo lua/host luci-base/host 
+Section: luci
+Category: LuCI
+Title: LuCI Administration - full-featured for full control
+Maintainer: 
+Source: 
+Type: ipkg
+Feed: luci
+Description: LuCI Administration - full-featured for full control
+
+@@
+
+

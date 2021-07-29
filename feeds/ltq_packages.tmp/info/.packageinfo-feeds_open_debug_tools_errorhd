@@ -1,0 +1,46 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_debug_tools/errorhd/Makefile
+Package: errorhd
+Menu: 1
+Version: 1.0.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libconfig +libpthread +PACKAGE_telemetrics:telemetrics
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Intel
+Title: UGW Error Handler
+Maintainer: Lantiq Beteiligungs-GmbH & Co. KG
+Source: 
+Type: ipkg
+Feed: open_debug_tools
+Description: 	UGW Error Handler Daemon
+http://www.lantiq.com
+Lantiq Beteiligungs-GmbH & Co. KG
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_errorhd
+	config errorhd_USE_CUSTOM_VERSION
+		depends on PACKAGE_errorhd
+		bool "Use custom package version"
+		default n
+	config errorhd_CUSTOM_VERSION
+		depends on errorhd_USE_CUSTOM_VERSION
+		string "errorhd version as string (default version: 1.0.0.0)"
+		default "1.0.0.0"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_errorhd
+	config errorhd_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_errorhd
+		bool "Use custom source directory"
+		default n
+	config errorhd_CUSTOM_SOURCE_DIR
+		depends on errorhd_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/mnt/d/git/alexandr-mironov/ax50/ugw/feeds_opensrc/debug_tools/errorhd/src"
+	endmenu
+
+@@
+
+

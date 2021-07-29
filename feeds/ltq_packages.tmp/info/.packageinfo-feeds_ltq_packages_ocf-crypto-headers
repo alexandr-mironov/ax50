@@ -1,0 +1,23 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/ocf-crypto-headers/Makefile
+Override: libs/ocf-crypto-headers
+Package: ocf-crypto-headers
+Version: 20110720-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: OCF-Linux cryptodev header
+Maintainer: 
+Source: 
+License: GPL-2.0
+LicenseFiles: cryptodev.h
+Type: ipkg
+Feed: ltq_packages
+Description: OCF-Linux cryptodev header
+http://ocf-linux.sourceforge.net/
+
+@@
+
+

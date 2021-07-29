@@ -1,0 +1,36 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/linux-firmware/Makefile
+Override: firmware/linux-firmware
+Package: iwl-firmware
+Version: 1.0.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: firmware
+Category: Firmware
+Title: Intel wireless firmware
+Maintainer: 
+Source: 
+Type: ipkg
+Feed: open_applications
+Description: Intel wireless firmware
+
+@@
+Config:
+  if PACKAGE_iwl-firmware
+	config IWL8000_FW
+		bool "Intel Wi-Fi 8000 Series Firmware"
+		default n
+		help
+		  Download and install firmware for:
+		    Intel Wi-Fi Series 8265
+	config IBT8000_FW
+		bool "Intel BT 8000 Series Firmware"
+		default n
+		help
+		  Download and install firmware for:
+		    Intel BT Series 8265
+  endif
+@@
+
+

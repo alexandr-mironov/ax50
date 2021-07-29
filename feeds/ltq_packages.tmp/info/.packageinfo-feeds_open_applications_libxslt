@@ -1,0 +1,68 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/libxslt/Makefile
+Package: libxslt
+Version: 1.1.28-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libxml2
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends/host: libxml2/host
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Gnome XSLT library
+Maintainer: Jiri Slachta <jiri@slachta.eu>
+Source: libxslt-1.1.28.tar.gz
+License: MIT
+LicenseFiles: COPYING
+Type: ipkg
+Feed: open_applications
+Description:  A library for XML transformation using XSLT.
+http://xmlsoft.org/XSLT/
+Jiri Slachta <jiri@slachta.eu>
+@@
+
+Package: libexslt
+Version: 1.1.28-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libxslt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends/host: libxml2/host
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Gnome XSLT library Extension
+Maintainer: Jiri Slachta <jiri@slachta.eu>
+Source: libxslt-1.1.28.tar.gz
+License: MIT
+LicenseFiles: COPYING
+Type: ipkg
+Feed: open_applications
+Description:  An extension for XSLT.
+http://xmlsoft.org/XSLT/EXSLT/
+Jiri Slachta <jiri@slachta.eu>
+@@
+
+Package: xsltproc
+Version: 1.1.28-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libxml2 +libxslt +libexslt
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends/host: libxml2/host
+Build-Types: host
+Section: utils
+Category: Utilities
+Title: Gnome XSLT xsltproc Utility
+Maintainer: Jiri Slachta <jiri@slachta.eu>
+Source: libxslt-1.1.28.tar.gz
+License: MIT
+LicenseFiles: COPYING
+Type: ipkg
+Feed: open_applications
+Description:  XSLT XML transformation utility.
+http://xmlsoft.org/XSLT/
+Jiri Slachta <jiri@slachta.eu>
+@@
+
+

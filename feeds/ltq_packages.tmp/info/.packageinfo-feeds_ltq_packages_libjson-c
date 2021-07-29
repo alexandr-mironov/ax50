@@ -1,0 +1,23 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/libjson-c/Makefile
+Override: libs/libjson-c
+Package: libjson-c
+Version: 0.12-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: javascript object notation
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: json-c-0.12.tar.gz
+License: MIT
+LicenseFiles: COPYING
+Type: ipkg
+Feed: ltq_packages
+Description:  This package contains a library for javascript object notation backends.
+http://oss.metaparadigm.com/json-c/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

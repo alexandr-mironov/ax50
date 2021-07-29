@@ -1,31 +1,63 @@
-	config FEED_packages
-		bool "Enable feed packages"
+	config FEED_ugw_packages
+		bool "Enable feed ugw_packages"
 		depends on PER_FEED_REPO
+		default y
 		help
-		 Enable the \"packages\" feed at https://github.com/openwrt/packages.git;for-15.05.
+		 Enable the \"ugw_packages\" feed at ../ugw/feeds_ugw.
+
+	config FEED_ltq_feeds_uboot
+		bool "Enable feed ltq_feeds_uboot"
+		depends on PER_FEED_REPO
+		default y
+		help
+		 Enable the \"ltq_feeds_uboot\" feed at ../ugw/feeds_opensrc/bootloaders.
+
+	config FEED_thirdparty_sw
+		bool "Enable feed thirdparty_sw"
+		depends on PER_FEED_REPO
+		default y
+		help
+		 Enable the \"thirdparty_sw\" feed at ../ugw/feeds_thirdparty.
+
+	config FEED_open_debug_tools
+		bool "Enable feed open_debug_tools"
+		depends on PER_FEED_REPO
+		default y
+		help
+		 Enable the \"open_debug_tools\" feed at ../ugw/feeds_opensrc/debug_tools.
+
+	config FEED_open_applications
+		bool "Enable feed open_applications"
+		depends on PER_FEED_REPO
+		default y
+		help
+		 Enable the \"open_applications\" feed at ../ugw/feeds_opensrc/packages.
+
+	config FEED_ltq_build_support
+		bool "Enable feed ltq_build_support"
+		depends on PER_FEED_REPO
+		default y
+		help
+		 Enable the \"ltq_build_support\" feed at ../ugw/build/build_support.
 
 	config FEED_luci
 		bool "Enable feed luci"
 		depends on PER_FEED_REPO
 		default y
 		help
-		 Enable the \"luci\" feed at https://github.com/openwrt/luci.git;for-15.05.
+		 Enable the \"luci\" feed at ../ugw/feeds_opensrc/luci.
 
-	config FEED_routing
-		bool "Enable feed routing"
+	config FEED_ltq_packages
+		bool "Enable feed ltq_packages"
 		depends on PER_FEED_REPO
+		default y
 		help
-		 Enable the \"routing\" feed at https://github.com/openwrt-routing/packages.git;for-15.05.
+		 Enable the \"ltq_packages\" feed at ../package.
 
-	config FEED_telephony
-		bool "Enable feed telephony"
+	config FEED_ltq_voice_cpe
+		bool "Enable feed ltq_voice_cpe"
 		depends on PER_FEED_REPO
+		default y
 		help
-		 Enable the \"telephony\" feed at https://github.com/openwrt/telephony.git;for-15.05.
-
-	config FEED_management
-		bool "Enable feed management"
-		depends on PER_FEED_REPO
-		help
-		 Enable the \"management\" feed at https://github.com/openwrt-management/packages.git;for-15.05.
+		 Enable the \"ltq_voice_cpe\" feed at ../../../feed_voice_cpe.
 

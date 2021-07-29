@@ -1,0 +1,57 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/libiconv-full/Makefile
+Override: libs/libiconv-full
+Package: libcharset
+Version: 1.11.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Character set conversion library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: libiconv-1.11.1.tar.gz
+Type: ipkg
+Feed: ltq_packages
+Description: Character set conversion library
+http://www.gnu.org/software/libiconv/
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+Package: libiconv-full
+Version: 1.11.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Character set conversion library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: libiconv-1.11.1.tar.gz
+Type: ipkg
+Feed: ltq_packages
+Description: Character set conversion library
+http://www.gnu.org/software/libiconv/
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+Package: iconv
+Version: 1.11.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libiconv-full +libcharset
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: Character set conversion utility
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: libiconv-1.11.1.tar.gz
+Type: ipkg
+Feed: ltq_packages
+Description: Character set conversion utility
+http://www.gnu.org/software/libiconv/
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

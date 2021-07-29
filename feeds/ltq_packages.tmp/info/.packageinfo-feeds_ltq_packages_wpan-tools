@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/wpan-tools/Makefile
+Override: network/utils/wpan-tools
+Package: wpan-tools
+Version: 0.4
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libnl
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: cfg802154 interface configuration utility
+Maintainer: 
+Source: wpan-tools-0.4.tar.bz2
+Type: ipkg
+Feed: ltq_packages
+Description: cfg802154 interface configuration utility
+http://wpan.cakelab.org/
+
+@@
+
+

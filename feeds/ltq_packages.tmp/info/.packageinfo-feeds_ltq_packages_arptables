@@ -1,0 +1,23 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/arptables/Makefile
+Override: network/utils/arptables
+Package: arptables
+Submenu: Firewall
+Version: 0.0.4-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-arptables
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: ARP firewalling software
+Maintainer: 
+Source: arptables-v0.0.4.tar.gz
+License: GPL-2.0
+Type: ipkg
+Feed: ltq_packages
+Description: ARP firewalling software
+http://ebtables.sourceforge.net
+
+@@
+
+

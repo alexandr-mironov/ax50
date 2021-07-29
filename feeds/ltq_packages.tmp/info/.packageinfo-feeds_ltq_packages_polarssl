@@ -1,0 +1,25 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/polarssl/Makefile
+Override: libs/polarssl
+Package: libpolarssl
+Submenu: SSL
+Version: 1.3.11-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: libs
+Category: Libraries
+Title: Embedded SSL (library)
+Maintainer: 
+Source: mbedtls-1.3.11-gpl.tgz
+License: GPL-2.0+
+Type: ipkg
+Feed: ltq_packages
+Description: The aim of the PolarSSL project is to provide a quality, open-source
+cryptographic library written in C and targeted at embedded systems.
+This package contains the PolarSSL library.
+http://polarssl.org/
+
+@@
+
+

@@ -1,0 +1,41 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/elfutils/Makefile
+Override: libs/elfutils
+Package: libdw
+Version: 0.155-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread libelf1 +zlib +libbz2
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: USE_UCLIBC:argp-standalone USE_EXTERNAL_LIBC:argp-standalone !BUILD_NLS:libiconv !BUILD_NLS:libintl
+Section: libs
+Category: Libraries
+Title: ELF manipulation libraries (libdw)
+Maintainer: 
+Source: elfutils-0.155.tar.bz2
+Type: ipkg
+Feed: open_applications
+Description: ELF manipulation libraries (libdw)
+https://fedorahosted.org/elfutils/
+
+@@
+
+Package: libelf1
+Version: 0.155-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +BUILD_NLS:libintl-full
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: USE_UCLIBC:argp-standalone USE_EXTERNAL_LIBC:argp-standalone !BUILD_NLS:libiconv !BUILD_NLS:libintl
+Section: libs
+Category: Libraries
+Title: ELF manipulation libraries (libelf)
+Maintainer: 
+Source: elfutils-0.155.tar.bz2
+Type: ipkg
+Feed: open_applications
+Description: ELF manipulation libraries (libelf)
+https://fedorahosted.org/elfutils/
+
+@@
+
+

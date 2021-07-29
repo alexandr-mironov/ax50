@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/hostap-utils/Makefile
+Override: utils/hostap-utils
+Package: hostap-utils
+Version: 0.4.7-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread kmod-hostap
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Host AP driver utility programs
+Maintainer: 
+Source: hostap-utils-0.4.7.tar.gz
+Type: ipkg
+Feed: ltq_packages
+Description: Host AP driver utility programs
+http://hostap.epitest.fi/
+
+@@
+
+

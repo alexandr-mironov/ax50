@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/mountd/Makefile
+Override: system/mountd
+Package: mountd
+Version: 0.1-2.1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +kmod-fs-autofs4 +libuci
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: OpenWrt automount daemon
+Maintainer: 
+Source: mountd-0.1.tar.bz2
+Type: ipkg
+Feed: open_applications
+Description:   openwrt automount daemon
+http://www.openwrt.org
+
+@@
+
+

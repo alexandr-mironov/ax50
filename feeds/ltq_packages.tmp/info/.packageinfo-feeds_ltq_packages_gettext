@@ -1,0 +1,23 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/gettext/Makefile
+Override: libs/gettext
+Package: libintl
+Version: 2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: Stub header for the GNU Internationalization library
+Maintainer: Jo-Philipp Wich <jow@openwrt.org>
+Source: 
+License: FSFULLR
+LicenseFiles: LICENSE
+Type: ipkg
+Feed: ltq_packages
+Description: Stub header for the GNU Internationalization library
+Jo-Philipp Wich <jow@openwrt.org>
+@@
+
+

@@ -1,0 +1,54 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/net-snmp/Makefile
+Package: net-snmp
+Menu: 1
+Version: 5.1-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: ifx-oam ltq-mapi  libtool libintl libiconv
+Section: net
+Category: Network
+Title: Net SNMP Support
+Maintainer: 
+Source: net-snmp-5.1.tar.gz
+Type: ipkg
+Feed: open_applications
+Description:   Net SNMP Support
+http://localhost
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_net-snmp
+	config net-snmp_USE_CUSTOM_VERSION
+		depends on PACKAGE_net-snmp
+		bool "Use custom package version"
+		default n
+	config net-snmp_CUSTOM_VERSION
+		depends on net-snmp_USE_CUSTOM_VERSION
+		string "net-snmp version as string (default version: 5.1)"
+		default "5.1"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_net-snmp
+	config net-snmp_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_net-snmp
+		bool "Use custom source directory"
+		default n
+	config net-snmp_CUSTOM_SOURCE_DIR
+		depends on net-snmp_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/mnt/d/git/alexandr-mironov/ax50/../../../wlnsw/wireline_sw_linux26/open_snmp"
+	endmenu
+	config FEATURE_SNMPv1
+		default n
+		depends on PACKAGE_net-snmp
+		bool 'Support for SNMPV1 and V2'
+	config FEATURE_SNMPv3
+		default n
+		depends on PACKAGE_net-snmp
+		bool 'Support for SNMPV3'
+@@
+
+

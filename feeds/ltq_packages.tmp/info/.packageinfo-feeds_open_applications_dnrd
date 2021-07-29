@@ -1,0 +1,49 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/dnrd/Makefile
+Package: dnrd
+Menu: 1
+Version: 2.20.3-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: base
+Category: Base system
+Title: Support for DNS Relay
+Maintainer: 
+Source: dnrd-2.20.3.tar.gz
+Type: ipkg
+Feed: open_applications
+Description:   Package for DNS Relay Support 
+http://en.sourceforge.jp/
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_dnrd
+	config dnrd_USE_CUSTOM_VERSION
+		depends on PACKAGE_dnrd
+		bool "Use custom package version"
+		default n
+	config dnrd_CUSTOM_VERSION
+		depends on dnrd_USE_CUSTOM_VERSION
+		string "dnrd version as string (default version: 2.20.3)"
+		default "2.20.3"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_dnrd
+	config dnrd_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_dnrd
+		bool "Use custom source directory"
+		default n
+	config dnrd_CUSTOM_SOURCE_DIR
+		depends on dnrd_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/mnt/d/git/alexandr-mironov/ax50/../../../wlnsw/wireline_sw_linux24/open_dnrd"
+	endmenu
+	config FEATURE_DNS_RELAY
+		depends on PACKAGE_dnrd
+		bool
+		default 'y'
+@@
+
+

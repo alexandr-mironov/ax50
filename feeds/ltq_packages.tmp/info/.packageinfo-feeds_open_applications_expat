@@ -1,0 +1,22 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/expat/Makefile
+Package: libexpat
+Version: 2.1.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv libtool libintl libiconv
+Build-Types: host
+Section: libs
+Category: Libraries
+Title: An XML parsing library
+Maintainer: 
+Source: expat-2.1.0.tar.gz
+Type: ipkg
+Feed: open_applications
+Description:  A fast, non-validating, stream-oriented XML parsing library.
+http://expat.sourceforge.net/
+
+@@
+
+

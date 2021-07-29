@@ -1,0 +1,20 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/ixp4xx-microcode/Makefile
+Override: firmware/ixp4xx-microcode
+Package: ixp4xx-microcode
+Version: 2.4-2
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_ixp4xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Network
+Title: Microcode for the IXP4xx network engines
+Maintainer: 
+Source: IPL_ixp400NpeLibraryWithCrypto-2_4.zip
+Type: ipkg
+Feed: ltq_packages
+Description:  This package contains the microcode needed to use the network engines in IXP4xx CPUs
+
+@@
+
+

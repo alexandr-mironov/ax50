@@ -1,0 +1,50 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/zebra/Makefile
+Package: zebra
+Menu: 1
+Version: 0.94-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: net
+Category: Network
+Title: The zebra Software Routing Suite
+Maintainer: 
+Source: zebra-0.94.tar.gz
+Type: ipkg
+Feed: open_applications
+Description: 	GNU Zebra is free software that manages TCP/IP based routing protocols
+ftp://ftp.zebra.org
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_zebra
+	config zebra_USE_CUSTOM_VERSION
+		depends on PACKAGE_zebra
+		bool "Use custom package version"
+		default n
+	config zebra_CUSTOM_VERSION
+		depends on zebra_USE_CUSTOM_VERSION
+		string "zebra version as string (default version: 0.94)"
+		default "0.94"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_zebra
+	config zebra_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_zebra
+		bool "Use custom source directory"
+		default n
+	config zebra_CUSTOM_SOURCE_DIR
+		depends on zebra_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/mnt/d/git/alexandr-mironov/ax50/../../../wlnsw/wireline_sw_linux26/open_zebra"
+	endmenu
+	config FEATURE_RIP
+		default y
+		depends on PACKAGE_zebra
+		bool 'RIP Support'
+@@
+
+

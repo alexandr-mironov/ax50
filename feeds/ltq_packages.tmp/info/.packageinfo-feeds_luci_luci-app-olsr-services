@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/luci/luci-app-olsr-services/Makefile
+Package: luci-app-olsr-services
+Submenu: 3. Applications
+Version: x-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +luci-app-olsr +olsrd +olsrd-mod-nameservice
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: lua/host luci-base/host 
+Section: luci
+Category: LuCI
+Title: Show services announced with the nameservice plugin
+Maintainer: 
+Source: 
+Type: ipkg
+Feed: luci
+Description: Show services announced with the nameservice plugin
+
+@@
+
+

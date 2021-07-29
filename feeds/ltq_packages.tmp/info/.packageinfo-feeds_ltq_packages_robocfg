@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/robocfg/Makefile
+Override: utils/robocfg
+Package: robocfg
+Version: 0.01-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: BCM5325E/536x switch configuration utility
+Maintainer: 
+Source: 
+Type: ipkg
+Feed: ltq_packages
+Description:  This package contains an utility for configuring the Broadcom BCM5325E/536x 
+ based switches.
+
+@@
+
+

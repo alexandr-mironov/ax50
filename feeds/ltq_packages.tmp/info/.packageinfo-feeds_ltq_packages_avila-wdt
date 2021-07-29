@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/avila-wdt/Makefile
+Override: kernel/avila-wdt
+Package: kmod-avila-wdt
+Submenu: Other modules
+Version: <LINUX_VERSION>-1
+Depends: @GPIO_SUPPORT @TARGET_ixp4xx
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: GPIO hardware watchdog driver for modified Avila boards
+Maintainer: 
+Source: 
+Type: ipkg
+Feed: ltq_packages
+Description: GPIO hardware watchdog driver for modified Avila boards
+
+@@
+
+

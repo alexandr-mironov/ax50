@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/rotary-gpio-custom/Makefile
+Override: kernel/rotary-gpio-custom
+Package: kmod-rotary-gpio-custom
+Submenu: Other modules
+Version: <LINUX_VERSION>-1
+Depends: @GPIO_SUPPORT +kmod-input-gpio-encoder
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: kernel
+Category: Kernel modules
+Title: Custom GPIO-based rotary encoder device
+Maintainer: 
+Source: 
+Type: ipkg
+Feed: ltq_packages
+Description:  Kernel module for register a custom rotary-gpio-encoder platform device.
+
+@@
+
+

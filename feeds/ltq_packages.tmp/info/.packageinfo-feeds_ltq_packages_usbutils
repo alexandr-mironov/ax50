@@ -1,0 +1,21 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_packages/usbutils/Makefile
+Override: utils/usbutils
+Package: usbutils
+Version: 007-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +libusb-1.0 +zlib +librt +libpthread
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: utils
+Category: Utilities
+Title: USB devices listing utilities
+Maintainer: Felix Fietkau <nbd@openwrt.org>
+Source: usbutils-007.tar.bz2
+Type: ipkg
+Feed: ltq_packages
+Description: USB devices listing utilities
+http://www.linux-usb.org/
+Felix Fietkau <nbd@openwrt.org>
+@@
+
+

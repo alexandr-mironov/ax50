@@ -1,0 +1,69 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/linux-atm/Makefile
+Override: network/utils/linux-atm
+Package: linux-atm
+Menu: 1
+Version: 2.5.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread 
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: libs
+Category: Libraries
+Title: Linux ATM library
+Maintainer: 
+Source: linux-atm-2.5.0.tar.gz
+Type: ipkg
+Feed: open_applications
+Description:   This package contains a library for accessing the Linux ATM subsystem.
+http://linux-atm.sourceforge.net/
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_linux-atm
+	config linux-atm_USE_CUSTOM_VERSION
+		depends on PACKAGE_linux-atm
+		bool "Use custom package version"
+		default n
+	config linux-atm_CUSTOM_VERSION
+		depends on linux-atm_USE_CUSTOM_VERSION
+		string "linux-atm version as string (default version: 2.5.0)"
+		default "2.5.0"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_linux-atm
+	config linux-atm_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_linux-atm
+		bool "Use custom source directory"
+		default n
+	config linux-atm_CUSTOM_SOURCE_DIR
+		depends on linux-atm_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/mnt/d/git/alexandr-mironov/ax50/../../../wlnsw/wireline_sw_linux26/open_linux_atm"
+	endmenu
+	config FEATURE_CLIP
+		depends on PACKAGE_linux-atm
+		bool 'CLIP'
+@@
+
+Package: atm-tools
+Version: 2.5.0-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread linux-atm
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: libtool libintl libiconv
+Section: net
+Category: Network
+Title: Linux ATM tools
+Maintainer: 
+Source: linux-atm-2.5.0.tar.gz
+Type: ipkg
+Feed: open_applications
+Description:   This package contains the Linux ATM tools.
+http://linux-atm.sourceforge.net/
+
+@@
+
+

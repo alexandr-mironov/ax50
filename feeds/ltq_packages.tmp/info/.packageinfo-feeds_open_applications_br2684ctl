@@ -1,0 +1,50 @@
+Source-Makefile: feeds/ltq_packages/feeds/open_applications/br2684ctl/Makefile
+Package: br2684ctl
+Menu: 1
+Version: 20040226-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread +linux-atm
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: linux-atm
+Section: net
+Category: Base system
+Title: ATM Ethernet bridging configuration utility
+Maintainer: 
+Source: br2684ctl_20040226.orig.tar.gz
+Type: ipkg
+Feed: open_applications
+Description: ATM Ethernet bridging configuration utility
+http://ftp.debian.org/debian/pool/main/b/br2684ctl
+
+@@
+Config:
+	menu "overwrite package version"
+		depends on PACKAGE_br2684ctl
+	config br2684ctl_USE_CUSTOM_VERSION
+		depends on PACKAGE_br2684ctl
+		bool "Use custom package version"
+		default n
+	config br2684ctl_CUSTOM_VERSION
+		depends on br2684ctl_USE_CUSTOM_VERSION
+		string "br2684ctl version as string (default version: 20040226)"
+		default "20040226"
+	endmenu
+	menu "custom source directory"
+		depends on PACKAGE_br2684ctl
+	config br2684ctl_USE_CUSTOM_SOURCE_DIR
+		depends on PACKAGE_br2684ctl
+		bool "Use custom source directory"
+		default n
+	config br2684ctl_CUSTOM_SOURCE_DIR
+		depends on br2684ctl_USE_CUSTOM_SOURCE_DIR
+		string "Custom source directory"
+		default "/mnt/d/git/alexandr-mironov/ax50/../../../wlnsw/wireline_sw_linux26/open_br2684ctl"
+	endmenu
+	menu "br2684ctl features"
+	depends on PACKAGE_br2684ctl
+	source "ugw/feeds_opensrc/packages/br2684ctl/config/Config.in"
+	endmenu
+@@
+
+

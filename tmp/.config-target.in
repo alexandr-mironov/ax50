@@ -3,15 +3,5221 @@ choice
 	default TARGET_ar71xx
 	reset if !DEVEL
 	
+config TARGET_intel_xway
+	bool "Intel GPON/XWAY/SVIP"
+	select HAS_SUBTARGETS
+	help
+	  Build firmware images for Intel XWAY/GPON/SVIP SoCs
+
+
+config TARGET_lantiq
+	bool "Lantiq GPON/XWAY/SVIP"
+	select HAS_SUBTARGETS
+	help
+	  Build firmware images for Lantiq SoC
+
+
 endchoice
 
 choice
 	prompt "Subtarget" if HAS_SUBTARGETS
+	default TARGET_intel_xway_danube if TARGET_intel_xway
+	default TARGET_lantiq_danube if TARGET_lantiq
+
+config TARGET_intel_xway_falcon
+	bool "Falcon"
+	select LINUX_3_10
+	depends on TARGET_intel_xway
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select mips
+	help
+	  Lantiq Falcon
+
+
+config TARGET_intel_xway_xrx200
+	bool "Lantiq xRX200"
+	select LINUX_3_10
+	depends on TARGET_intel_xway
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select PCI_SUPPORT
+	select PCIE_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX200
+
+
+config TARGET_intel_xway_xrx300
+	bool "Lantiq xRX300"
+	select LINUX_3_10
+	depends on TARGET_intel_xway
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select PCI_SUPPORT
+	select PCIE_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX300
+
+
+config TARGET_intel_xway_xrx330
+	bool "Lantiq xRX330"
+	select LINUX_3_10
+	depends on TARGET_intel_xway
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select PCI_SUPPORT
+	select PCIE_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX330
+
+
+config TARGET_intel_xway_xrx500
+	bool "Lantiq xRX500"
+	select LINUX_3_10
+	depends on TARGET_intel_xway
+	select DISPLAY_SUPPORT
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select RTC_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX500
+
+
+config TARGET_intel_xway_xrx500_4kec
+	bool "Lantiq xRX500 BOOTCORE"
+	select LINUX_3_10
+	depends on TARGET_intel_xway
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select mips
+	help
+	  Lantiq xRX500 Boot Core
+
+
+config TARGET_lantiq_ar9
+	bool "Lantiq xRX100"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX100
+
+
+config TARGET_lantiq_ase
+	bool "Amazon-SE"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select mips
+	help
+	  Lantiq ASE
+
+
+config TARGET_lantiq_danube
+	bool "Danube"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq Danube/Twinpass
+
+
+config TARGET_lantiq_falcon
+	bool "Falcon"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select mips
+	help
+	  Lantiq Falcon
+
+
+config TARGET_lantiq_svip_be
+	bool "SVIP Big Endian"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq SVIP Big Endian
+
+
+config TARGET_lantiq_svip_le
+	bool "SVIP Little Endian"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mipsel
+	help
+	  Lantiq SVIP Little Endian
+
+
+config TARGET_lantiq_xrx200
+	bool "Lantiq xRX200"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select PCI_SUPPORT
+	select PCIE_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX200
+
+
+config TARGET_lantiq_xrx300
+	bool "Lantiq xRX300"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select PCI_SUPPORT
+	select PCIE_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX300
+
+
+config TARGET_lantiq_xrx330
+	bool "Lantiq xRX330"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select PCI_SUPPORT
+	select PCIE_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX330
+
+
+config TARGET_lantiq_xrx500
+	bool "Lantiq xRX500"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select DISPLAY_SUPPORT
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select RTC_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX500
+
+
+config TARGET_lantiq_xrx500_4kec
+	bool "Lantiq xRX500 BOOTCORE"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select USES_SQUASHFS
+	select mips
+	help
+	  Lantiq xRX500 Boot Core
+
+
+config TARGET_lantiq_xrx500_sec
+	bool "Lantiq xRX500 True virtualization"
+	select LINUX_3_10
+	depends on TARGET_lantiq
+	select DISPLAY_SUPPORT
+	select USES_DEVICETREE
+	select GPIO_SUPPORT
+	select USES_JFFS2
+	select PCI_SUPPORT
+	select RTC_SUPPORT
+	select USES_SQUASHFS
+	select USB_SUPPORT
+	select mips
+	help
+	  Lantiq xRX500 True virtualization
+
 
 endchoice
 
 choice
 	prompt "Target Profile"
+
+config TARGET_intel_xway_falcon_Generic
+	bool "Generic - all boards"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-dti-agent
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000-nfs
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-lantiq
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_intel_xway_falcon_EASY98000
+	bool "EASY98000"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000-nfs
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-lantiq
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq EASY98000 evalkit
+
+config TARGET_intel_xway_falcon_EASY98020
+	bool "EASY98020"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq EASY98020 evalkit
+
+config TARGET_intel_xway_falcon_EASY98020V18
+	bool "EASY98020V18"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq EASY98020 V1.8 evalkit
+
+config TARGET_intel_xway_falcon_MDU
+	bool "MDU"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq MDU platform
+
+config TARGET_intel_xway_falcon_SFP
+	bool "SFP"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_gpon-sfp-i2c-drv
+	select DEFAULT_gpon-sfp-i2c-drv-linux
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-gpon-sfp-i2c-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq SFP platform
+
+config TARGET_intel_xway_falcon_EASY98000NOR
+	bool "Lantiq Falcon - EASY98000NOR"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-algo-bit
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-gpio
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_intel_xway_falcon_EASY98000NAND
+	bool "Lantiq Falcon - EASY98000NAND"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-algo-bit
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-gpio
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_intel_xway_falcon_EASY98000SFLASH
+	bool "Lantiq Falcon - EASY98000SFLASH"
+	depends on TARGET_intel_xway_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-algo-bit
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-gpio
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_FRITZ3370
+	bool "FRITZ3370 - Ftizbox"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_button-hotplug
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-ifxhcd
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_EASY80920NOR
+	bool "EASY80920 VRX288 Family Board, NOR Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_EASY80920SPI
+	bool "EASY80920 VRX288 Family Board, SPI Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_EASY80920NAND
+	bool "EASY80920 VRX288 Family Board, NAND Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_EASY4210NAND
+	bool "EASY4210 GRX288 Family Board, NAND Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_EASY220
+	bool "EASY220 Reference Board, SPI Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_EASY220W2
+	bool "EASY220 Reference Board, NAND Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx200_easy220_v2
+	bool "EASY220 Reference Board V2, NAND Flash"
+	depends on TARGET_intel_xway_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx300_EASY388
+	bool "EASY388 Family Board"
+	depends on TARGET_intel_xway_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx300_EASY388_ina219
+	bool "EASY388 Family Board with Power Monitoring INA219"
+	depends on TARGET_intel_xway_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx300_EASY388_VRX318
+	bool "EASY388 Family Board with VRX318 Addon"
+	depends on TARGET_intel_xway_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx300_EASY362
+	bool "EASY362 Family Board"
+	depends on TARGET_intel_xway_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx300_EASY382
+	bool "EASY382 Family Board"
+	depends on TARGET_intel_xway_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx300_EASY388_BOND
+	bool "EASY388 BOND Reference Board"
+	depends on TARGET_intel_xway_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx330_EASY389_BOND
+	bool "EASY389 BOND Reference Board (600MHz)"
+	depends on TARGET_intel_xway_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx330_EASY330
+	bool "EASY330 Singleline DSL with Power Monitoring INA219"
+	depends on TARGET_intel_xway_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx330_EASY300_BOND
+	bool "EASY300 VDSL BOND Board (600MHz)"
+	depends on TARGET_intel_xway_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx330_EASY330_GFAST
+	bool "EASY330 G.Fast Board (720MHz)"
+	depends on TARGET_intel_xway_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx330_EASY330_BOND
+	bool "EASY330 VDSL BOND Board (720MHz)"
+	depends on TARGET_intel_xway_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx330_EASY300_AC1200
+	bool "EASY300 AC1200 Board (600MHz)"
+	depends on TARGET_intel_xway_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_intel_xway_xrx500_None
+	bool "Generic Profile"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Basic profile
+
+config TARGET_intel_xway_xrx500_HAPS
+	bool "LANTIQ GRX500 HAPS "
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 HAPS Platform
+
+config TARGET_intel_xway_xrx500_grx500_evm
+	bool "LANTIQ GRX500 EVM Boards"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 EVM Board
+
+config TARGET_intel_xway_xrx500_easy350_anywan
+	bool "EASY350 ANYWAN 600MHz Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN Board
+
+config TARGET_intel_xway_xrx500_easy350_anywan_800m
+	bool "EASY350 ANYWAN 800Mhz Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN 800Mhz DT
+
+config TARGET_intel_xway_xrx500_easy350_anywan_ire
+	bool "IRX200 ANYWAN 800Mhz Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  IRX200 ANYWAN 800Mhz DT
+
+config TARGET_intel_xway_xrx500_easy350_anywan_router_800m
+	bool "EASY350 ANYWAN 800Mhz Router Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN 800Mhz Router DT
+
+config TARGET_intel_xway_xrx500_easy350_m
+	bool "EASY350-M Board with GPON and G.Fast"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350-M Board with GPON and G.Fast
+
+config TARGET_intel_xway_xrx500_easy550_anywan_gw
+	bool "EASY550 ANYWAN 1GHz Gateway Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY550 ANYWAN Gateway Board
+
+config TARGET_intel_xway_xrx500_easy350_anywan_mpe
+	bool "EASY350 ANYWAN Board for MPE (600MHz/800MHz)"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN Board DT for MPE
+
+config TARGET_intel_xway_xrx500_easy550_anywan_router
+	bool "EASY550 ANYWAN Router Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY550 ANYWAN Router DT
+
+config TARGET_intel_xway_xrx500_easy550v2_anywan_gw
+	bool "EASY550 2000V2 ANYWAN Gateway Board"
+	depends on TARGET_intel_xway_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY550 2000V2 ANYWAN Gateway Board
+
+config TARGET_intel_xway_xrx500_4kec_HAPS_BOOTCORE
+	bool "LANTIQ GRX500 HAPS BOOTCORE"
+	depends on TARGET_intel_xway_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 HAPS BOOTCORE Platform
+
+config TARGET_intel_xway_xrx500_4kec_grx500_evm_bootcore
+	bool "LANTIQ GRX500 EVM BOOTCORE"
+	depends on TARGET_intel_xway_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 EVM BOOTCORE Reference Platform
+
+config TARGET_intel_xway_xrx500_4kec_easy350550_bootcore
+	bool "LANTIQ EASY350/550 ANYWAN BOOTCORE"
+	depends on TARGET_intel_xway_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  EASY350/550 ANYWAN BOOTCORE
+
+config TARGET_lantiq_ar9_Generic
+	bool "Generic - all boards"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+
+config TARGET_lantiq_ar9_EASY50812
+	bool "EASY50812 - Eval Board"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Lantiq EASY50812 evalkit
+
+config TARGET_lantiq_ar9_DGN3500B
+	bool "DGN3500B Netgear"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath9k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-ltq-dsl-firmware-b-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Netgear DGN3500B
+
+config TARGET_lantiq_ar9_WBMR
+	bool "WBMR - Buffalo WBMR-HP-G300H"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-ltq-dsl-firmware-b-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the Buffalo WBMR routers
+
+config TARGET_lantiq_ar9_FRITZ7320
+	bool "FRITZ7320 Fritzbox"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath9k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-ltq-dsl-firmware-b-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-ifxhcd
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+
+config TARGET_lantiq_ar9_P2601HNFX
+	bool "P2601HNFX - ZyXEL P-2601HN-Fx"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-ltq-dsl-firmware-b-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-rt2800-usb
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+
+config TARGET_lantiq_ar9_H201L
+	bool "H201L - ZTE ZXV10"
+	depends on TARGET_lantiq_ar9
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath9k-htc
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-ar9
+	select DEFAULT_kmod-ltq-dsl-firmware-b-ar9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+
+config TARGET_lantiq_ase_Generic
+	bool "Generic - all boards"
+	depends on TARGET_lantiq_ase
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_button-hotplug
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ltq-dsl-ase
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+
+config TARGET_lantiq_ase_EASY50601
+	bool "EASY50601"
+	depends on TARGET_lantiq_ase
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ltq-dsl-ase
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  Lantiq EASY50601 evalkit
+
+config TARGET_lantiq_ase_DGN1000B
+	bool "Netgear DGN1000B"
+	depends on TARGET_lantiq_ase
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-ltq-dsl-ase
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+
+config TARGET_lantiq_ase_GRX500MIPS4KEC
+	bool "LANTIQ MIPS4KEC"
+	depends on TARGET_lantiq_ase
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-ltq-dsl-ase
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+
+config TARGET_lantiq_danube_Generic
+	bool "Generic - all boards"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_danube_EASY50712
+	bool "EASY50712"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Lantiq EASY50712 evalkit
+
+config TARGET_lantiq_danube_ARV3527P
+	bool "ARV3527P - Arcor Easybox 401"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Package set optimized for the ARV3527P
+
+config TARGET_lantiq_danube_ARV4510PW
+	bool "ARV4510PW - Wippies Homebox"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-rt61-pci
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV4518PW
+
+config TARGET_lantiq_danube_ARV4518PW
+	bool "ARV4518PW - SMC7908A"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath5k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV4518PW
+
+config TARGET_lantiq_danube_ARV4519PW
+	bool "ARV4519PW - Vodafone, Pirelli"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath5k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV4519PW
+
+config TARGET_lantiq_danube_ARV4520PW
+	bool "ARV4520PW - Arcor Easybox 800"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-rt61-pci
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV4520PW
+
+config TARGET_lantiq_danube_ARV4525PW
+	bool "ARV4525PW - Speedport W502V"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath5k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV4525PW
+
+config TARGET_lantiq_danube_ARV7525PW
+	bool "ARV7525PW - Speedport W303V Typ A"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-rt2800-pci
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV4525PW
+
+config TARGET_lantiq_danube_ARV452CPW
+	bool "ARV452CPW - Arcor Easybox 801"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath5k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV452CPW
+
+config TARGET_lantiq_danube_ARV752DPW
+	bool "ARV752DPW - Arcor Easybox 802"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-rt2800-pci
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV752PW
+
+config TARGET_lantiq_danube_ARV752DPW22
+	bool "ARV752DPW22 - Arcor Easybox 803"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_kmod-usb-uhci
+	select DEFAULT_kmod-usb2
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Package set optimized for the ARV752PW22
+
+config TARGET_lantiq_danube_ARV7518PW
+	bool "ARV7518PW - ya.com, Astoria"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath9k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the ARV7518PW
+
+config TARGET_lantiq_danube_GIGASX76X
+	bool "GIGASX76X - Gigaset SX761,SX762,SX763"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath5k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-b-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the Gigaset SX76X routers
+
+config TARGET_lantiq_danube_BTHOMEHUBV2B
+	bool "BTHOMEHUBV2B - BT Homehub V2.0 Type B"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath9k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the BT Homehub V2.0 Type B using whole nand for OpenWRT
+
+config TARGET_lantiq_danube_BTHOMEHUBV2BOPENRG
+	bool "BTHOMEHUBV2B - BT Homehub V2.0 Type B (OpenRG)"
+	depends on TARGET_lantiq_danube
+	
+
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_iwinfo
+	select DEFAULT_kmod-ath9k
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-input-gpio-keys-polled
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-netdev
+	select DEFAULT_kmod-ledtrig-usbdev
+	select DEFAULT_kmod-ltq-dsl-danube
+	select DEFAULT_kmod-ltq-dsl-firmware-a-danube
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-core
+	select DEFAULT_kmod-usb-dwc-otg
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	select DEFAULT_wpad-mini
+	help
+	  Package set optimized for the BT Homehub V2.0 Type B but retaining OpenRG image
+
+config TARGET_lantiq_falcon_Generic
+	bool "Generic - all boards"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-dti-agent
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000-nfs
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-lantiq
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_lantiq_falcon_EASY98000
+	bool "EASY98000"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000-nfs
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-lantiq
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq EASY98000 evalkit
+
+config TARGET_lantiq_falcon_EASY98020
+	bool "EASY98020"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq EASY98020 evalkit
+
+config TARGET_lantiq_falcon_EASY98020V18
+	bool "EASY98020V18"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq EASY98020 V1.8 evalkit
+
+config TARGET_lantiq_falcon_MDU
+	bool "MDU"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq MDU platform
+
+config TARGET_lantiq_falcon_SFP
+	bool "SFP"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_gpon-sfp-i2c-drv
+	select DEFAULT_gpon-sfp-i2c-drv-linux
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-gpon-sfp-i2c-drv
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+	help
+	  Lantiq SFP platform
+
+config TARGET_lantiq_falcon_EASY98000NOR
+	bool "Lantiq Falcon - EASY98000NOR"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-algo-bit
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-gpio
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_lantiq_falcon_EASY98000NAND
+	bool "Lantiq Falcon - EASY98000NAND"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-algo-bit
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-gpio
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_lantiq_falcon_EASY98000SFLASH
+	bool "Lantiq Falcon - EASY98000SFLASH"
+	depends on TARGET_lantiq_falcon
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_gpon-base-files
+	select DEFAULT_gpon-luci
+	select DEFAULT_gpon-omci-api
+	select DEFAULT_gpon-omci-onu
+	select DEFAULT_gpon-onu-drv
+	select DEFAULT_gpon-optic-drv
+	select DEFAULT_gpon-pe-firmware
+	select DEFAULT_kmod-button-hotplug
+	select DEFAULT_kmod-dm9000
+	select DEFAULT_kmod-eeprom-at24
+	select DEFAULT_kmod-eeprom-at25
+	select DEFAULT_kmod-gpon-onu-drv
+	select DEFAULT_kmod-gpon-optic-drv
+	select DEFAULT_kmod-i2c-algo-bit
+	select DEFAULT_kmod-i2c-core
+	select DEFAULT_kmod-i2c-gpio
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_kmod-input-core
+	select DEFAULT_kmod-input-gpio-keys
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ledtrig-heartbeat
+	select DEFAULT_kmod-spi-bitbang
+	select DEFAULT_kmod-spi-gpio
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uci
+
+config TARGET_lantiq_svip_be_Generic
+	bool "Generic - all boards"
+	depends on TARGET_lantiq_svip_be
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_hostapd-mini
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uboot-svip
+	select DEFAULT_uci
+
+config TARGET_lantiq_svip_be_EASY336
+	bool "EASY336"
+	depends on TARGET_lantiq_svip_be
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_hostapd-mini
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uboot-svip
+	select DEFAULT_uci
+	help
+	  Lantiq EASY336 evalkit
+
+config TARGET_lantiq_svip_be_EASY33016
+	bool "EASY33016"
+	depends on TARGET_lantiq_svip_be
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_hostapd-mini
+	select DEFAULT_ifx-evtlog
+	select DEFAULT_ifx-vos
+	select DEFAULT_kmod-ifxos
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_svip-switch
+	select DEFAULT_uboot-svip
+	select DEFAULT_uci
+	select DEFAULT_voice-lib-cli
+	select DEFAULT_voice-lib-tapi
+	select DEFAULT_voice-tapi
+	select DEFAULT_voice-tapi-cli
+	select DEFAULT_voice-tapidemo-xt
+	select DEFAULT_voice-vatests
+	select DEFAULT_voice-vxt
+	select DEFAULT_voice-xtbox
+	help
+	  Lantiq EASY33016 evalkit
+
+config TARGET_lantiq_svip_le_Generic
+	bool "Generic - all boards"
+	depends on TARGET_lantiq_svip_le
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_hostapd-mini
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uboot-svip
+	select DEFAULT_uci
+
+config TARGET_lantiq_svip_le_EASY336
+	bool "EASY336"
+	depends on TARGET_lantiq_svip_le
+	
+
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dropbear
+	select DEFAULT_fstools
+	select DEFAULT_hostapd-mini
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_opkg
+	select DEFAULT_uboot-svip
+	select DEFAULT_uci
+	help
+	  Lantiq EASY336 evalkit
+
+config TARGET_lantiq_xrx200_FRITZ3370
+	bool "FRITZ3370 - Ftizbox"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_button-hotplug
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-leds-gpio
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-usb-ifxhcd
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_EASY80920NOR
+	bool "EASY80920 VRX288 Family Board, NOR Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_EASY80920SPI
+	bool "EASY80920 VRX288 Family Board, SPI Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_EASY80920NAND
+	bool "EASY80920 VRX288 Family Board, NAND Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_EASY4210NAND
+	bool "EASY4210 GRX288 Family Board, NAND Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_EASY220
+	bool "EASY220 Reference Board, SPI Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_EASY220W2
+	bool "EASY220 Reference Board, NAND Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx200_easy220_v2
+	bool "EASY220 Reference Board V2, NAND Flash"
+	depends on TARGET_lantiq_xrx200
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx200
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx300_EASY388
+	bool "EASY388 Family Board"
+	depends on TARGET_lantiq_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx300_EASY388_ina219
+	bool "EASY388 Family Board with Power Monitoring INA219"
+	depends on TARGET_lantiq_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx300_EASY388_VRX318
+	bool "EASY388 Family Board with VRX318 Addon"
+	depends on TARGET_lantiq_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx300_EASY362
+	bool "EASY362 Family Board"
+	depends on TARGET_lantiq_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx300_EASY382
+	bool "EASY382 Family Board"
+	depends on TARGET_lantiq_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx300_EASY388_BOND
+	bool "EASY388 BOND Reference Board"
+	depends on TARGET_lantiq_xrx300
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx300
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY389_BOND
+	bool "EASY389 BOND Reference Board (600MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY330
+	bool "EASY330 Singleline DSL with Power Monitoring INA219"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY300_BOND
+	bool "EASY300 VDSL BOND Board (600MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY330_GFAST
+	bool "EASY330 G.Fast Board (720MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY330_BOND
+	bool "EASY330 VDSL BOND Board (720MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY300_AC1200
+	bool "EASY300 AC1200 Board (600MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY330_RT
+	bool "EASY330 ETH RT Board (720MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx330_EASY330_AC1200_35B
+	bool "EASY330 AC1200 35B Board (720MHz)"
+	depends on TARGET_lantiq_xrx330
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq-vpe
+	select DEFAULT_kmod-lantiq_ppa_xrx330
+	select DEFAULT_kmod-ltq-dsl-vr9
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_kmod-vpe
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_ltq-dsl-app
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx500_None
+	bool "Generic Profile"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Basic profile
+
+config TARGET_lantiq_xrx500_HAPS
+	bool "LANTIQ GRX500 HAPS "
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 HAPS Platform
+
+config TARGET_lantiq_xrx500_grx500_evm
+	bool "LANTIQ GRX500 EVM Boards"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 EVM Board
+
+config TARGET_lantiq_xrx500_easy350_anywan
+	bool "EASY350 ANYWAN 600MHz Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN Board
+
+config TARGET_lantiq_xrx500_easy350_anywan_800m
+	bool "EASY350 ANYWAN 800Mhz Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN 800Mhz DT
+
+config TARGET_lantiq_xrx500_easy350_anywan_800m_host
+	bool "EASY350 ANYWAN 800Mhz Board for host os"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN 800Mhz DT for host os
+
+config TARGET_lantiq_xrx500_easy350_anywan_ire
+	bool "IRX200 ANYWAN 800Mhz Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  IRE220 ANYWAN 800Mhz DT
+
+config TARGET_lantiq_xrx500_easy350_anywan_axepoint
+	bool "AxePoint ANYWAN 800Mhz Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  AxePoint ANYWAN 800Mhz DT
+
+config TARGET_lantiq_xrx500_easy350_anywan_ire220
+	bool "IRE220 ANYWAN 800Mhz Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+
+config TARGET_lantiq_xrx500_easy350_anywan_router
+	bool "EASY350 ANYWAN 600Mhz Router Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN 600Mhz Router DT
+
+config TARGET_lantiq_xrx500_easy350_anywan_router_800m
+	bool "EASY350 ANYWAN 800Mhz Router Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN 800Mhz Router DT
+
+config TARGET_lantiq_xrx500_easy350_m
+	bool "EASY350-M Board with GPON and G.Fast"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350-M Board with GPON and G.Fast
+
+config TARGET_lantiq_xrx500_easy550_anywan_gw
+	bool "EASY550 ANYWAN 1GHz Gateway Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY550 ANYWAN Gateway Board
+
+config TARGET_lantiq_xrx500_easy350_anywan_mpe
+	bool "EASY350 ANYWAN Board for MPE (600MHz/800MHz)"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 ANYWAN Board DT for MPE
+
+config TARGET_lantiq_xrx500_easy550_anywan_router
+	bool "EASY550 ANYWAN Router Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY550 ANYWAN Router DT
+
+config TARGET_lantiq_xrx500_easy550v2_anywan_gw
+	bool "EASY550 2000V2 ANYWAN Gateway Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY550 2000V2 ANYWAN Gateway Board
+
+config TARGET_lantiq_xrx500_easy350v2_anywan_gw
+	bool "EASY350 1600 V2 ANYWAN Gateway Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 1600 V2 ANYWAN Gateway Board
+
+config TARGET_lantiq_xrx500_easy350_1200v2_anywan_gw
+	bool "EASY350 1200V2 ANYWAN Gateway Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 1200V2 ANYWAN Gateway Board
+
+config TARGET_lantiq_xrx500_easy350_hgu
+	bool "EASY350 HGU Board"
+	depends on TARGET_lantiq_xrx500
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 HGU
+
+config TARGET_lantiq_xrx500_4kec_HAPS_BOOTCORE
+	bool "LANTIQ GRX500 HAPS BOOTCORE"
+	depends on TARGET_lantiq_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 HAPS BOOTCORE Platform
+
+config TARGET_lantiq_xrx500_4kec_grx500_evm_bootcore
+	bool "LANTIQ GRX500 EVM BOOTCORE"
+	depends on TARGET_lantiq_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  Lantiq GRX500 EVM BOOTCORE Reference Platform
+
+config TARGET_lantiq_xrx500_4kec_easy350550_bootcore
+	bool "LANTIQ EASY350/550 ANYWAN BOOTCORE"
+	depends on TARGET_lantiq_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  EASY350/550 ANYWAN BOOTCORE
+
+config TARGET_lantiq_xrx500_4kec_easy350550_bootcore_serialoff
+	bool "LANTIQ EASY350/550 ANYWAN BOOTCORE NO SERIAL PORT"
+	depends on TARGET_lantiq_xrx500_4kec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_base-files
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_uci
+	help
+	  EASY350/550 ANYWAN BOOTCORE serial port off
+
+config TARGET_lantiq_xrx500_sec_None
+	bool "Generic Profile"
+	depends on TARGET_lantiq_xrx500_sec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  Basic profile
+
+config TARGET_lantiq_xrx500_sec_easy350_hwvt_800m
+	bool "EASY350 True virtualization ANYWAN 800Mhz Board"
+	depends on TARGET_lantiq_xrx500_sec
+	
+
+	select DEFAULT_LTQBASE
+	select DEFAULT_atm-tools
+	select DEFAULT_base-files
+	select DEFAULT_br2684ctl
+	select DEFAULT_busybox
+	select DEFAULT_dnsmasq
+	select DEFAULT_dropbear
+	select DEFAULT_firewall
+	select DEFAULT_fstools
+	select DEFAULT_ip6tables
+	select DEFAULT_iptables
+	select DEFAULT_kmod-lantiq_ppa_xrx500
+	select DEFAULT_kmod-nf-nathelper
+	select DEFAULT_kmod-pppoa
+	select DEFAULT_libc
+	select DEFAULT_libgcc
+	select DEFAULT_linux-atm
+	select DEFAULT_mtd
+	select DEFAULT_netifd
+	select DEFAULT_odhcp6c
+	select DEFAULT_odhcpd
+	select DEFAULT_opkg
+	select DEFAULT_ppp
+	select DEFAULT_ppp-mod-pppoa
+	select DEFAULT_ppp-mod-pppoe
+	select DEFAULT_ppp-mod-pppol2tp
+	select DEFAULT_swconfig
+	select DEFAULT_uci
+	help
+	  EASY350 True virtualization ANYWAN 800Mhz DT
 
 endchoice
 
@@ -21,14 +5227,374 @@ config HAS_SUBTARGETS
 config TARGET_BOARD
 	string
 
+		default "intel-xway" if TARGET_intel_xway
+		default "lantiq" if TARGET_lantiq
 config TARGET_ARCH_PACKAGES
 	string
 	
+		default "intel-xway" if TARGET_intel_xway_falcon
+		default "intel-xway" if TARGET_intel_xway_xrx200
+		default "intel-xway" if TARGET_intel_xway_xrx300
+		default "intel-xway" if TARGET_intel_xway_xrx330
+		default "intel-xway" if TARGET_intel_xway_xrx500
+		default "intel-xway" if TARGET_intel_xway_xrx500_4kec
+		default "lantiq" if TARGET_lantiq_ar9
+		default "lantiq" if TARGET_lantiq_ase
+		default "lantiq" if TARGET_lantiq_danube
+		default "lantiq" if TARGET_lantiq_falcon
+		default "lantiq" if TARGET_lantiq_svip_be
+		default "lantiq" if TARGET_lantiq_svip_le
+		default "lantiq" if TARGET_lantiq_xrx200
+		default "lantiq" if TARGET_lantiq_xrx300
+		default "lantiq" if TARGET_lantiq_xrx330
+		default "lantiq" if TARGET_lantiq_xrx500
+		default "lantiq" if TARGET_lantiq_xrx500_4kec
+		default "lantiq" if TARGET_lantiq_xrx500_sec
 
 config DEFAULT_TARGET_OPTIMIZATION
 	string
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_intel_xway_falcon
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc" if TARGET_intel_xway_xrx200
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc" if TARGET_intel_xway_xrx300
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc" if TARGET_intel_xway_xrx330
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=1004kc" if TARGET_intel_xway_xrx500
+	default "-Os -pipe -mips32r2 -mno-branch-likely" if TARGET_intel_xway_xrx500_4kec
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_lantiq_ar9
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_lantiq_ase
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_lantiq_danube
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_lantiq_falcon
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_lantiq_svip_be
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=mips32r2" if TARGET_lantiq_svip_le
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc" if TARGET_lantiq_xrx200
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc" if TARGET_lantiq_xrx300
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=34kc" if TARGET_lantiq_xrx330
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=1004kc" if TARGET_lantiq_xrx500
+	default "-Os -pipe -mips32r2 -mno-branch-likely" if TARGET_lantiq_xrx500_4kec
+	default "-Os -pipe -mips32r2 -mno-branch-likely -mtune=1004kc" if TARGET_lantiq_xrx500_sec
 	default "-Os -pipe -funit-at-a-time"
 
 config CPU_TYPE
 	string
+	default "mips32" if TARGET_intel_xway_falcon
+	default "mips32" if TARGET_intel_xway_xrx200
+	default "mips32" if TARGET_intel_xway_xrx300
+	default "mips32" if TARGET_intel_xway_xrx330
+	default "mips32" if TARGET_intel_xway_xrx500
+	default "mips32" if TARGET_intel_xway_xrx500_4kec
+	default "mips32" if TARGET_lantiq_ar9
+	default "mips32" if TARGET_lantiq_ase
+	default "mips32" if TARGET_lantiq_danube
+	default "mips32" if TARGET_lantiq_falcon
+	default "mips32" if TARGET_lantiq_svip_be
+	default "mips32" if TARGET_lantiq_svip_le
+	default "mips32" if TARGET_lantiq_xrx200
+	default "mips32" if TARGET_lantiq_xrx300
+	default "mips32" if TARGET_lantiq_xrx330
+	default "mips32" if TARGET_lantiq_xrx500
+	default "mips32" if TARGET_lantiq_xrx500_4kec
+	default "mips32" if TARGET_lantiq_xrx500_sec
 	default ""
+
+config LINUX_3_10
+	bool
+
+	config DEFAULT_LTQBASE
+		bool
+
+	config DEFAULT_atm-tools
+		bool
+
+	config DEFAULT_base-files
+		bool
+
+	config DEFAULT_br2684ctl
+		bool
+
+	config DEFAULT_busybox
+		bool
+
+	config DEFAULT_button-hotplug
+		bool
+
+	config DEFAULT_dnsmasq
+		bool
+
+	config DEFAULT_dropbear
+		bool
+
+	config DEFAULT_firewall
+		bool
+
+	config DEFAULT_fstools
+		bool
+
+	config DEFAULT_gpon-base-files
+		bool
+
+	config DEFAULT_gpon-dti-agent
+		bool
+
+	config DEFAULT_gpon-luci
+		bool
+
+	config DEFAULT_gpon-omci-api
+		bool
+
+	config DEFAULT_gpon-omci-onu
+		bool
+
+	config DEFAULT_gpon-onu-drv
+		bool
+
+	config DEFAULT_gpon-optic-drv
+		bool
+
+	config DEFAULT_gpon-pe-firmware
+		bool
+
+	config DEFAULT_gpon-sfp-i2c-drv
+		bool
+
+	config DEFAULT_gpon-sfp-i2c-drv-linux
+		bool
+
+	config DEFAULT_hostapd-mini
+		bool
+
+	config DEFAULT_ifx-evtlog
+		bool
+
+	config DEFAULT_ifx-vos
+		bool
+
+	config DEFAULT_ip6tables
+		bool
+
+	config DEFAULT_iptables
+		bool
+
+	config DEFAULT_iwinfo
+		bool
+
+	config DEFAULT_kmod-ath5k
+		bool
+
+	config DEFAULT_kmod-ath9k
+		bool
+
+	config DEFAULT_kmod-ath9k-htc
+		bool
+
+	config DEFAULT_kmod-button-hotplug
+		bool
+
+	config DEFAULT_kmod-dm9000
+		bool
+
+	config DEFAULT_kmod-dm9000-nfs
+		bool
+
+	config DEFAULT_kmod-eeprom-at24
+		bool
+
+	config DEFAULT_kmod-eeprom-at25
+		bool
+
+	config DEFAULT_kmod-gpon-onu-drv
+		bool
+
+	config DEFAULT_kmod-gpon-optic-drv
+		bool
+
+	config DEFAULT_kmod-gpon-sfp-i2c-drv
+		bool
+
+	config DEFAULT_kmod-i2c-algo-bit
+		bool
+
+	config DEFAULT_kmod-i2c-core
+		bool
+
+	config DEFAULT_kmod-i2c-gpio
+		bool
+
+	config DEFAULT_kmod-i2c-lantiq
+		bool
+
+	config DEFAULT_kmod-ifxos
+		bool
+
+	config DEFAULT_kmod-input-core
+		bool
+
+	config DEFAULT_kmod-input-gpio-keys
+		bool
+
+	config DEFAULT_kmod-input-gpio-keys-polled
+		bool
+
+	config DEFAULT_kmod-lantiq-vpe
+		bool
+
+	config DEFAULT_kmod-lantiq_ppa_xrx200
+		bool
+
+	config DEFAULT_kmod-lantiq_ppa_xrx300
+		bool
+
+	config DEFAULT_kmod-lantiq_ppa_xrx330
+		bool
+
+	config DEFAULT_kmod-lantiq_ppa_xrx500
+		bool
+
+	config DEFAULT_kmod-leds-gpio
+		bool
+
+	config DEFAULT_kmod-ledtrig-heartbeat
+		bool
+
+	config DEFAULT_kmod-ledtrig-netdev
+		bool
+
+	config DEFAULT_kmod-ledtrig-usbdev
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-ar9
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-ase
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-danube
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-firmware-a-danube
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-firmware-b-ar9
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-firmware-b-danube
+		bool
+
+	config DEFAULT_kmod-ltq-dsl-vr9
+		bool
+
+	config DEFAULT_kmod-nf-nathelper
+		bool
+
+	config DEFAULT_kmod-pppoa
+		bool
+
+	config DEFAULT_kmod-rt2800-pci
+		bool
+
+	config DEFAULT_kmod-rt2800-usb
+		bool
+
+	config DEFAULT_kmod-rt61-pci
+		bool
+
+	config DEFAULT_kmod-spi-bitbang
+		bool
+
+	config DEFAULT_kmod-spi-gpio
+		bool
+
+	config DEFAULT_kmod-usb-core
+		bool
+
+	config DEFAULT_kmod-usb-dwc-otg
+		bool
+
+	config DEFAULT_kmod-usb-ifxhcd
+		bool
+
+	config DEFAULT_kmod-usb-uhci
+		bool
+
+	config DEFAULT_kmod-usb2
+		bool
+
+	config DEFAULT_kmod-vpe
+		bool
+
+	config DEFAULT_libc
+		bool
+
+	config DEFAULT_libgcc
+		bool
+
+	config DEFAULT_linux-atm
+		bool
+
+	config DEFAULT_ltq-dsl-app
+		bool
+
+	config DEFAULT_mtd
+		bool
+
+	config DEFAULT_netifd
+		bool
+
+	config DEFAULT_odhcp6c
+		bool
+
+	config DEFAULT_odhcpd
+		bool
+
+	config DEFAULT_opkg
+		bool
+
+	config DEFAULT_ppp
+		bool
+
+	config DEFAULT_ppp-mod-pppoa
+		bool
+
+	config DEFAULT_ppp-mod-pppoe
+		bool
+
+	config DEFAULT_ppp-mod-pppol2tp
+		bool
+
+	config DEFAULT_svip-switch
+		bool
+
+	config DEFAULT_swconfig
+		bool
+
+	config DEFAULT_uboot-svip
+		bool
+
+	config DEFAULT_uci
+		bool
+
+	config DEFAULT_voice-lib-cli
+		bool
+
+	config DEFAULT_voice-lib-tapi
+		bool
+
+	config DEFAULT_voice-tapi
+		bool
+
+	config DEFAULT_voice-tapi-cli
+		bool
+
+	config DEFAULT_voice-tapidemo-xt
+		bool
+
+	config DEFAULT_voice-vatests
+		bool
+
+	config DEFAULT_voice-vxt
+		bool
+
+	config DEFAULT_voice-xtbox
+		bool
+
+	config DEFAULT_wpad-mini
+		bool
+

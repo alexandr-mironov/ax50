@@ -1,0 +1,27 @@
+Source-Makefile: feeds/ltq_packages/feeds/ltq_feeds_uboot/open_uboot/Makefile
+Package: open_uboot
+Version: 2010.06-1
+Depends: +!PACKAGE_ecos:libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread @TARGET_ltqcpe||TARGET_lantiq||TARGET_intel_xway
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Build-Depends: opkg/host PACKAGE_secure_boot:secure_boot
+Section: boot
+Category: Boot Loaders
+Title: U-Boot for Lantiq SoC based platforms
+Maintainer: 
+Source: u-boot-2010.06.tar.bz2
+Type: ipkg
+Feed: ltq_feeds_uboot
+Description: U-Boot for Lantiq SoC based platforms
+http://www.denx.de/wiki/UBoot/WebHome
+
+@@
+Config:
+        menu "Configuration"
+                depends on PACKAGE_open_uboot
+                source "ugw/feeds_opensrc/bootloaders/open_uboot/config/Kconfig"
+        endmenu
+@@
+
+
