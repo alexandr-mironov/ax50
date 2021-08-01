@@ -1,6 +1,6 @@
 # AX50 Mesh Firmware (in development)
 
-OpenWRT TP Link AX50 Firmware
+OpenWRT TP-Link AX50 Firmware
 
 ## Installing dependencies
 ```
@@ -12,6 +12,8 @@ sudo dpkg --add-architecture i386
 sudo apt update
 sudo apt install libelf1:i386 libncurses5:i386 libc6-i386 lib32stdc++6 lib32z1 libc6-dev-i386
 ```
-
+## Notes:
 not fount candidates in wsl ubuntu 20.04
+```
 libstdc++6-4.4-dev g++-4.4 ia32-libs uboot-mkimage
+```
