@@ -4,6 +4,7 @@
 # What library to link
 ldflags()
 {
+	echo "-Wl,-melf_i386 -Bsymbolic-functions -lncursesw -ltinfo" && exit
 	pkg-config --libs ncursesw 2>/dev/null && exit
 	pkg-config --libs ncurses 2>/dev/null && exit
 	for ext in so a dll.a dylib ; do
