@@ -10,7 +10,7 @@ sudo apt install libncurses5 libncurses5-dev m4 bison gawk flex g++ gengetopt gi
 ```
 sudo dpkg --add-architecture i386
 sudo apt update
-sudo apt install libelf1:i386 libncurses5:i386 libc6-i386 lib32stdc++6 lib32z1 libc6-dev-i386
+sudo apt install libelf1:i386 libncurses5:i386 libc6-i386 lib32stdc++6 lib32z1 libc6-dev-i386 lib32z1-dev
 ```
 ## Notes:
 not fount candidates in wsl ubuntu 20.04
