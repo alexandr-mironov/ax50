@@ -136,10 +136,11 @@ $(eval $(call SetupHostCommand,wget,Please install GNU 'wget', \
 $(eval $(call SetupHostCommand,perl,Please install Perl 5.x, \
 	perl --version | grep "perl.*v5"))
 
-$(eval $(call SetupHostCommand,python,Please install Python 2.7, \
-	python2.7 -V 2>&1 | grep Python.*2.7, \
-	python2 -V 2>&1 | grep Python.*2.7, \
-	python -V 2>&1 | grep Python.*2.7))
+# Python 2.7 check disabled - not available, not actually used in build
+#$(eval $(call SetupHostCommand,python,Please install Python 2.7, \
+#	python2.7 -V 2>&1 | grep Python.*2.7, \
+#	python2 -V 2>&1 | grep Python.*2.7, \
+#	python -V 2>&1 | grep Python.*2.7))
 
 $(eval $(call SetupHostCommand,python3,Please install Python 3.x, \
 	python3.3 -V 2>&1 | grep Python.*3, \
@@ -156,7 +157,7 @@ $(eval $(call SetupHostCommand,file,Please install the 'file' package, \
 	file --version 2>&1 | grep file))
 
 $(eval $(call SetupHostCommand,openssl,Please install the 'openssl' utility, \
-	openssl version | grep OpenSSL))
+	openssl version | grep -E 'OpenSSL|LibreSSL'))
 
 
 # Install ldconfig stub

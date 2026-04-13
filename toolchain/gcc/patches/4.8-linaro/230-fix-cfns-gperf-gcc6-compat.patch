@@ -1,0 +1,24 @@
+--- a/gcc/cp/cfns.gperf
++++ b/gcc/cp/cfns.gperf
+@@ -22,6 +22,9 @@ __inline
+ static unsigned int hash (const char *, unsigned int);
+ #ifdef __GNUC__
+ __inline
++#ifdef __cplusplus
++__attribute__ ((__gnu_inline__))
++#endif
+ #endif
+ const char * libc_name_p (const char *, unsigned int);
+ %}
+--- a/gcc/cp/cfns.h
++++ b/gcc/cp/cfns.h
+@@ -53,6 +53,9 @@ hash (register const char *str, register unsigned int len)
+
+ #ifdef __GNUC__
+ __inline
++#ifdef __cplusplus
++__attribute__ ((__gnu_inline__))
++#endif
+ #endif
+ const char *
+ libc_name_p (register const char *str, register unsigned int len)
