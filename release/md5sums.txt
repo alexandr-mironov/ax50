@@ -1,0 +1,6 @@
+b5efe2c6516709313aee6bece57c9f12  fullimage.img
+49f9b9548dfaff670e4179d7acfed550  openwrt-lantiq-xrx500-easy350_anywan-squashfs.image
+127713ea2ec0532cf826791af5476194  rootfs.img
+f8d02fab27846c155327a44fff181da4  sha256sums.txt
+80feff28b62002bdddc45c461c828b9a  uImage
+9416083551943ed217cba73d71721cc9  uImage_bootcore
