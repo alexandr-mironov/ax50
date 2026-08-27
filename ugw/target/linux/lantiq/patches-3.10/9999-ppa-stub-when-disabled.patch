@@ -1,0 +1,21 @@
+diff --git a/drivers/net/ppp/ppp_generic.c b/drivers/net/ppp/ppp_generic.c
+--- a/drivers/net/ppp/ppp_generic.c
++++ b/drivers/net/ppp/ppp_generic.c
+@@ -56,6 +56,17 @@
+ #include <linux/if_pppox.h>
+
+ #include <net/ppa_api.h>
++
++#if !defined(CONFIG_LTQ_PPA) && !defined(CONFIG_LTQ_PPA_MODULE)
++/* Stubs for PPA symbols when PPA is not available */
++void *(*ppa_get_pptp_info_fn)(struct net_device *dev);
++EXPORT_SYMBOL(ppa_get_pptp_info_fn);
++uint32_t ppa_copy_from_user(void *to, const void __user *from, uint32_t n)
++{
++	return copy_from_user(to, from, n);
++}
++#endif
++
+ #include <net/route.h>
+ #include <net/gre.h>
+ #include <net/arp.h>

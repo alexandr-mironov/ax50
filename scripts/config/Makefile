@@ -16,7 +16,8 @@
 
 check_lxdialog = $(shell $(SHELL) $(CURDIR)/lxdialog/check-lxdialog.sh -$(1))
 export CFLAGS += -DKBUILD_NO_NLS -I. $(call check_lxdialog,ccflags)
-export LDFLAGS += -melf_i386
+# -melf_i386 removed: ld-only flag, not needed on x86_64 host
+#export LDFLAGS += -melf_i386
 
 conf-objs	:= conf.o zconf.tab.o
 mconf-objs	:= mconf.o zconf.tab.o

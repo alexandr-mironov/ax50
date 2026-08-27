@@ -17,7 +17,7 @@ env_link_config() {
 	local CONFIG_LINK=`echo $CONFIG_PATH|cut -d / -f2`	
 	local TOS_SIZE=`grep "UBOOT_CONFIG_TOS.*=y$" $CURDIR/.config`
 	local DDR_SIZE=`grep "UBOOT_CONFIG_DDR.*=y$" $CURDIR/.config`
-	`ln -s $CURDIR/$CONFIG_LINK $BASEDIR/`
+	`ln -sf $CURDIR/$CONFIG_LINK $BASEDIR/`
 	cd $BASEDIR
 	local NAME=`find $CONFIG_PATH/ -name $MODEL -type d -print0`
   [ -f "$NAME/.config" ] || error "$NAME or $BASEDIR/invalid environment directory"

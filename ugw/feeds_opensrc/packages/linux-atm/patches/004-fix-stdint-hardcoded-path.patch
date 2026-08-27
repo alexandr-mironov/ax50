@@ -1,0 +1,11 @@
+--- a/src/include/stdint.h
++++ b/src/include/stdint.h
+@@ -6,7 +6,7 @@
+
+ #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 1
+
+-#include "/usr/include/stdint.h"
++#include_next <stdint.h>
+
+ #elif __GLIBC__ >= 2
+
